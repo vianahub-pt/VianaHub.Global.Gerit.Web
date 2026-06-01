@@ -1,0 +1,50 @@
+{
+  "name": "Gerit",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.19.0 <23",
+    "npm": ">=10"
+  },
+  "scripts": {
+    "clean": "node -e \"const fs=require('fs');let failed=false;for(const path of ['.next','out','tsconfig.tsbuildinfo']){try{fs.rmSync(path,{recursive:true,force:true})}catch(error){failed=true;console.error('Failed to remove '+path+': '+error.message)}}if(failed)process.exitCode=1\"",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.1",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-radio-group": "^1.2.0",
+    "@radix-ui/react-select": "^2.1.1",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.1",
+    "@radix-ui/react-tooltip": "^1.1.2",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.1",
+    "embla-carousel-react": "^8.1.8",
+    "i18next": "^23.11.5",
+    "lucide-react": "^0.396.0",
+    "next": "15.5.14",
+    "next-i18next": "^15.3.0",
+    "next-themes": "^0.3.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "react-i18next": "^14.1.2",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss": "^3.4.1",
+    "tailwindcss-animate": "^1.0.7",
+    "winston": "^3.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "15.5.14",
+    "postcss": "^8",
+    "typescript": "^5"
+  }
+}

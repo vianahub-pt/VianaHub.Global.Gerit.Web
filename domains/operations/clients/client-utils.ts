@@ -18,7 +18,7 @@ export function normalizeClient(payload: unknown): ClientItem | null {
   const id = candidate.id;
   const name = candidate.name;
   const email = candidate.email;
-  const phone = candidate.phone;
+  const phone = candidate.phone ?? candidate.phoneNumber ?? "";
   const isActive = candidate.isActive;
   const clientTypeDescription =
     typeof candidate.clientTypeDescription === "string"

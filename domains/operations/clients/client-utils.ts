@@ -1,4 +1,4 @@
-import { ClientItem } from "./client-models";
+import { ClientItem, ClientIndividual, ClientCompany } from "./client-models";
 
 export interface ClientsPagedResponse {
   items?: unknown;
@@ -7,6 +7,59 @@ export interface ClientsPagedResponse {
   pageNumber?: number;
   pageSize?: number;
   totalPages?: number;
+}
+
+function normalizeIndividual(payload: unknown): ClientIndividual | undefined {
+  if (typeof payload !== "object" || payload === null) {
+    return undefined;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+
+  return {
+    id: typeof candidate.id === "number" ? candidate.id : undefined,
+    tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : undefined,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : undefined,
+    displayName: typeof candidate.displayName === "string" ? candidate.displayName : undefined,
+    firstName: typeof candidate.firstName === "string" ? candidate.firstName : undefined,
+    lastName: typeof candidate.lastName === "string" ? candidate.lastName : undefined,
+    phoneNumber: typeof candidate.phoneNumber === "string" ? candidate.phoneNumber : undefined,
+    cellPhoneNumber: typeof candidate.cellPhoneNumber === "string" ? candidate.cellPhoneNumber : undefined,
+    isWhatsapp: typeof candidate.isWhatsapp === "boolean" ? candidate.isWhatsapp : undefined,
+    email: typeof candidate.email === "string" ? candidate.email : undefined,
+    birthDate: typeof candidate.birthDate === "string" ? candidate.birthDate : undefined,
+    gender: typeof candidate.gender === "string" ? candidate.gender : undefined,
+    documentType: typeof candidate.documentType === "string" ? candidate.documentType : undefined,
+    documentNumber: typeof candidate.documentNumber === "string" ? candidate.documentNumber : undefined,
+    nationality: typeof candidate.nationality === "string" ? candidate.nationality : undefined,
+    isActive: typeof candidate.isActive === "boolean" ? candidate.isActive : undefined,
+  };
+}
+
+function normalizeCompany(payload: unknown): ClientCompany | undefined {
+  if (typeof payload !== "object" || payload === null) {
+    return undefined;
+  }
+
+  const candidate = payload as Record<string, unknown>;
+
+  return {
+    id: typeof candidate.id === "number" ? candidate.id : undefined,
+    tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : undefined,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : undefined,
+    legalName: typeof candidate.legalName === "string" ? candidate.legalName : undefined,
+    tradeName: typeof candidate.tradeName === "string" ? candidate.tradeName : undefined,
+    phoneNumber: typeof candidate.phoneNumber === "string" ? candidate.phoneNumber : undefined,
+    cellPhoneNumber: typeof candidate.cellPhoneNumber === "string" ? candidate.cellPhoneNumber : undefined,
+    isWhatsapp: typeof candidate.isWhatsapp === "boolean" ? candidate.isWhatsapp : undefined,
+    email: typeof candidate.email === "string" ? candidate.email : undefined,
+    site: typeof candidate.site === "string" ? candidate.site : undefined,
+    companyRegistration: typeof candidate.companyRegistration === "string" ? candidate.companyRegistration : undefined,
+    cae: typeof candidate.cae === "string" ? candidate.cae : undefined,
+    numberOfEmployee: typeof candidate.numberOfEmployee === "number" ? candidate.numberOfEmployee : undefined,
+    legalRepresentative: typeof candidate.legalRepresentative === "string" ? candidate.legalRepresentative : undefined,
+    isActive: typeof candidate.isActive === "boolean" ? candidate.isActive : undefined,
+  };
 }
 
 export function normalizeClient(payload: unknown): ClientItem | null {
@@ -86,7 +139,10 @@ export function normalizeClient(payload: unknown): ClientItem | null {
     return null;
   }
 
-    return {
+  const individual = normalizeIndividual(candidate.individual);
+  const company = normalizeCompany(candidate.company);
+
+  return {
     id,
     name,
     email: typeof email === "string" ? email : null,
@@ -101,6 +157,8 @@ export function normalizeClient(payload: unknown): ClientItem | null {
     clientType: typeof clientType === "number" ? clientType : undefined,
     contact,
     urlImage,
+    individual,
+    company,
   };
 }
 

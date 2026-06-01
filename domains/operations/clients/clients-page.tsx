@@ -334,11 +334,6 @@ export function ClientsPage() {
         label: t("clients.table.phone"),
         cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
       },
-      {
-        key: "Contact",
-        label: t("clients.table.contact"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
-      },
     ],
     [t],
   );
@@ -412,7 +407,7 @@ export function ClientsPage() {
       client.name,
       client.email ?? "-",
       client.phone,
-      client.contact ?? "-",
+      client.phone,
     ],
     [],
   );

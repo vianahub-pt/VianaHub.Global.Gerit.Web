@@ -249,6 +249,7 @@
   "clients.detail.tabs.addressesSummary": "Localizações",
   "clients.detail.item.primaryContact": "Contato principal",
   "clients.detail.item.primaryAddress": "Endereço principal",
+  "clients.detail.loadingTab": "Clique na aba para carregar...",
   "clients.detail.item.image": "Imagem",
   "clients.bulk.upload.label": "Importar CSV",
   "clients.bulk.upload.success": "Importação de {{resource}} concluída com sucesso.",

@@ -107,59 +107,36 @@ export function normalizeClient(payload: unknown): ClientItem | null {
         ? candidate.clientType
         : null;
 
-  // origin: root-level "origin"/"source" or originTypeDescription/originType (GET /{id} shape)
-  const origin =
-    typeof candidate.origin === "string"
-      ? candidate.origin
-      : typeof candidate.source === "string"
-        ? candidate.source
-        : typeof candidate.originTypeDescription === "string"
-          ? candidate.originTypeDescription
-          : typeof candidate.originType === "number"
-            ? String(candidate.originType)
-            : null;
+  // originType: from API root-level "originType" (number)
+  const originType =
+    typeof candidate.originType === "number"
+      ? candidate.originType
+      : null;
 
-  const website =
-    typeof candidate.website === "string"
-      ? candidate.website
-      : typeof candidate.url === "string"
-        ? candidate.url
-        : null;
-  const score =
-    typeof candidate.score === "number"
-      ? candidate.score
-      : typeof candidate.clientScore === "number"
-        ? candidate.clientScore
-        : null;
-  const consent =
-    typeof candidate.consent === "boolean"
-      ? candidate.consent
-      : typeof candidate.acceptsMarketing === "boolean"
-        ? candidate.acceptsMarketing
-        : true;
+  // originTypeDescription: from API root-level "originTypeDescription" (string)
+  const originTypeDescription =
+    typeof candidate.originTypeDescription === "string"
+      ? candidate.originTypeDescription
+      : null;
 
-  // remarks: root-level "remarks"/"description" or "note" (GET /{id} shape)
-  const remarks =
-    typeof candidate.remarks === "string"
-      ? candidate.remarks
-      : typeof candidate.description === "string"
-        ? candidate.description
-        : typeof candidate.note === "string"
-          ? candidate.note
-          : null;
-
-  const contact =
-    typeof candidate.contact === "string"
-      ? candidate.contact
-      : typeof candidate.mainContact === "string"
-        ? candidate.mainContact
-        : null;
+  // urlImage: from API root-level "urlImage"
   const urlImage =
     typeof candidate.urlImage === "string"
       ? candidate.urlImage
       : typeof candidate.imageUrl === "string"
         ? candidate.imageUrl
         : null;
+
+  // note: from API root-level "note"
+  const note =
+    typeof candidate.note === "string"
+      ? candidate.note
+      : typeof candidate.remarks === "string"
+        ? candidate.remarks
+        : typeof candidate.description === "string"
+          ? candidate.description
+          : null;
+
   const clientType =
     typeof candidate.clientType === "number"
       ? candidate.clientType
@@ -188,14 +165,11 @@ export function normalizeClient(payload: unknown): ClientItem | null {
     phone,
     isActive,
     clientTypeDescription: clientTypeDescription ?? undefined,
-    origin: origin ?? undefined,
-    website,
-    score,
-    consent: Boolean(consent),
-    remarks,
-    clientType: typeof clientType === "number" ? clientType : undefined,
-    contact,
+    originType: originType ?? undefined,
+    originTypeDescription: originTypeDescription ?? undefined,
     urlImage,
+    note,
+    clientType: typeof clientType === "number" ? clientType : undefined,
     individual,
     company,
   };

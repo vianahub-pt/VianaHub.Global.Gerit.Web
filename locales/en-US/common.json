@@ -243,6 +243,7 @@
   "clients.detail.tabs.addressesSummary": "Addresses",
   "clients.detail.item.primaryContact": "Primary contact",
   "clients.detail.item.primaryAddress": "Primary address",
+  "clients.detail.loadingTab": "Click the tab to load...",
   "clients.detail.item.image": "Image",
   "clients.bulk.upload.label": "Import CSV",
   "clients.bulk.upload.success": "{{resource}} import completed successfully.",

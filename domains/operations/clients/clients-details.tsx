@@ -290,8 +290,8 @@ const ORIGIN_DESCRIPTION_TO_VALUE = Object.fromEntries(
 
 /* ---------- Client type helpers ---------- */
 
-const INDIVIDUAL_CLIENT_TYPES = new Set([1, 2, 3]);
-const COMPANY_CLIENT_TYPES = new Set([4, 5]);
+const INDIVIDUAL_CLIENT_TYPES = new Set([1]);
+const COMPANY_CLIENT_TYPES = new Set([4]);
 
 function isIndividualType(clientType: number | undefined): boolean {
   return typeof clientType === "number" && INDIVIDUAL_CLIENT_TYPES.has(clientType);
@@ -882,6 +882,8 @@ export function ClientsDetailsPage() {
       setClientFormState((prev) => ({
         ...prev,
         clientType: newClientType,
+        individual: { ...initialIndividualFormState },
+        company: { ...initialCompanyFormState },
       }));
     },
     [],

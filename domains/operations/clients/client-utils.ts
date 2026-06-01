@@ -69,22 +69,56 @@ export function normalizeClient(payload: unknown): ClientItem | null {
 
   const candidate = payload as Record<string, unknown>;
   const id = candidate.id;
-  const name = candidate.name;
-  const email = candidate.email;
-  const phone = candidate.phone ?? candidate.phoneNumber ?? "";
+  const individualRaw = candidate.individual as Record<string, unknown> | undefined;
   const isActive = candidate.isActive;
+
+  // name: root-level "name" or from individual.displayName (GET /{id} shape)
+  const name =
+    typeof candidate.name === "string"
+      ? candidate.name
+      : typeof individualRaw?.displayName === "string"
+        ? individualRaw.displayName
+        : undefined;
+
+  // email: root-level "email" or from individual.email (GET /{id} shape)
+  const email =
+    typeof candidate.email === "string"
+      ? candidate.email
+      : typeof individualRaw?.email === "string"
+        ? individualRaw.email
+        : undefined;
+
+  // phone: root-level "phone"/"phoneNumber" or from individual.phoneNumber (GET /{id} shape)
+  const phone =
+    typeof candidate.phone === "string"
+      ? candidate.phone
+      : typeof candidate.phoneNumber === "string"
+        ? candidate.phoneNumber
+        : typeof individualRaw?.phoneNumber === "string"
+          ? individualRaw.phoneNumber
+          : typeof individualRaw?.cellPhoneNumber === "string"
+            ? individualRaw.cellPhoneNumber
+            : "";
+
   const clientTypeDescription =
     typeof candidate.clientTypeDescription === "string"
       ? candidate.clientTypeDescription
       : typeof candidate.clientType === "string"
         ? candidate.clientType
         : null;
+
+  // origin: root-level "origin"/"source" or originTypeDescription/originType (GET /{id} shape)
   const origin =
     typeof candidate.origin === "string"
       ? candidate.origin
       : typeof candidate.source === "string"
         ? candidate.source
-        : null;
+        : typeof candidate.originTypeDescription === "string"
+          ? candidate.originTypeDescription
+          : typeof candidate.originType === "number"
+            ? String(candidate.originType)
+            : null;
+
   const website =
     typeof candidate.website === "string"
       ? candidate.website
@@ -103,12 +137,17 @@ export function normalizeClient(payload: unknown): ClientItem | null {
       : typeof candidate.acceptsMarketing === "boolean"
         ? candidate.acceptsMarketing
         : true;
+
+  // remarks: root-level "remarks"/"description" or "note" (GET /{id} shape)
   const remarks =
     typeof candidate.remarks === "string"
       ? candidate.remarks
       : typeof candidate.description === "string"
         ? candidate.description
-        : null;
+        : typeof candidate.note === "string"
+          ? candidate.note
+          : null;
+
   const contact =
     typeof candidate.contact === "string"
       ? candidate.contact

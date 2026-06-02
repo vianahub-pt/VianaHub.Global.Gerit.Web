@@ -1923,6 +1923,23 @@ export function ClientsDetailsPage() {
             offLabel={t("clients.switch.inactive")}
           />
         </div>
+        {/* Line 7: Observações — abaixo do grid */}
+        <div className="mt-4">
+          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            {t("clients.form.observation")}
+          </label>
+          <textarea
+            value={clientFormState.note}
+            onChange={(event) =>
+              setClientFormState((prev) => ({
+                ...prev,
+                note: event.target.value,
+              }))
+            }
+            rows={3}
+            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+          />
+        </div>
       </div>
     );
   };
@@ -1997,6 +2014,45 @@ export function ClientsDetailsPage() {
             onChange={(v) => updateCompany("isWhatsapp", v)}
             onLabel={t("clients.switch.on")}
             offLabel={t("clients.switch.off")}
+          />
+          {/* Company fields: Origin */}
+          <SelectField
+            label={t("clients.form.origin")}
+            value={clientFormState.originType}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, originType: v }))
+            }
+            options={ORIGIN_OPTIONS.map((opt) => ({
+              value: opt.value,
+              label: t(opt.labelKey),
+            }))}
+            placeholder={t("clients.form.selectOption")}
+          />
+          <ToggleField
+            label={t("clients.switch.status")}
+            checked={clientFormState.isActive}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, isActive: v }))
+            }
+            onLabel={t("clients.switch.active")}
+            offLabel={t("clients.switch.inactive")}
+          />
+        </div>
+        {/* Observações */}
+        <div className="mt-4">
+          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            {t("clients.form.observation")}
+          </label>
+          <textarea
+            value={clientFormState.note}
+            onChange={(event) =>
+              setClientFormState((prev) => ({
+                ...prev,
+                note: event.target.value,
+              }))
+            }
+            rows={3}
+            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
           />
         </div>
       </div>

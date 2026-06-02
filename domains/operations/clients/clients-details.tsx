@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -598,6 +598,7 @@ export function ClientsDetailsPage() {
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const clientLoadRequestRef = useRef(0);
 
   const clientId = useMemo(() => {
     const raw = searchParams.get("clientId");
@@ -680,10 +681,36 @@ export function ClientsDetailsPage() {
     setClientFormState(initialClientFormState);
   }, []);
 
+  const resetClientViewState = useCallback(() => {
+    setClient(null);
+    resetClientForm();
+    resetContactForm();
+    resetAddressForm();
+    setContacts([]);
+    setAddresses([]);
+    setActiveTab("informacoes");
+    setLoadedTabs(new Set(["informacoes"]));
+    setContactGridDensity("medium");
+    setAddressGridDensity("medium");
+    setContactSearch("");
+    setAddressSearch("");
+    setContactStatusFilter("all");
+    setAddressStatusFilter("all");
+    setContactPage(1);
+    setAddressPage(1);
+    setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
+    setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
+    setContactSortBy("Name");
+    setContactSortDirection("asc");
+    setAddressSortBy("Street");
+    setAddressSortDirection("asc");
+  }, [resetAddressForm, resetClientForm, resetContactForm]);
+
   /* ---------- Load client ---------- */
 
   const loadClient = useCallback(async () => {
     if (!clientId) return;
+    const requestId = ++clientLoadRequestRef.current;
     setLoadingClient(true);
     try {
       const response = await fetchWithAuth(`/api/gerit/v1/clients/${clientId}`, { method: "GET" });
@@ -693,6 +720,9 @@ export function ClientsDetailsPage() {
       }
       const normalized = normalizeClient(payload);
       if (normalized) {
+        if (clientLoadRequestRef.current !== requestId) {
+          return;
+        }
         setClient(normalized);
 
         // Build individual form state from API response
@@ -740,9 +770,15 @@ export function ClientsDetailsPage() {
           company: compState,
         });
       } else {
+        if (clientLoadRequestRef.current !== requestId) {
+          return;
+        }
         setClient(null);
       }
     } catch (error) {
+      if (clientLoadRequestRef.current !== requestId) {
+        return;
+      }
       toast({
         title: t("clients.toasts.errorTitle"),
         description:
@@ -750,7 +786,9 @@ export function ClientsDetailsPage() {
         variant: "destructive",
       });
     } finally {
-      setLoadingClient(false);
+      if (clientLoadRequestRef.current === requestId) {
+        setLoadingClient(false);
+      }
     }
   }, [clientId, fetchWithAuth, t, toast]);
 
@@ -835,16 +873,13 @@ export function ClientsDetailsPage() {
   useEffect(() => {
     if (!isHydrating && isAuthenticated) {
       if (clientId) {
+        resetClientViewState();
         void loadClient();
       } else {
-        setClient(null);
-        resetClientForm();
-        setContacts([]);
-        setAddresses([]);
-        setLoadedTabs(new Set(["informacoes"]));
+        resetClientViewState();
       }
     }
-  }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientForm]);
+  }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientViewState]);
 
   // Lazy load contacts when tab becomes active
   useEffect(() => {

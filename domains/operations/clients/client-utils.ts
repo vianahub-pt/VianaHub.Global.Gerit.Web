@@ -70,25 +70,32 @@ export function normalizeClient(payload: unknown): ClientItem | null {
   const candidate = payload as Record<string, unknown>;
   const id = candidate.id;
   const individualRaw = candidate.individual as Record<string, unknown> | undefined;
+  const companyRaw = candidate.company as Record<string, unknown> | undefined;
   const isActive = candidate.isActive;
 
-  // name: root-level "name" or from individual.displayName (GET /{id} shape)
+  // name: root-level "name" or from individual.displayName or from company.legalName/tradeName (GET /{id} shape)
   const name =
     typeof candidate.name === "string"
       ? candidate.name
       : typeof individualRaw?.displayName === "string"
         ? individualRaw.displayName
-        : undefined;
+        : typeof companyRaw?.legalName === "string"
+          ? companyRaw.legalName
+          : typeof companyRaw?.tradeName === "string"
+            ? companyRaw.tradeName
+            : undefined;
 
-  // email: root-level "email" or from individual.email (GET /{id} shape)
+  // email: root-level "email" or from individual.email or from company.email (GET /{id} shape)
   const email =
     typeof candidate.email === "string"
       ? candidate.email
       : typeof individualRaw?.email === "string"
         ? individualRaw.email
-        : undefined;
+        : typeof companyRaw?.email === "string"
+          ? companyRaw.email
+          : undefined;
 
-  // phone: root-level "phone"/"phoneNumber" or from individual.phoneNumber (GET /{id} shape)
+  // phone: root-level "phone"/"phoneNumber" or from individual or company phone fields (GET /{id} shape)
   const phone =
     typeof candidate.phone === "string"
       ? candidate.phone
@@ -98,7 +105,11 @@ export function normalizeClient(payload: unknown): ClientItem | null {
           ? individualRaw.phoneNumber
           : typeof individualRaw?.cellPhoneNumber === "string"
             ? individualRaw.cellPhoneNumber
-            : "";
+            : typeof companyRaw?.phoneNumber === "string"
+              ? companyRaw.phoneNumber
+              : typeof companyRaw?.cellPhoneNumber === "string"
+                ? companyRaw.cellPhoneNumber
+                : "";
 
   const clientTypeDescription =
     typeof candidate.clientTypeDescription === "string"

@@ -1,8 +1,8 @@
 ---
-description: Valida implementações frontend React/Next.js e move cards no Kanban (For Tests → In Test → For Deploy)
+description: Valida implementações frontend React/Next.js e move cards no Kanban (For Tests → In Test → Done)
 mode: subagent
+model: opencode/deepseek-v4-flash-free
 temperature: 0.1
-steps: 5
 tools:
   write: true
   edit: false

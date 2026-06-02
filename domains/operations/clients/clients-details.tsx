@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
@@ -592,20 +592,18 @@ function parsePagedAddresses(payload: unknown) {
    MAIN COMPONENT
    ========================== */
 
-export function ClientsDetailsPage() {
+export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: string }) {
   const { fetchWithAuth, isHydrating, isAuthenticated } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const clientLoadRequestRef = useRef(0);
 
   const clientId = useMemo(() => {
-    const raw = searchParams.get("clientId");
-    if (!raw) return null;
-    const parsed = Number(raw);
+    if (!clientIdProp) return null;
+    const parsed = Number(clientIdProp);
     return Number.isFinite(parsed) ? parsed : null;
-  }, [searchParams]);
+  }, [clientIdProp]);
 
   /* ---------- Client state ---------- */
 
@@ -1065,7 +1063,7 @@ export function ClientsDetailsPage() {
             },
           });
           if (!isEditing) {
-            void router.replace(`/operations/clients-details?clientId=${normalized.id}`);
+            void router.replace(`/clients-details/${normalized.id}/`);
           }
         }
         toast({
@@ -2120,7 +2118,7 @@ export function ClientsDetailsPage() {
       <div className="flex justify-start gap-3">
         <button
           type="button"
-          onClick={() => router.push("/operations/clients/")}
+          onClick={() => router.push("/clients/")}
           className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -2410,7 +2408,7 @@ export function ClientsDetailsPage() {
             <div className="flex items-center gap-4">
               <button
                 type="button"
-                onClick={() => router.push("/operations/clients/")}
+                onClick={() => router.push("/clients/")}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
                 title={t("clients.actions.back")}
               >

@@ -1,5 +1,5 @@
-import { ClientsPage } from "@/domains/operations/clients";
+import { redirect } from "next/navigation";
 
-export default function OperationsClientsPage() {
-  return <ClientsPage />;
+export default function OldClientsRedirect() {
+  redirect("/clients/");
 }

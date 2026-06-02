@@ -1,5 +1,5 @@
 export const operationsClientsModule = {
-  route: "/operations/clients",
+  route: "/clients",
   resource: "clients",
 } as const;
 

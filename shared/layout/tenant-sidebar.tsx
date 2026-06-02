@@ -63,7 +63,7 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
           {
             key: "clients",
             label: t("workspace.sidebar.clients"),
-            href: "/operations/clients",
+            href: "/clients",
             icon: UserRound,
           },
           {

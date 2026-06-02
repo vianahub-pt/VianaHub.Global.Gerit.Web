@@ -1,8 +1,8 @@
 ---
-description: Implementa features/correções e move cards no Kanban (To do → In Progress → For Tests)
+description: Implementa features/correções frontend e move cards no Kanban (To do → In Progress → For Tests)
 mode: subagent
+model: gpt/gpt-5.5-pro
 temperature: 0.2
-steps: 10
 tools:
   write: true
   edit: true

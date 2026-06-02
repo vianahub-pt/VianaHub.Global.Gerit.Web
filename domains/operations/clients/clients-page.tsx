@@ -53,11 +53,10 @@ export function ClientsPage() {
 
   const openClientDetails = useCallback(
     (clientId?: number) => {
-      const base = "/operations/clients-details";
       if (clientId) {
-        router.push(`${base}?clientId=${clientId}`);
+        router.push(`/clients-details/${clientId}/`);
       } else {
-        router.push(base);
+        router.push("/clients-details/");
       }
     },
     [router],

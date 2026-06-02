@@ -1,6 +1,7 @@
 ---
-description: Product Owner - cria issues no GitHub Projects e gerencia o Backlog/To do
+description: Product Owner - escreve histórias de usuário, issues e gerencia o Backlog/To do no GitHub Projects
 mode: subagent
+model: opencode/deepseek-v4-flash-free
 temperature: 0.2
 tools:
   write: true

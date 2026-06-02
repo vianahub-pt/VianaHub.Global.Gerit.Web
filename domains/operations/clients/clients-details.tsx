@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, Power, SquarePen, Trash2 } from "lucide-react";
+import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/platform/auth";
@@ -55,7 +55,7 @@ function getContactSortValue(item: ContactItem, column: ContactSortColumn) {
     case "Email":
       return (item.email ?? "").toLowerCase();
     case "Phone":
-      return (item.phone ?? "").toLowerCase();
+      return (item.phoneNumber ?? "").toLowerCase();
     default:
       return item.name.toLowerCase();
   }
@@ -82,7 +82,7 @@ interface ContactItem {
   id: number;
   name: string;
   email: string | null;
-  phone: string | null;
+  phoneNumber: string | null;
   isActive: boolean;
   isPrimary: boolean;
 }
@@ -173,16 +173,10 @@ const initialCompanyFormState: CompanyFormState = {
 /* ---------- Client form state ---------- */
 
 interface ClientFormState {
-  name: string;
-  email: string;
-  phone: string;
   clientType: string;
-  origin: string;
-  website: string;
-  score: string;
-  consent: boolean;
+  originType: string;
   isActive: boolean;
-  remarks: string;
+  note: string;
   individual: IndividualFormState;
   company: CompanyFormState;
 }
@@ -190,7 +184,7 @@ interface ClientFormState {
 interface ContactFormState {
   name: string;
   email: string;
-  phone: string;
+  phoneNumber: string;
 }
 
 interface AddressFormState {
@@ -201,19 +195,13 @@ interface AddressFormState {
   country: string;
 }
 
-type ClientTab = "client" | "contacts" | "addresses";
+type ClientTab = "informacoes" | "contactos" | "enderecos";
 
 const initialClientFormState: ClientFormState = {
-  name: "",
-  email: "",
-  phone: "",
   clientType: "",
-  origin: "",
-  website: "",
-  score: "",
-  consent: true,
+  originType: "",
   isActive: true,
-  remarks: "",
+  note: "",
   individual: { ...initialIndividualFormState },
   company: { ...initialCompanyFormState },
 };
@@ -221,7 +209,7 @@ const initialClientFormState: ClientFormState = {
 const initialContactFormState: ContactFormState = {
   name: "",
   email: "",
-  phone: "",
+  phoneNumber: "",
 };
 
 const initialAddressFormState: AddressFormState = {
@@ -279,14 +267,6 @@ const DOCUMENT_TYPE_OPTIONS_KEYS: Record<string, string> = {
   Passaporte: "clients.form.documentType.passport",
   Outro: "clients.form.documentType.other",
 };
-
-const CLIENT_TYPE_DESCRIPTION_TO_VALUE = Object.fromEntries(
-  CLIENT_TYPE_OPTIONS.map((option) => [option.description, option.value]),
-) as Record<string, string>;
-
-const ORIGIN_DESCRIPTION_TO_VALUE = Object.fromEntries(
-  ORIGIN_OPTIONS.map((option) => [option.description, option.value]),
-) as Record<string, string>;
 
 /* ---------- Client type helpers ---------- */
 
@@ -444,18 +424,12 @@ function SelectField({
 function resolveClientTypeValue(client: ClientItem | null): string {
   if (!client) return "";
   if (typeof client.clientType === "number") return String(client.clientType);
-  if (client.clientTypeDescription)
-    return CLIENT_TYPE_DESCRIPTION_TO_VALUE[client.clientTypeDescription] ?? "";
   return "";
 }
 
-function resolveOriginValue(client: ClientItem | null): string {
+function resolveOriginTypeValue(client: ClientItem | null): string {
   if (!client) return "";
-  if (client.origin) {
-    const parsedNumber = Number(client.origin);
-    if (!Number.isNaN(parsedNumber)) return String(parsedNumber);
-    return ORIGIN_DESCRIPTION_TO_VALUE[client.origin] ?? "";
-  }
+  if (typeof client.originType === "number") return String(client.originType);
   return "";
 }
 
@@ -480,12 +454,14 @@ function normalizeContact(payload: unknown): ContactItem | null {
         : typeof candidate.contactName === "string"
           ? candidate.contactName
           : "";
-  const phone =
-    typeof candidate.phone === "string"
-      ? candidate.phone
-      : typeof candidate.mobile === "string"
-        ? candidate.mobile
-        : null;
+  const phoneNumber =
+    typeof candidate.phoneNumber === "string"
+      ? candidate.phoneNumber
+      : typeof candidate.phone === "string"
+        ? candidate.phone
+        : typeof candidate.mobile === "string"
+          ? candidate.mobile
+          : null;
   const email = typeof candidate.email === "string" ? candidate.email : null;
   const isActiveValue =
     typeof candidate.isActive === "boolean"
@@ -502,7 +478,7 @@ function normalizeContact(payload: unknown): ContactItem | null {
     id: rawId,
     name,
     email,
-    phone,
+    phoneNumber,
     isActive: Boolean(isActiveValue),
     isPrimary: Boolean(isPrimaryValue),
   };
@@ -557,7 +533,9 @@ function normalizeAddress(payload: unknown): AddressItem | null {
       ? candidate.state
       : typeof candidate.region === "string"
         ? candidate.region
-        : null;
+        : typeof candidate.district === "string"
+          ? candidate.district
+          : null;
   const postalCode =
     typeof candidate.postalCode === "string"
       ? candidate.postalCode
@@ -567,9 +545,11 @@ function normalizeAddress(payload: unknown): AddressItem | null {
   const country =
     typeof candidate.country === "string"
       ? candidate.country
-      : typeof candidate.regionCode === "string"
-        ? candidate.regionCode
-        : null;
+      : typeof candidate.countryCode === "string"
+        ? candidate.countryCode
+        : typeof candidate.regionCode === "string"
+          ? candidate.regionCode
+          : null;
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
@@ -651,9 +631,18 @@ export function ClientsDetailsPage() {
   const [addressSubmitting, setAddressSubmitting] = useState(false);
   const [addressesBulkUploading, setAddressesBulkUploading] = useState(false);
 
-  /* ---------- Tab state ---------- */
+  /* ---------- Tab & lazy loading state ---------- */
 
-  const [activeTab, setActiveTab] = useState<ClientTab>("client");
+  const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
+
+  const handleTabChange = useCallback((tab: ClientTab) => {
+    setActiveTab(tab);
+    setLoadedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      return new Set(prev).add(tab);
+    });
+  }, []);
 
   /* ---------- Contact grid state ---------- */
 
@@ -743,19 +732,10 @@ export function ClientsDetailsPage() {
         };
 
         setClientFormState({
-          name: normalized.name,
-          email: normalized.email ?? "",
-          phone: normalized.phone,
           clientType: resolveClientTypeValue(normalized),
-          origin: resolveOriginValue(normalized),
-          website: normalized.website ?? "",
-          score:
-            typeof normalized.score === "number"
-              ? String(normalized.score)
-              : "",
-          consent: normalized.consent ?? true,
+          originType: resolveOriginTypeValue(normalized),
           isActive: normalized.isActive,
-          remarks: normalized.remarks ?? "",
+          note: normalized.note ?? "",
           individual: indState,
           company: compState,
         });
@@ -790,7 +770,7 @@ export function ClientsDetailsPage() {
     });
     try {
       const response = await fetchWithAuth(
-        `/api/gerit/v1/client/${client.id}/contacts/paged?${query.toString()}`,
+        `/api/gerit/v1/clients/${client.id}/contacts/paged?${query.toString()}`,
         { method: "GET" },
       );
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -828,7 +808,7 @@ export function ClientsDetailsPage() {
     });
     try {
       const response = await fetchWithAuth(
-        `/api/gerit/v1/client/${client.id}/addresses/paged?${query.toString()}`,
+        `/api/gerit/v1/clients/${client.id}/addresses/paged?${query.toString()}`,
         { method: "GET" },
       );
       const payload = (await response.json().catch(() => null)) as unknown;
@@ -861,19 +841,24 @@ export function ClientsDetailsPage() {
         resetClientForm();
         setContacts([]);
         setAddresses([]);
+        setLoadedTabs(new Set(["informacoes"]));
       }
     }
   }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientForm]);
 
+  // Lazy load contacts when tab becomes active
   useEffect(() => {
-    if (!client) {
-      setContacts([]);
-      setAddresses([]);
-      return;
+    if (loadedTabs.has("contactos") && client?.id && contacts.length === 0 && !contactsLoading) {
+      void loadClientContacts();
     }
-    void loadClientContacts();
-    void loadClientAddresses();
-  }, [client, loadClientContacts, loadClientAddresses]);
+  }, [loadedTabs, client?.id, contacts.length, contactsLoading, loadClientContacts]);
+
+  // Lazy load addresses when tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("enderecos") && client?.id && addresses.length === 0 && !addressesLoading) {
+      void loadClientAddresses();
+    }
+  }, [loadedTabs, client?.id, addresses.length, addressesLoading, loadClientAddresses]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -895,18 +880,9 @@ export function ClientsDetailsPage() {
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
 
-      const name = clientFormState.name.trim();
-      const phone = clientFormState.phone.trim();
-      const email = clientFormState.email.trim();
       const clientTypeValue = clientFormState.clientType.trim();
-      const originValue = clientFormState.origin.trim();
-      const websiteValue = clientFormState.website.trim();
-      const scoreValue = clientFormState.score.trim();
-      const scoreNumber =
-        scoreValue.length > 0 && !Number.isNaN(Number(scoreValue))
-          ? Number(scoreValue)
-          : null;
-      const remarksValue = clientFormState.remarks.trim();
+      const originTypeValue = clientFormState.originType.trim();
+      const noteValue = clientFormState.note.trim();
 
       // Resolve numeric client type
       const clientTypeNumber =
@@ -936,11 +912,12 @@ export function ClientsDetailsPage() {
           return;
         }
       } else {
-        // Fallback: basic name + phone validation
-        if (!name || !phone) {
+        // Fallback: basic name + phone validation from individual fields
+        const ind = clientFormState.individual;
+        if (!ind.firstName.trim() || !ind.lastName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.required"),
+            description: t("clients.validation.individualRequired"),
             variant: "destructive",
           });
           return;
@@ -950,18 +927,15 @@ export function ClientsDetailsPage() {
       setSubmittingClient(true);
       try {
         const originNumber =
-          originValue.length > 0 && !Number.isNaN(Number(originValue))
-            ? Number(originValue)
+          originTypeValue.length > 0 && !Number.isNaN(Number(originTypeValue))
+            ? Number(originTypeValue)
             : null;
 
         const payload: Record<string, unknown> = {
           clientType: clientTypeNumber,
-          origin: originNumber,
-          website: websiteValue.length > 0 ? websiteValue : null,
-          score: scoreNumber,
-          consent: clientFormState.consent,
+          originType: originNumber,
           isActive: clientFormState.isActive,
-          remarks: remarksValue.length > 0 ? remarksValue : null,
+          note: noteValue.length > 0 ? noteValue : null,
         };
 
         // Add individual or company nested data
@@ -971,29 +945,26 @@ export function ClientsDetailsPage() {
             displayName: ind.displayName.trim() || `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),
-            phoneNumber: ind.phoneNumber.trim() || phone,
+            phoneNumber: ind.phoneNumber.trim(),
             cellPhoneNumber: ind.cellPhoneNumber.trim(),
             isWhatsapp: ind.isWhatsapp,
-            email: ind.email.trim() || (email.length > 0 ? email : null),
+            email: ind.email.trim() || null,
             birthDate: ind.birthDate.length > 0 ? ind.birthDate : null,
             gender: ind.gender.length > 0 ? ind.gender : null,
             documentType: ind.documentType.length > 0 ? ind.documentType : null,
             documentNumber: ind.documentNumber.length > 0 ? ind.documentNumber : null,
             nationality: ind.nationality.length > 0 ? ind.nationality : null,
           };
-          payload.name = `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim();
-          payload.email = ind.email.trim() || (email.length > 0 ? email : null);
-          payload.phone = ind.phoneNumber.trim() || phone;
         } else if (isCompanyType(clientTypeNumber ?? undefined)) {
           const comp = clientFormState.company;
           payload.company = {
             legalName: comp.legalName.trim(),
             tradeName: comp.tradeName.trim(),
-            phoneNumber: comp.phoneNumber.trim() || phone,
+            phoneNumber: comp.phoneNumber.trim(),
             cellPhoneNumber: comp.cellPhoneNumber.trim(),
             isWhatsapp: comp.isWhatsapp,
-            email: comp.email.trim() || (email.length > 0 ? email : null),
-            site: comp.site.trim() || (websiteValue.length > 0 ? websiteValue : null),
+            email: comp.email.trim() || null,
+            site: comp.site.trim() || null,
             companyRegistration: comp.companyRegistration.length > 0 ? comp.companyRegistration : null,
             cae: comp.cae.length > 0 ? comp.cae : null,
             numberOfEmployee: comp.numberOfEmployee.length > 0 && !Number.isNaN(Number(comp.numberOfEmployee))
@@ -1001,13 +972,6 @@ export function ClientsDetailsPage() {
               : null,
             legalRepresentative: comp.legalRepresentative.length > 0 ? comp.legalRepresentative : null,
           };
-          payload.name = comp.legalName.trim();
-          payload.email = comp.email.trim() || (email.length > 0 ? email : null);
-          payload.phone = comp.phoneNumber.trim() || phone;
-        } else {
-          payload.name = name;
-          payload.email = email.length > 0 ? email : null;
-          payload.phone = phone;
         }
 
         const isEditing = Boolean(client?.id);
@@ -1030,17 +994,10 @@ export function ClientsDetailsPage() {
           const ind = normalized.individual;
           const comp = normalized.company;
           setClientFormState({
-            name: normalized.name,
-            email: normalized.email ?? "",
-            phone: normalized.phone,
             clientType: resolveClientTypeValue(normalized),
-            origin: resolveOriginValue(normalized),
-            website: normalized.website ?? "",
-            score:
-              typeof normalized.score === "number" ? String(normalized.score) : "",
-            consent: normalized.consent ?? true,
+            originType: resolveOriginTypeValue(normalized),
             isActive: normalized.isActive,
-            remarks: normalized.remarks ?? "",
+            note: normalized.note ?? "",
             individual: {
               displayName: ind?.displayName ?? "",
               firstName: ind?.firstName ?? "",
@@ -1080,10 +1037,6 @@ export function ClientsDetailsPage() {
           title: t("clients.toasts.successTitle"),
           description: isEditing ? t("clients.toasts.updated") : t("clients.toasts.created"),
         });
-        if (normalized?.id) {
-          await loadClientContacts();
-          await loadClientAddresses();
-        }
       } catch (error) {
         toast({
           title: t("clients.toasts.errorTitle"),
@@ -1099,8 +1052,6 @@ export function ClientsDetailsPage() {
       client,
       clientFormState,
       fetchWithAuth,
-      loadClientAddresses,
-      loadClientContacts,
       router,
       t,
       toast,
@@ -1144,9 +1095,9 @@ export function ClientsDetailsPage() {
       event.preventDefault();
       if (!client) return;
       const name = contactFormState.name.trim();
-      const phone = contactFormState.phone.trim();
+      const phoneNumber = contactFormState.phoneNumber.trim();
       const email = contactFormState.email.trim();
-      if (!name || !phone) {
+      if (!name || !phoneNumber) {
         toast({
           title: t("clients.toasts.validationTitle"),
           description: t("clients.contacts.validation.required"),
@@ -1158,13 +1109,13 @@ export function ClientsDetailsPage() {
       try {
         const payload = {
           name,
-          phone,
+          phoneNumber,
           email: email.length > 0 ? email : null,
         };
         const isEditing = editingContact !== null;
         const endpoint = isEditing
-          ? `/api/gerit/v1/client/${client.id}/contacts/${editingContact?.id}`
-          : `/api/gerit/v1/client/${client.id}/contacts`;
+          ? `/api/gerit/v1/clients/${client.id}/contacts/${editingContact?.id}`
+          : `/api/gerit/v1/clients/${client.id}/contacts`;
         const response = await fetchWithAuth(endpoint, {
           method: isEditing ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -1203,7 +1154,7 @@ export function ClientsDetailsPage() {
     setContactFormState({
       name: contact.name,
       email: contact.email ?? "",
-      phone: contact.phone ?? "",
+      phoneNumber: contact.phoneNumber ?? "",
     });
   }, []);
 
@@ -1212,8 +1163,8 @@ export function ClientsDetailsPage() {
       if (!client?.id) return;
       try {
         const endpoint = contact.isActive
-          ? `/api/gerit/v1/client/${client.id}/contacts/${contact.id}/deactivate`
-          : `/api/gerit/v1/client/${client.id}/contacts/${contact.id}/activate`;
+          ? `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/deactivate`
+          : `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
@@ -1249,7 +1200,7 @@ export function ClientsDetailsPage() {
       if (!client?.id) return;
       try {
         const response = await fetchWithAuth(
-          `/api/gerit/v1/client/${client.id}/contacts/${contact.id}`,
+          `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}`,
           { method: "DELETE" },
         );
         const responsePayload = (await response.json().catch(() => null)) as unknown;
@@ -1305,8 +1256,8 @@ export function ClientsDetailsPage() {
         };
         const isEditing = editingAddress !== null;
         const endpoint = isEditing
-          ? `/api/gerit/v1/client/${client.id}/addresses/${editingAddress?.id}`
-          : `/api/gerit/v1/client/${client.id}/addresses`;
+          ? `/api/gerit/v1/clients/${client.id}/addresses/${editingAddress?.id}`
+          : `/api/gerit/v1/clients/${client.id}/addresses`;
         const response = await fetchWithAuth(endpoint, {
           method: isEditing ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -1356,8 +1307,8 @@ export function ClientsDetailsPage() {
       if (!client?.id) return;
       try {
         const endpoint = address.isActive
-          ? `/api/gerit/v1/client/${client.id}/addresses/${address.id}/deactivate`
-          : `/api/gerit/v1/client/${client.id}/addresses/${address.id}/activate`;
+          ? `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/deactivate`
+          : `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
@@ -1394,7 +1345,7 @@ export function ClientsDetailsPage() {
       if (!client?.id) return;
       try {
         const response = await fetchWithAuth(
-          `/api/gerit/v1/client/${client.id}/addresses/${address.id}`,
+          `/api/gerit/v1/clients/${client.id}/addresses/${address.id}`,
           { method: "DELETE" },
         );
         const responsePayload = (await response.json().catch(() => null)) as unknown;
@@ -1430,7 +1381,7 @@ export function ClientsDetailsPage() {
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetchWithAuth(
-          `/api/gerit/v1/client/${client.id}/contacts/bulk-upload`,
+          `/api/gerit/v1/clients/${client.id}/contacts/bulk-upload`,
           { method: "POST", body: formData },
         );
         const payload = (await response.json().catch(() => null)) as unknown;
@@ -1471,7 +1422,7 @@ export function ClientsDetailsPage() {
         const formData = new FormData();
         formData.append("file", file);
         const response = await fetchWithAuth(
-          `/api/gerit/v1/client/${client.id}/addresses/bulk-upload`,
+          `/api/gerit/v1/clients/${client.id}/addresses/bulk-upload`,
           { method: "POST", body: formData },
         );
         const payload = (await response.json().catch(() => null)) as unknown;
@@ -1554,7 +1505,7 @@ export function ClientsDetailsPage() {
       }
       if (!searchTerm) return true;
       const email = contact.email ?? "";
-      const phone = contact.phone ?? "";
+      const phone = contact.phoneNumber ?? "";
       return (
         contact.name.toLowerCase().includes(searchTerm) ||
         email.toLowerCase().includes(searchTerm) ||
@@ -1603,7 +1554,7 @@ export function ClientsDetailsPage() {
     (contact: ContactItem) => [
       contact.name,
       contact.email ?? "-",
-      contact.phone ?? "-",
+      contact.phoneNumber ?? "-",
     ],
     [],
   );
@@ -1613,9 +1564,7 @@ export function ClientsDetailsPage() {
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          contact.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-[#3E515B] dark:text-[#84a0c0]",
         )}
       >
         {contact.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -1762,9 +1711,7 @@ export function ClientsDetailsPage() {
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          address.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-[#3E515B] dark:text-[#84a0c0]",
         )}
       >
         {address.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -2025,6 +1972,331 @@ export function ClientsDetailsPage() {
     );
   };
 
+  /* ---------- Render: Info tab ---------- */
+
+  const renderInfoTab = () => (
+    <form onSubmit={(e) => void handleClientSubmit(e)} className="space-y-6">
+      {/* Basic client fields */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <SelectField
+          label={t("clients.form.clientType")}
+          value={clientFormState.clientType}
+          onChange={handleClientTypeChange}
+          options={CLIENT_TYPE_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: t(opt.labelKey),
+          }))}
+          placeholder={t("clients.form.selectOption")}
+        />
+        <SelectField
+          label={t("clients.form.origin")}
+          value={clientFormState.originType}
+          onChange={(v) =>
+            setClientFormState((prev) => ({ ...prev, originType: v }))
+          }
+          options={ORIGIN_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: t(opt.labelKey),
+          }))}
+          placeholder={t("clients.form.selectOption")}
+        />
+
+        {/* Note / Observations - full width */}
+        <div className="sm:col-span-2 lg:col-span-3">
+          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            {t("clients.form.observation")}
+          </label>
+          <textarea
+            value={clientFormState.note}
+            onChange={(event) =>
+              setClientFormState((prev) => ({
+                ...prev,
+                note: event.target.value,
+              }))
+            }
+            rows={3}
+            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+          />
+        </div>
+      </div>
+
+      {/* Dynamic individual/company fields */}
+      {showIndividualFields && renderIndividualFields()}
+      {showCompanyFields && renderCompanyFields()}
+
+      {/* Save button */}
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          disabled={submittingClient}
+          className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+        >
+          {submittingClient && <Loader2 className="h-4 w-4 animate-spin" />}
+          {t("clients.actions.save")}
+        </button>
+      </div>
+    </form>
+  );
+
+  /* ---------- Render: Contacts tab ---------- */
+
+  const renderContactsTab = () => {
+    if (!loadedTabs.has("contactos")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Contact form */}
+        <form
+          onSubmit={(e) => void handleContactSubmit(e)}
+          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.contacts.form.name")}
+              value={contactFormState.name}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, name: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.contacts.form.email")}
+              value={contactFormState.email}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, email: v }))
+              }
+              type="email"
+            />
+            <FormField
+              label={t("clients.contacts.form.phone")}
+              value={contactFormState.phoneNumber}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, phoneNumber: v }))
+              }
+              required
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={contactSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+            >
+              {contactSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingContact ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingContact && (
+              <button
+                type="button"
+                onClick={resetContactForm}
+                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+            {/* Bulk upload */}
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+              {contactsBulkUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {t("clients.contacts.bulk.label")}
+              <input
+                type="file"
+                accept=".csv"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  void handleContactsBulkUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </form>
+
+        {/* Contacts grid */}
+        <HubGrid
+          columns={contactColumns}
+          items={visibleContacts}
+          renderRowCells={contactRowCells}
+          renderStatus={renderContactStatus}
+          renderActions={renderContactActions}
+          rowDensity={contactGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setContactGridDensity}
+          sortBy={contactSortBy}
+          sortDirection={contactSortDirection}
+          onSort={handleContactSort}
+          statusFilter={contactStatusFilter}
+          statusFilterOptions={contactStatusFilterOptions}
+          onStatusFilterChange={setContactStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={contactSearch}
+          onSearchChange={setContactSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={contactsLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.contacts.empty")}
+          pageCaption={contactPageCaption}
+          page={contactPage}
+          totalPages={contactTotalPages}
+          pageButtons={contactPageButtons}
+          onPageChange={setContactPage}
+          pageSize={contactPageSize}
+          pageSizeOptions={CONTACT_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setContactPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(contact) => contact.id}
+        />
+      </div>
+    );
+  };
+
+  /* ---------- Render: Addresses tab ---------- */
+
+  const renderAddressesTab = () => {
+    if (!loadedTabs.has("enderecos")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Address form */}
+        <form
+          onSubmit={(e) => void handleAddressSubmit(e)}
+          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.addresses.form.street")}
+              value={addressFormState.street}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, street: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.addresses.form.city")}
+              value={addressFormState.city}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, city: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.addresses.form.state")}
+              value={addressFormState.state}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, state: v }))
+              }
+            />
+            <FormField
+              label={t("clients.addresses.form.postalCode")}
+              value={addressFormState.postalCode}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, postalCode: v }))
+              }
+            />
+            <FormField
+              label={t("clients.addresses.form.country")}
+              value={addressFormState.country}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, country: v }))
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={addressSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+            >
+              {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingAddress && (
+              <button
+                type="button"
+                onClick={resetAddressForm}
+                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+            {/* Bulk upload */}
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+              {addressesBulkUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {t("clients.addresses.bulk.label")}
+              <input
+                type="file"
+                accept=".csv"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  void handleAddressesBulkUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </form>
+
+        {/* Addresses grid */}
+        <HubGrid
+          columns={addressColumns}
+          items={visibleAddresses}
+          renderRowCells={addressRowCells}
+          renderStatus={renderAddressStatus}
+          renderActions={renderAddressActions}
+          rowDensity={addressGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setAddressGridDensity}
+          sortBy={addressSortBy}
+          sortDirection={addressSortDirection}
+          onSort={handleAddressSort}
+          statusFilter={addressStatusFilter}
+          statusFilterOptions={addressStatusFilterOptions}
+          onStatusFilterChange={setAddressStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={addressSearch}
+          onSearchChange={setAddressSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={addressesLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.addresses.empty")}
+          pageCaption={addressPageCaption}
+          page={addressPage}
+          totalPages={addressTotalPages}
+          pageButtons={addressPageButtons}
+          onPageChange={setAddressPage}
+          pageSize={addressPageSize}
+          pageSizeOptions={ADDRESS_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setAddressPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(address) => address.id}
+        />
+      </div>
+    );
+  };
+
   /* ==========================
      RENDER
      ========================== */
@@ -2034,44 +2306,56 @@ export function ClientsDetailsPage() {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#243143]">
           {/* ---------- Header ---------- */}
-          <div className="mb-6 flex items-center justify-between gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f]">
-            <div>
-              <h1 className="text-3xl font-semibold text-[#0f172a] dark:text-white">
-                {isEditing ? t("clients.form.editTitle") : t("clients.form.newTitle")}
-              </h1>
-              <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
-                {client ? t("clients.form.subtitle") : t("clients.detail.helper")}
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
+          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f] sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/operations/clients/")}
-                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
+                title={t("clients.actions.back")}
               >
-                {t("clients.actions.back")}
+                <ArrowLeft className="h-5 w-5" />
               </button>
+              <div>
+                <div className="flex items-center gap-3">
+                  <h1 className="text-2xl font-semibold text-[#0f172a] dark:text-white sm:text-3xl">
+                    {isEditing
+                      ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
+                      : t("clients.form.newTitle")}
+                  </h1>
+                  {client && (
+                    <span
+                      className={clsx(
+                        "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
+                        client.isActive
+                          ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                          : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400",
+                      )}
+                    >
+                      {client.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                  {client ? client.clientTypeDescription ?? "" : t("clients.detail.helper")}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
               {client && (
-                <>
-                  <span
-                    className={clsx(
-                      "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
-                      client.isActive
-                        ? "text-[#3E515B] dark:text-[#84a0c0]"
-                        : "text-[#3E515B] dark:text-[#84a0c0]",
-                    )}
-                  >
-                    {client.isActive ? t("clients.status.active") : t("clients.status.inactive")}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void handleClientToggleStatus()}
-                    className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
-                  >
-                    <Power className="h-4 w-4" />
-                    {client.isActive ? t("clients.actions.deactivate") : t("clients.actions.activate")}
-                  </button>
-                </>
+                <button
+                  type="button"
+                  onClick={() => void handleClientToggleStatus()}
+                  className={clsx(
+                    "inline-flex items-center gap-2 rounded-sm border px-4 py-2 text-sm font-semibold transition-colors",
+                    client.isActive
+                      ? "border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-transparent dark:text-red-400 dark:hover:bg-red-950/30"
+                      : "border-green-300 bg-white text-green-700 hover:bg-green-50 dark:border-green-800 dark:bg-transparent dark:text-green-400 dark:hover:bg-green-950/30",
+                  )}
+                >
+                  <Power className="h-4 w-4" />
+                  {client.isActive ? t("clients.actions.deactivate") : t("clients.actions.activate")}
+                </button>
               )}
             </div>
           </div>
@@ -2090,417 +2374,22 @@ export function ClientsDetailsPage() {
           {!loadingClient && (
             <HubTabs<ClientTab>
               activeTab={activeTab}
-              onTabChange={setActiveTab}
+              onTabChange={handleTabChange}
               tabs={[
                 {
-                  id: "client",
+                  id: "informacoes",
                   label: t("clients.detail.tabs.clientSummary"),
-                  panel: (
-                    <form onSubmit={(e) => void handleClientSubmit(e)} className="space-y-6">
-                      {/* Basic client fields */}
-                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                        <SelectField
-                          label={t("clients.form.clientType")}
-                          value={clientFormState.clientType}
-                          onChange={handleClientTypeChange}
-                          options={CLIENT_TYPE_OPTIONS.map((opt) => ({
-                            value: opt.value,
-                            label: t(opt.labelKey),
-                          }))}
-                          placeholder={t("clients.form.selectOption")}
-                        />
-                        <SelectField
-                          label={t("clients.form.origin")}
-                          value={clientFormState.origin}
-                          onChange={(v) =>
-                            setClientFormState((prev) => ({ ...prev, origin: v }))
-                          }
-                          options={ORIGIN_OPTIONS.map((opt) => ({
-                            value: opt.value,
-                            label: t(opt.labelKey),
-                          }))}
-                          placeholder={t("clients.form.selectOption")}
-                        />
-                        <FormField
-                          label={t("clients.form.website")}
-                          value={clientFormState.website}
-                          onChange={(v) =>
-                            setClientFormState((prev) => ({ ...prev, website: v }))
-                          }
-                          type="url"
-                        />
-                        <FormField
-                          label={t("clients.form.score")}
-                          value={clientFormState.score}
-                          onChange={(v) =>
-                            setClientFormState((prev) => ({ ...prev, score: v }))
-                          }
-                          type="number"
-                        />
-                        <div className="sm:col-span-2 lg:col-span-3">
-                          <ToggleField
-                            label={t("clients.form.consent")}
-                            checked={clientFormState.consent}
-                            onChange={(v) =>
-                              setClientFormState((prev) => ({ ...prev, consent: v }))
-                            }
-                            onLabel={t("clients.form.consentOn")}
-                            offLabel={t("clients.form.consentOff")}
-                          />
-                        </div>
-                        <div className="sm:col-span-2 lg:col-span-3">
-                          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
-                            {t("clients.form.observation")}
-                          </label>
-                          <textarea
-                            value={clientFormState.remarks}
-                            onChange={(event) =>
-                              setClientFormState((prev) => ({
-                                ...prev,
-                                remarks: event.target.value,
-                              }))
-                            }
-                            rows={3}
-                            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Dynamic individual/company fields */}
-                      {showIndividualFields && renderIndividualFields()}
-                      {showCompanyFields && renderCompanyFields()}
-
-                      {/* Primary contact & address summary */}
-                      <hr className="border-t border-[#c9d2e0] dark:border-[#38505d]" />
-                      <div className="mt-5 flex flex-col gap-6 lg:flex-row lg:items-start">
-                        <div className="flex-1 space-y-4">
-                          <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]">
-                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#94a5b4] dark:text-[#8da7b4]">
-                              {t("clients.detail.item.primaryContact")}
-                            </p>
-                            {primaryContact ? (
-                              <div className="mt-3 space-y-2 text-sm text-[#163047] dark:text-[#d6e6ee]">
-                                <p>
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.contacts.form.name")}:{" "}
-                                  </strong>
-                                  {primaryContact.name}
-                                </p>
-                                <p className="text-[#475569] dark:text-[#9eb1bc]">
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.contacts.form.email")}:{" "}
-                                  </strong>
-                                  {primaryContact.email ?? "-"}
-                                </p>
-                                <p className="text-[#475569] dark:text-[#9eb1bc]">
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.contacts.form.phone")}:{" "}
-                                  </strong>
-                                  {primaryContact.phone ?? "-"}
-                                </p>
-                              </div>
-                            ) : (
-                              <p className="mt-3 text-sm text-[#94a5b4]">
-                                {t("clients.contacts.empty")}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex-1 space-y-4">
-                          <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]">
-                            <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[#94a5b4] dark:text-[#8da7b4]">
-                              {t("clients.detail.item.primaryAddress")}
-                            </p>
-                            {primaryAddress ? (
-                              <div className="mt-3 space-y-2 text-sm text-[#163047] dark:text-[#d6e6ee]">
-                                <p>
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.addresses.form.street")}:{" "}
-                                  </strong>
-                                  {primaryAddress.street ?? "-"}
-                                </p>
-                                <p className="text-[#475569] dark:text-[#9eb1bc]">
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.addresses.form.city")}:{" "}
-                                  </strong>
-                                  {primaryAddress.city ?? "-"}
-                                </p>
-                                <p className="text-[#475569] dark:text-[#9eb1bc]">
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.addresses.form.state")}:{" "}
-                                  </strong>
-                                  {primaryAddress.state ?? "-"}
-                                </p>
-                                <p className="text-[#475569] dark:text-[#9eb1bc]">
-                                  <strong className="text-[#1f2c3e] dark:text-white">
-                                    {t("clients.addresses.form.postalCode")}:{" "}
-                                  </strong>
-                                  {primaryAddress.postalCode ?? "-"}
-                                </p>
-                              </div>
-                            ) : (
-                              <p className="mt-3 text-sm text-[#94a5b4]">
-                                {t("clients.addresses.empty")}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Save button */}
-                      <div className="flex justify-end">
-                        <button
-                          type="submit"
-                          disabled={submittingClient}
-                          className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
-                        >
-                          {submittingClient && <Loader2 className="h-4 w-4 animate-spin" />}
-                          {t("clients.actions.save")}
-                        </button>
-                      </div>
-                    </form>
-                  ),
+                  panel: renderInfoTab(),
                 },
                 {
-                  id: "contacts",
+                  id: "contactos",
                   label: t("clients.detail.tabs.contactsSummary"),
-                  panel: (
-                    <div className="space-y-4">
-                      {/* Contact form */}
-                      <form
-                        onSubmit={(e) => void handleContactSubmit(e)}
-                        className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
-                      >
-                        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <FormField
-                            label={t("clients.contacts.form.name")}
-                            value={contactFormState.name}
-                            onChange={(v) =>
-                              setContactFormState((prev) => ({ ...prev, name: v }))
-                            }
-                            required
-                          />
-                          <FormField
-                            label={t("clients.contacts.form.email")}
-                            value={contactFormState.email}
-                            onChange={(v) =>
-                              setContactFormState((prev) => ({ ...prev, email: v }))
-                            }
-                            type="email"
-                          />
-                          <FormField
-                            label={t("clients.contacts.form.phone")}
-                            value={contactFormState.phone}
-                            onChange={(v) =>
-                              setContactFormState((prev) => ({ ...prev, phone: v }))
-                            }
-                            required
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="submit"
-                            disabled={contactSubmitting}
-                            className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
-                          >
-                            {contactSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {editingContact ? t("clients.actions.save") : t("clients.actions.add")}
-                          </button>
-                          {editingContact && (
-                            <button
-                              type="button"
-                              onClick={resetContactForm}
-                              className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
-                            >
-                              {t("clients.actions.cancel")}
-                            </button>
-                          )}
-                          {/* Bulk upload */}
-                          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
-                            {contactsBulkUploading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                            {t("clients.contacts.bulk.label")}
-                            <input
-                              type="file"
-                              accept=".csv"
-                              className="sr-only"
-                              onChange={(event) => {
-                                const file = event.currentTarget.files?.[0] ?? null;
-                                void handleContactsBulkUpload(file);
-                                event.currentTarget.value = "";
-                              }}
-                            />
-                          </label>
-                        </div>
-                      </form>
-
-                      {/* Contacts grid */}
-                      <HubGrid
-                        columns={contactColumns}
-                        items={visibleContacts}
-                        renderRowCells={contactRowCells}
-                        renderStatus={renderContactStatus}
-                        renderActions={renderContactActions}
-                        rowDensity={contactGridDensity}
-                        densityOptions={gridDensityOptions}
-                        onDensityChange={setContactGridDensity}
-                        sortBy={contactSortBy}
-                        sortDirection={contactSortDirection}
-                        onSort={handleContactSort}
-                        statusFilter={contactStatusFilter}
-                        statusFilterOptions={contactStatusFilterOptions}
-                        onStatusFilterChange={setContactStatusFilter}
-                        statusFilterLabel={t("clients.filters.statusLabel")}
-                        searchValue={contactSearch}
-                        onSearchChange={setContactSearch}
-                        searchPlaceholder={t("clients.filters.search")}
-                        loading={contactsLoading}
-                        loadingText={t("clients.loading")}
-                        emptyText={t("clients.contacts.empty")}
-                        pageCaption={contactPageCaption}
-                        page={contactPage}
-                        totalPages={contactTotalPages}
-                        pageButtons={contactPageButtons}
-                        onPageChange={setContactPage}
-                        pageSize={contactPageSize}
-                        pageSizeOptions={CONTACT_GRID_PAGE_SIZE_OPTIONS}
-                        onPageSizeChange={setContactPageSize}
-                        paginationPreviousLabel={t("clients.pagination.previous")}
-                        paginationNextLabel={t("clients.pagination.next")}
-                        paginationPageLabel={t("clients.pagination.page")}
-                        paginationPerPageLabel={t("clients.pagination.perPage")}
-                        getRowKey={(contact) => contact.id}
-                      />
-                    </div>
-                  ),
+                  panel: renderContactsTab(),
                 },
                 {
-                  id: "addresses",
+                  id: "enderecos",
                   label: t("clients.detail.tabs.addressesSummary"),
-                  panel: (
-                    <div className="space-y-4">
-                      {/* Address form */}
-                      <form
-                        onSubmit={(e) => void handleAddressSubmit(e)}
-                        className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
-                      >
-                        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                          <FormField
-                            label={t("clients.addresses.form.street")}
-                            value={addressFormState.street}
-                            onChange={(v) =>
-                              setAddressFormState((prev) => ({ ...prev, street: v }))
-                            }
-                            required
-                          />
-                          <FormField
-                            label={t("clients.addresses.form.city")}
-                            value={addressFormState.city}
-                            onChange={(v) =>
-                              setAddressFormState((prev) => ({ ...prev, city: v }))
-                            }
-                            required
-                          />
-                          <FormField
-                            label={t("clients.addresses.form.state")}
-                            value={addressFormState.state}
-                            onChange={(v) =>
-                              setAddressFormState((prev) => ({ ...prev, state: v }))
-                            }
-                          />
-                          <FormField
-                            label={t("clients.addresses.form.postalCode")}
-                            value={addressFormState.postalCode}
-                            onChange={(v) =>
-                              setAddressFormState((prev) => ({ ...prev, postalCode: v }))
-                            }
-                          />
-                          <FormField
-                            label={t("clients.addresses.form.country")}
-                            value={addressFormState.country}
-                            onChange={(v) =>
-                              setAddressFormState((prev) => ({ ...prev, country: v }))
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="submit"
-                            disabled={addressSubmitting}
-                            className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
-                          >
-                            {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
-                          </button>
-                          {editingAddress && (
-                            <button
-                              type="button"
-                              onClick={resetAddressForm}
-                              className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
-                            >
-                              {t("clients.actions.cancel")}
-                            </button>
-                          )}
-                          {/* Bulk upload */}
-                          <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
-                            {addressesBulkUploading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : null}
-                            {t("clients.addresses.bulk.label")}
-                            <input
-                              type="file"
-                              accept=".csv"
-                              className="sr-only"
-                              onChange={(event) => {
-                                const file = event.currentTarget.files?.[0] ?? null;
-                                void handleAddressesBulkUpload(file);
-                                event.currentTarget.value = "";
-                              }}
-                            />
-                          </label>
-                        </div>
-                      </form>
-
-                      {/* Addresses grid */}
-                      <HubGrid
-                        columns={addressColumns}
-                        items={visibleAddresses}
-                        renderRowCells={addressRowCells}
-                        renderStatus={renderAddressStatus}
-                        renderActions={renderAddressActions}
-                        rowDensity={addressGridDensity}
-                        densityOptions={gridDensityOptions}
-                        onDensityChange={setAddressGridDensity}
-                        sortBy={addressSortBy}
-                        sortDirection={addressSortDirection}
-                        onSort={handleAddressSort}
-                        statusFilter={addressStatusFilter}
-                        statusFilterOptions={addressStatusFilterOptions}
-                        onStatusFilterChange={setAddressStatusFilter}
-                        statusFilterLabel={t("clients.filters.statusLabel")}
-                        searchValue={addressSearch}
-                        onSearchChange={setAddressSearch}
-                        searchPlaceholder={t("clients.filters.search")}
-                        loading={addressesLoading}
-                        loadingText={t("clients.loading")}
-                        emptyText={t("clients.addresses.empty")}
-                        pageCaption={addressPageCaption}
-                        page={addressPage}
-                        totalPages={addressTotalPages}
-                        pageButtons={addressPageButtons}
-                        onPageChange={setAddressPage}
-                        pageSize={addressPageSize}
-                        pageSizeOptions={ADDRESS_GRID_PAGE_SIZE_OPTIONS}
-                        onPageSizeChange={setAddressPageSize}
-                        paginationPreviousLabel={t("clients.pagination.previous")}
-                        paginationNextLabel={t("clients.pagination.next")}
-                        paginationPageLabel={t("clients.pagination.page")}
-                        paginationPerPageLabel={t("clients.pagination.perPage")}
-                        getRowKey={(address) => address.id}
-                      />
-                    </div>
-                  ),
+                  panel: renderAddressesTab(),
                 },
               ]}
             />

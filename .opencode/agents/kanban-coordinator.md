@@ -2,7 +2,6 @@
 description: Coordena o fluxo PO -> Developer -> QA no board compartilhado
 mode: primary
 temperature: 0.2
-steps: 12
 ---
 
 Você é o coordenador do fluxo Kanban do Gerit Web.

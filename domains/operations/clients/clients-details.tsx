@@ -1987,6 +1987,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {t("clients.form.company.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {/* Line 1: Razão Social + Nome Comercial */}
           <FormField
             label={t("clients.form.company.legalName")}
             value={comp.legalName}
@@ -1997,7 +1998,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             label={t("clients.form.company.tradeName")}
             value={comp.tradeName}
             onChange={(v) => updateCompany("tradeName", v)}
+            className="sm:col-span-2 lg:col-span-2"
           />
+          {/* Line 2: Telefone + Telemóvel + WhatsApp */}
           <FormField
             label={t("clients.form.company.phoneNumber")}
             value={comp.phoneNumber}
@@ -2008,6 +2011,14 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             value={comp.cellPhoneNumber}
             onChange={(v) => updateCompany("cellPhoneNumber", v)}
           />
+          <ToggleField
+            label={t("clients.form.company.isWhatsapp")}
+            checked={comp.isWhatsapp}
+            onChange={(v) => updateCompany("isWhatsapp", v)}
+            onLabel={t("clients.switch.on")}
+            offLabel={t("clients.switch.off")}
+          />
+          {/* Line 3: E-mail + Site + N.º Funcionários */}
           <FormField
             label={t("clients.form.company.email")}
             value={comp.email}
@@ -2021,6 +2032,20 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             type="url"
           />
           <FormField
+            label={t("clients.form.company.numberOfEmployee")}
+            value={comp.numberOfEmployee}
+            onChange={(v) => updateCompany("numberOfEmployee", v)}
+            type="number"
+          />
+          {/* Line 4: Representante Legal (full width) */}
+          <FormField
+            label={t("clients.form.company.legalRepresentative")}
+            value={comp.legalRepresentative}
+            onChange={(v) => updateCompany("legalRepresentative", v)}
+            className="sm:col-span-2 lg:col-span-3"
+          />
+          {/* Line 5: NIF + CAE + Origem */}
+          <FormField
             label={t("clients.form.company.companyRegistration")}
             value={comp.companyRegistration}
             onChange={(v) => updateCompany("companyRegistration", v)}
@@ -2030,25 +2055,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             value={comp.cae}
             onChange={(v) => updateCompany("cae", v)}
           />
-          <FormField
-            label={t("clients.form.company.numberOfEmployee")}
-            value={comp.numberOfEmployee}
-            onChange={(v) => updateCompany("numberOfEmployee", v)}
-            type="number"
-          />
-          <FormField
-            label={t("clients.form.company.legalRepresentative")}
-            value={comp.legalRepresentative}
-            onChange={(v) => updateCompany("legalRepresentative", v)}
-          />
-          <ToggleField
-            label={t("clients.form.company.isWhatsapp")}
-            checked={comp.isWhatsapp}
-            onChange={(v) => updateCompany("isWhatsapp", v)}
-            onLabel={t("clients.switch.on")}
-            offLabel={t("clients.switch.off")}
-          />
-          {/* Company fields: Origin */}
           <SelectField
             label={t("clients.form.origin")}
             value={clientFormState.originType}
@@ -2061,6 +2067,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             }))}
             placeholder={t("clients.form.selectOption")}
           />
+          {/* Line 6: Estado */}
           <ToggleField
             label={t("clients.switch.status")}
             checked={clientFormState.isActive}
@@ -2070,23 +2077,23 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             onLabel={t("clients.switch.active")}
             offLabel={t("clients.switch.inactive")}
           />
-        </div>
-        {/* Observações */}
-        <div className="mt-4">
-          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
-            {t("clients.form.observation")}
-          </label>
-          <textarea
-            value={clientFormState.note}
-            onChange={(event) =>
-              setClientFormState((prev) => ({
-                ...prev,
-                note: event.target.value,
-              }))
-            }
-            rows={3}
-            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
-          />
+          {/* Line 7: Observações (full width) */}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+              {t("clients.form.observation")}
+            </label>
+            <textarea
+              value={clientFormState.note}
+              onChange={(event) =>
+                setClientFormState((prev) => ({
+                  ...prev,
+                  note: event.target.value,
+                }))
+              }
+              rows={3}
+              className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+            />
+          </div>
         </div>
       </div>
     );

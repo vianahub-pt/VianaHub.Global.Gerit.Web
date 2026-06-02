@@ -110,6 +110,7 @@ Located in `.opencode/agents/`:
 ## Workflow Automation
 
 ### Regra Geral
+Toda e qualquer comunicação com o usuário e também as issue do Github Projects sempre serão em português do Brasil.
 Os agentes devem ser invocados **automaticamente** sem pedir confirmação ao utilizador.
 A **única intervenção humana** é aprovar o PR no GitHub.
 

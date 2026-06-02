@@ -1,5 +1,6 @@
 # Shared Kanban Flow
 
+- Toda e qualquer comunicação com o usuário e também as issue do Github Projects sempre serão em português do Brasil.
 - Board padrão para todos os repositórios e aplicações: `https://github.com/users/vianahub-pt/projects/1`
 - O repositório deve ser resolvido dinamicamente pelo workspace atual, nunca hardcoded para outro projeto.
 - O fluxo é sempre:

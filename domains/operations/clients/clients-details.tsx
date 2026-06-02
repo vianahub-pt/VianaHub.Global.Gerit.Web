@@ -1815,11 +1815,15 @@ export function ClientsDetailsPage() {
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <FormField
-            label={t("clients.form.individual.displayName")}
-            value={ind.displayName}
-            onChange={(v) => updateIndividual("displayName", v)}
-          />
+          {/* Line 1: Nome completo — 3 colunas */}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <FormField
+              label={t("clients.form.individual.displayName")}
+              value={ind.displayName}
+              onChange={(v) => updateIndividual("displayName", v)}
+            />
+          </div>
+          {/* Line 2: Nome próprio | Apelido | Origem */}
           <FormField
             label={t("clients.form.individual.firstName")}
             value={ind.firstName}
@@ -1832,6 +1836,28 @@ export function ClientsDetailsPage() {
             onChange={(v) => updateIndividual("lastName", v)}
             required
           />
+          <SelectField
+            label={t("clients.form.origin")}
+            value={clientFormState.originType}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, originType: v }))
+            }
+            options={ORIGIN_OPTIONS.map((opt) => ({
+              value: opt.value,
+              label: t(opt.labelKey),
+            }))}
+            placeholder={t("clients.form.selectOption")}
+          />
+          {/* Line 3: E-mail — 3 colunas */}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <FormField
+              label={t("clients.form.individual.email")}
+              value={ind.email}
+              onChange={(v) => updateIndividual("email", v)}
+              type="email"
+            />
+          </div>
+          {/* Line 4: Telefone | Telemóvel | WhatsApp */}
           <FormField
             label={t("clients.form.individual.phoneNumber")}
             value={ind.phoneNumber}
@@ -1842,12 +1868,14 @@ export function ClientsDetailsPage() {
             value={ind.cellPhoneNumber}
             onChange={(v) => updateIndividual("cellPhoneNumber", v)}
           />
-          <FormField
-            label={t("clients.form.individual.email")}
-            value={ind.email}
-            onChange={(v) => updateIndividual("email", v)}
-            type="email"
+          <ToggleField
+            label={t("clients.form.individual.isWhatsapp")}
+            checked={ind.isWhatsapp}
+            onChange={(v) => updateIndividual("isWhatsapp", v)}
+            onLabel={t("clients.switch.on")}
+            offLabel={t("clients.switch.off")}
           />
+          {/* Line 5: Data nascimento | Género | Nacionalidade */}
           <FormField
             label={t("clients.form.individual.birthDate")}
             value={ind.birthDate}
@@ -1864,6 +1892,12 @@ export function ClientsDetailsPage() {
             }))}
             placeholder={t("clients.form.selectOption")}
           />
+          <FormField
+            label={t("clients.form.individual.nationality")}
+            value={ind.nationality}
+            onChange={(v) => updateIndividual("nationality", v)}
+          />
+          {/* Line 6: Tipo documento | Nº Documento | Ativar/Desativar */}
           <SelectField
             label={t("clients.form.individual.documentType")}
             value={ind.documentType}
@@ -1879,17 +1913,31 @@ export function ClientsDetailsPage() {
             value={ind.documentNumber}
             onChange={(v) => updateIndividual("documentNumber", v)}
           />
-          <FormField
-            label={t("clients.form.individual.nationality")}
-            value={ind.nationality}
-            onChange={(v) => updateIndividual("nationality", v)}
-          />
           <ToggleField
-            label={t("clients.form.individual.isWhatsapp")}
-            checked={ind.isWhatsapp}
-            onChange={(v) => updateIndividual("isWhatsapp", v)}
-            onLabel={t("clients.switch.on")}
-            offLabel={t("clients.switch.off")}
+            label={t("clients.switch.status")}
+            checked={clientFormState.isActive}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, isActive: v }))
+            }
+            onLabel={t("clients.switch.active")}
+            offLabel={t("clients.switch.inactive")}
+          />
+        </div>
+        {/* Line 7: Observações — abaixo do grid */}
+        <div className="mt-4">
+          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            {t("clients.form.observation")}
+          </label>
+          <textarea
+            value={clientFormState.note}
+            onChange={(event) =>
+              setClientFormState((prev) => ({
+                ...prev,
+                note: event.target.value,
+              }))
+            }
+            rows={3}
+            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
           />
         </div>
       </div>
@@ -1967,42 +2015,31 @@ export function ClientsDetailsPage() {
             onLabel={t("clients.switch.on")}
             offLabel={t("clients.switch.off")}
           />
+          {/* Company fields: Origin */}
+          <SelectField
+            label={t("clients.form.origin")}
+            value={clientFormState.originType}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, originType: v }))
+            }
+            options={ORIGIN_OPTIONS.map((opt) => ({
+              value: opt.value,
+              label: t(opt.labelKey),
+            }))}
+            placeholder={t("clients.form.selectOption")}
+          />
+          <ToggleField
+            label={t("clients.switch.status")}
+            checked={clientFormState.isActive}
+            onChange={(v) =>
+              setClientFormState((prev) => ({ ...prev, isActive: v }))
+            }
+            onLabel={t("clients.switch.active")}
+            offLabel={t("clients.switch.inactive")}
+          />
         </div>
-      </div>
-    );
-  };
-
-  /* ---------- Render: Info tab ---------- */
-
-  const renderInfoTab = () => (
-    <form onSubmit={(e) => void handleClientSubmit(e)} className="space-y-6">
-      {/* Basic client fields */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <SelectField
-          label={t("clients.form.clientType")}
-          value={clientFormState.clientType}
-          onChange={handleClientTypeChange}
-          options={CLIENT_TYPE_OPTIONS.map((opt) => ({
-            value: opt.value,
-            label: t(opt.labelKey),
-          }))}
-          placeholder={t("clients.form.selectOption")}
-        />
-        <SelectField
-          label={t("clients.form.origin")}
-          value={clientFormState.originType}
-          onChange={(v) =>
-            setClientFormState((prev) => ({ ...prev, originType: v }))
-          }
-          options={ORIGIN_OPTIONS.map((opt) => ({
-            value: opt.value,
-            label: t(opt.labelKey),
-          }))}
-          placeholder={t("clients.form.selectOption")}
-        />
-
-        {/* Note / Observations - full width */}
-        <div className="sm:col-span-2 lg:col-span-3">
+        {/* Observações */}
+        <div className="mt-4">
           <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
             {t("clients.form.observation")}
           </label>
@@ -2019,13 +2056,41 @@ export function ClientsDetailsPage() {
           />
         </div>
       </div>
+    );
+  };
+
+  /* ---------- Render: Info tab ---------- */
+
+  const renderInfoTab = () => (
+    <form onSubmit={(e) => void handleClientSubmit(e)} className="space-y-6">
+      {/* Client type selector */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <SelectField
+          label={t("clients.form.clientType")}
+          value={clientFormState.clientType}
+          onChange={handleClientTypeChange}
+          options={CLIENT_TYPE_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: t(opt.labelKey),
+          }))}
+          placeholder={t("clients.form.selectOption")}
+        />
+      </div>
 
       {/* Dynamic individual/company fields */}
       {showIndividualFields && renderIndividualFields()}
       {showCompanyFields && renderCompanyFields()}
 
-      {/* Save button */}
-      <div className="flex justify-end">
+      {/* Footer: Voltar + Guardar */}
+      <div className="flex justify-start gap-3">
+        <button
+          type="button"
+          onClick={() => router.push("/operations/clients/")}
+          className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          {t("clients.actions.back")}
+        </button>
         <button
           type="submit"
           disabled={submittingClient}

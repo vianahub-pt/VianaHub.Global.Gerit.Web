@@ -4,6 +4,7 @@ import clsx from "clsx";
 import {
   Loader2,
   Power,
+  PowerOff,
   SquarePen,
   Trash2,
   UserRoundPlus,
@@ -474,7 +475,10 @@ export function ClientsPage() {
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          {client.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />
+          }
         </button>
         <button
           type="button"

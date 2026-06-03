@@ -47,6 +47,28 @@ async function proxyRequest(
       cache: "no-store",
     });
 
+    // Loga respostas de erro da API (4xx/5xx) para diagnóstico
+    if (!upstreamResponse.ok) {
+      const responseBody = await upstreamResponse.text().catch(() => "");
+      logger.warn("API Gerit retornou erro", {
+        context: "api.gerit.proxy",
+        method,
+        upstreamUrl,
+        status: upstreamResponse.status,
+        response: responseBody.slice(0, 500),
+      });
+
+      const responseHeaders = new Headers();
+      const contentType = upstreamResponse.headers.get("content-type");
+      if (contentType) responseHeaders.set("Content-Type", contentType);
+      responseHeaders.set("Cache-Control", "no-store");
+
+      return new Response(responseBody, {
+        status: upstreamResponse.status,
+        headers: responseHeaders,
+      });
+    }
+
     const responseHeaders = new Headers();
     const contentType = upstreamResponse.headers.get("content-type");
 

@@ -37,6 +37,17 @@ function serializeMeta(meta: Record<string, unknown>) {
     .join(" ");
 }
 
+const humanReadableFileFormat = format.combine(
+  format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+  format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = serializeMeta(meta as Record<string, unknown>);
+
+    return metaStr
+      ? `${timestamp} ${level}: ${message} ${metaStr}`
+      : `${timestamp} ${level}: ${message}`;
+  }),
+);
+
 function createWinstonLogger() {
   ensureLogDirectory();
 
@@ -63,6 +74,13 @@ function createWinstonLogger() {
               : `${timestamp} ${level}: ${message}`;
           }),
         ),
+      }),
+      // File transport legível: escreve logs de desenvolvimento em logs/application.log
+      // Em produção (static export), este transport é usado apenas durante o build;
+      // para debug em produção, o Console transport ainda está disponível
+      new transports.File({
+        filename: path.join(LOG_DIRECTORY, "application.log"),
+        format: humanReadableFileFormat,
       }),
     ],
   });

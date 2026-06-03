@@ -1,0 +1,427 @@
+"use client";
+
+import clsx from "clsx";
+import { ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import type { ReactNode } from "react";
+
+export type RowDensity = "compact" | "medium" | "expanded";
+
+export interface HubGridColumn<Item> {
+  key: string;
+  label: string;
+  sortable?: boolean;
+  headerClassName?: string;
+  cellClassName?: string;
+}
+
+export interface HubGridProps<Item> {
+  title?: string;
+  subtitle?: string;
+  columns: HubGridColumn<Item>[];
+  items: Item[];
+  renderRowCells: (item: Item) => ReactNode[];
+  renderStatus?: (item: Item) => ReactNode;
+  statusColumnLabel?: string;
+  renderActions?: (item: Item) => ReactNode;
+  actionsColumnLabel?: string;
+  rowDensity: RowDensity;
+  densityOptions: { key: RowDensity; label: string }[];
+  onDensityChange: (value: RowDensity) => void;
+  sortBy: string;
+  sortDirection: "asc" | "desc";
+  onSort: (columnKey: string) => void;
+  statusFilter: string;
+  statusFilterOptions: { value: string; label: string }[];
+  onStatusFilterChange: (value: string) => void;
+  statusFilterLabel: string;
+  searchValue: string;
+  onSearchChange: (value: string) => void;
+  searchPlaceholder: string;
+  loading: boolean;
+  loadingText: string;
+  emptyText: string;
+  pageCaption: string;
+  page: number;
+  totalPages: number;
+  pageButtons: number[];
+  onPageChange: (value: number) => void;
+  pageSize: number;
+  pageSizeOptions: number[];
+  onPageSizeChange: (value: number) => void;
+  paginationPreviousLabel: string;
+  paginationNextLabel: string;
+  paginationPageLabel: string;
+  paginationPerPageLabel: string;
+  selectedRowKey?: string | number;
+  getRowKey?: (item: Item) => string | number;
+  onRowClick?: (item: Item) => void;
+}
+
+export function HubGrid<Item>({
+  title,
+  subtitle,
+  columns,
+  items,
+  renderRowCells,
+  renderStatus,
+  statusColumnLabel,
+  renderActions,
+  actionsColumnLabel,
+  rowDensity,
+  densityOptions,
+  onDensityChange,
+  sortBy,
+  sortDirection,
+  onSort,
+  statusFilter,
+  statusFilterOptions,
+  onStatusFilterChange,
+  statusFilterLabel,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
+  loading,
+  loadingText,
+  emptyText,
+  pageCaption,
+  page,
+  totalPages,
+  pageButtons,
+  onPageChange,
+  pageSize,
+  pageSizeOptions,
+  onPageSizeChange,
+  paginationPreviousLabel,
+  paginationNextLabel,
+  paginationPageLabel,
+  paginationPerPageLabel,
+  selectedRowKey,
+  getRowKey,
+  onRowClick,
+}: HubGridProps<Item>) {
+  const rowDensityCellPadding =
+    rowDensity === "compact"
+      ? "py-0"
+      : rowDensity === "medium"
+        ? "py-1"
+        : "py-2";
+
+  const columnCount =
+    columns.length + (renderStatus ? 1 : 0) + (renderActions ? 1 : 0);
+
+  const handlePreviousPage = () => {
+    if (page > 1 && !loading) {
+      onPageChange(page - 1);
+    }
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages && !loading) {
+      onPageChange(page + 1);
+    }
+  };
+
+  return (
+    <section className="overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0c1721] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+      <div className="border-b border-[#dfe6ed]/80 bg-[#f4f6fb] px-6 py-4 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
+            <label className="relative block">
+              <span className="sr-only">{statusFilterLabel}</span>
+              <select
+                value={statusFilter}
+                onChange={(event) => onStatusFilterChange(event.target.value)}
+                className="h-11 min-w-[10rem] rounded-sm border border-[#c9d2e0] bg-white px-4 pr-10 text-sm font-semibold text-[#1f2f3f] outline-none focus:border-[#0fb3ff] appearance-none dark:border-[#203040] dark:bg-[#101b2a] dark:text-white"
+              >
+                {statusFilterOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7aa4c0]">
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              </span>
+            </label>
+            <label className="relative w-1/3 min-w-[12rem]">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7aa4c0]" />
+              <input
+                value={searchValue}
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder={searchPlaceholder}
+                className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white pl-10 pr-3 text-sm text-[#1f2f3f] outline-none focus:border-[#0fb3ff] dark:border-[#203040] dark:bg-[#0f1623] dark:text-white"
+              />
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            {densityOptions.map((option) => {
+              const isActive = rowDensity === option.key;
+              return (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => onDensityChange(option.key)}
+                  title={option.label}
+                  aria-pressed={isActive}
+                  className={clsx(
+                    "h-8 min-w-[3rem] rounded-sm border px-3 text-[0.55rem] font-semibold uppercase tracking-[0.14em] transition-colors",
+                    isActive
+                      ? "bg-[#131313] dark:bg-[#8EE0FB] text-[#ffffff] dark:text-[#000000] hover:border-[#0fb3ff] hover:text-white"
+                      : "border-[#0fb3ff] dark:border-[#0fb3ff] bg-[#f4f6fb] dark:bg-[#0d1c29] text-[#08AEE5] dark:text-[#08AEE5]",
+                  )}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <p className="mt-4 text-xs font-semibold text-[#000000] dark:text-[#8EE0FB]">
+          {pageCaption}
+        </p>
+      </div>
+
+      <div className="px-6 py-4">
+        <div className="rounded-sm border border-[#dfe6ed]/70 bg-white shadow-inner dark:border-[#142435] dark:bg-[#0b1520]">
+          <table className="w-full table-fixed border-collapse">
+            <thead>
+              <tr className="bg-[#f3f5fb] text-center text-xs uppercase tracking-[0.08em] text-[#6b7280] border-b border-[#dfe6ed]/70 dark:bg-[#0f1d26] dark:text-[#7aa4c0] dark:border-[#142436]">
+                {columns.map((column, columnIndex) => {
+                  const isSorted = sortBy === column.key;
+                  const sortable = column.sortable ?? true;
+                  const icon =
+                    isSorted && sortDirection === "asc" ? (
+                      <ChevronUp
+                        className="h-3.5 w-3.5 text-[#08aee5]"
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <ChevronDown
+                        className={clsx(
+                          "h-3.5 w-3.5 transition-colors",
+                          isSorted && sortable
+                            ? "text-[#08aee5]"
+                            : "text-transparent",
+                        )}
+                        aria-hidden="true"
+                      />
+                    );
+
+                  const hasLeftBorder = columnIndex > 0;
+                  return (
+                    <th
+                      key={column.key}
+                      className={clsx(
+                        "px-4 font-medium text-center",
+                        rowDensityCellPadding,
+                        column.headerClassName,
+                        hasLeftBorder &&
+                          "border-l border-[#e4e8f0]/60 dark:border-[#22323d]",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => sortable && onSort(column.key)}
+                        className={clsx(
+                          "flex w-full items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[#8da7b4] transition-colors",
+                          sortable
+                            ? "hover:text-white"
+                            : "cursor-default opacity-70",
+                        )}
+                        aria-sort={
+                          isSorted
+                            ? sortDirection === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : "none"
+                        }
+                        disabled={!sortable}
+                      >
+                        <span className="text-sm font-semibold uppercase tracking-[0.06em]">
+                          {column.label}
+                        </span>
+                        <span className="ml-auto flex items-center">
+                          {icon}
+                        </span>
+                      </button>
+                    </th>
+                  );
+                })}
+                {renderStatus ? (
+                  <th
+                    className={clsx(
+                      "w-[7rem] px-4 font-medium text-center",
+                      rowDensityCellPadding,
+                      "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                    )}
+                  >
+                    {statusColumnLabel}
+                  </th>
+                ) : null}
+                {renderActions ? (
+                  <th
+                    className={clsx(
+                      "w-[9rem] px-4 font-medium text-center",
+                      rowDensityCellPadding,
+                      "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                    )}
+                  >
+                    {actionsColumnLabel}
+                  </th>
+                ) : null}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={columnCount} className="px-4 py-12">
+                    <div className="flex items-center justify-center gap-2 text-[#4f5c6a] dark:text-[#9eb1bc]">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      {loadingText}
+                    </div>
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={columnCount}
+                    className="px-4 py-12 text-center text-sm text-[#4f5c6a] dark:text-[#9eb1bc]"
+                  >
+                    {emptyText}
+                  </td>
+                </tr>
+              ) : (
+                items.map((item, index) => {
+                  const rowKeyValue = getRowKey?.(item) ?? index;
+                  const rowKey =
+                    typeof rowKeyValue === "string" ||
+                    typeof rowKeyValue === "number"
+                      ? rowKeyValue
+                      : index;
+                  const cells = renderRowCells(item);
+                  const isSelected =
+                    selectedRowKey !== undefined && selectedRowKey === rowKey;
+
+                  return (
+                    <tr
+                      key={rowKey}
+                      onClick={
+                        onRowClick
+                          ? () => {
+                              onRowClick(item);
+                            }
+                          : undefined
+                      }
+                      className={clsx(
+                        "border-b border-[#dfe6ed]/70 bg-white text-[#11191f] transition-colors hover:bg-[#ebeff7] dark:border-[#172a36] dark:bg-[#1f2f3e] dark:text-[#d6e6ee] dark:hover:bg-[#223544]",
+                        isSelected && "border-l-4 border-[#08aee5]",
+                        onRowClick ? "cursor-pointer" : undefined,
+                      )}
+                    >
+                      {columns.map((column, columnIndex) => (
+                        <td
+                          key={`${column.key}-${rowKey}-${columnIndex}`}
+                          className={clsx(
+                            "px-4 text-sm",
+                            rowDensityCellPadding,
+                            column.cellClassName,
+                            columnIndex > 0 &&
+                              "border-l border-[#e4e8f0]/60 dark:border-[#12202c]",
+                            "border-b border-[#dfe6ed]/70 dark:border-[#12202c]",
+                          )}
+                        >
+                          {cells[columnIndex]}
+                        </td>
+                      ))}
+                      {renderStatus ? (
+                        <td
+                          className={clsx(
+                            "w-[7rem] px-4 text-center text-sm",
+                            rowDensityCellPadding,
+                            "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                          )}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            {renderStatus(item)}
+                          </div>
+                        </td>
+                      ) : null}
+                      {renderActions ? (
+                        <td
+                          className={clsx(
+                            "w-[9rem] px-4 text-center",
+                            rowDensityCellPadding,
+                            "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                          )}
+                        >
+                          <div className="flex justify-center gap-1">
+                            {renderActions(item)}
+                          </div>
+                        </td>
+                      ) : null}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <footer className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-4 text-sm text-[#4f5c6a] dark:border-[#162235] dark:bg-[#0d1c29] dark:text-[#9eb1bc]">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={page <= 1 || loading}
+            onClick={handlePreviousPage}
+            className="flex h-9 items-center justify-center rounded-sm border border-[#142435] bg-[#131313] dark:bg-[#8EE0FB] px-4 text-sm font-semibold text-[#ffffff] dark:text-[#000000] disabled:cursor-not-allowed disabled:opacity-80"
+          >
+            {paginationPreviousLabel}
+          </button>
+          {pageButtons.map((pageNumber) => (
+            <button
+              key={pageNumber}
+              type="button"
+              onClick={() => onPageChange(pageNumber)}
+              className={clsx(
+                "flex h-9 min-w-[2.75rem] items-center justify-center rounded-sm px-3 text-sm font-semibold transition-colors",
+                pageNumber === page
+                  ? "bg-[#08aee5] text-white"
+                  : "border border-[#0fb3ff] dark:border-[#0fb3ff] bg-[#f4f6fb] dark:bg-[#0d1c29] text-[#08AEE5] dark:text-[#08AEE5]",
+              )}
+            >
+              {pageNumber}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={page >= totalPages || loading}
+            onClick={handleNextPage}
+            className="flex h-9 items-center justify-center rounded-sm border border-[#142435] bg-[#131313] dark:bg-[#8EE0FB] px-4 text-sm font-semibold text-[#ffffff] dark:text-[#000000] disabled:cursor-not-allowed disabled:opacity-80"
+          >
+            {paginationNextLabel}
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="text-sm text-[#000000] dark:text-[#8EE0FB]">
+            {paginationPageLabel} {page} / {totalPages}
+          </span>
+          <label className="flex items-center gap-2 text-sm text-[#000000] dark:text-[#8EE0FB]">
+            <span>{paginationPerPageLabel}</span>
+            <select
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className="h-9 rounded-sm border border-[#142435] bg-[#09111a] px-2 text-sm font-semibold text-white outline-none focus:border-[#0fb3ff]"
+            >
+              {pageSizeOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </footer>
+    </section>
+  );
+}

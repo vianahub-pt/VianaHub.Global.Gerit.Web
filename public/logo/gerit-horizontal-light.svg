@@ -1,0 +1,22 @@
+<svg width="640" height="160" viewBox="0 0 640 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="gerit-flow-light" x1="38" y1="40" x2="116" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06A8A8"/>
+      <stop offset="1" stop-color="#11B7FF"/>
+    </linearGradient>
+    <linearGradient id="gerit-accent-light" x1="188" y1="118" x2="374" y2="118" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06A8A8"/>
+      <stop offset="1" stop-color="#11B7FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="124" height="124" rx="34" fill="#07161D"/>
+  <rect x="18.75" y="18.75" width="122.5" height="122.5" rx="33.25" stroke="#17313A" stroke-width="1.5"/>
+  <path d="M102 46H74C54.67 46 40 60.67 40 80C40 99.33 54.67 114 74 114H94C104 114 112 106 112 96C112 86 104 78 94 78H69" stroke="url(#gerit-flow-light)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="102" cy="46" r="8" fill="#7FE7FF"/>
+  <circle cx="69" cy="78" r="7" fill="#E8FFFE"/>
+  <circle cx="94" cy="114" r="8" fill="#11B7FF"/>
+  <path d="M174 110H314C340 110 362 92 369 67" stroke="url(#gerit-accent-light)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="174" cy="110" r="6" fill="#06A8A8"/>
+  <circle cx="369" cy="67" r="6" fill="#11B7FF"/>
+  <text x="172" y="90" fill="#0D1C24" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="1.5">Gerit</text>
+</svg>

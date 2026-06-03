@@ -6,6 +6,7 @@ import {
   transports,
   type Logger,
 } from "winston";
+import DailyRotateFile from "winston-daily-rotate-file";
 
 const LOG_DIRECTORY = path.join(process.cwd(), "logs");
 
@@ -37,6 +38,17 @@ function serializeMeta(meta: Record<string, unknown>) {
     .join(" ");
 }
 
+const humanReadableFileFormat = format.combine(
+  format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+  format.printf(({ timestamp, level, message, ...meta }) => {
+    const metaStr = serializeMeta(meta as Record<string, unknown>);
+
+    return metaStr
+      ? `${timestamp} ${level}: ${message} ${metaStr}`
+      : `${timestamp} ${level}: ${message}`;
+  }),
+);
+
 function createWinstonLogger() {
   ensureLogDirectory();
 
@@ -56,7 +68,7 @@ function createWinstonLogger() {
           format.colorize(),
           format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
           format.printf(({ timestamp, level, message, ...meta }) => {
-            const serializedMeta = serializeMeta(meta);
+            const serializedMeta = serializeMeta(meta as Record<string, unknown>);
 
             return serializedMeta
               ? `${timestamp} ${level}: ${message} ${serializedMeta}`
@@ -64,12 +76,11 @@ function createWinstonLogger() {
           }),
         ),
       }),
-      new transports.File({
-        filename: path.join(LOG_DIRECTORY, "application.log"),
-      }),
-      new transports.File({
-        filename: path.join(LOG_DIRECTORY, "error.log"),
-        level: "error",
+      new DailyRotateFile({
+        filename: path.join(LOG_DIRECTORY, "%DATE%.log"),
+        datePattern: "YYYY-MM-DD",
+        maxFiles: "30d",
+        format: humanReadableFileFormat,
       }),
     ],
   });

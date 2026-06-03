@@ -14,6 +14,7 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
+import { logError } from "@/core/logger/client-logger";
 import {
   HubGrid,
   type HubGridColumn,
@@ -114,6 +115,14 @@ export function ClientsPage() {
       setPage(serverPageNumber);
       setPageSize(serverPageSize);
     } catch (error) {
+      logError("clients.page.load", "Falha ao carregar clientes", error, {
+        search,
+        page,
+        pageSize,
+        sortBy,
+        sortDirection,
+        statusFilter,
+      });
       const message =
         error instanceof Error ? error.message : t("clients.errors.load");
       setClients([]);
@@ -199,6 +208,10 @@ export function ClientsPage() {
         });
         void loadClients();
       } catch (error) {
+        logError("clients.page.toggleStatus", "Falha ao alterar estado do cliente", error, {
+          clientId: client.id,
+          clientName: client.name,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -241,6 +254,10 @@ export function ClientsPage() {
         });
         void loadClients();
       } catch (error) {
+        logError("clients.page.delete", "Falha ao eliminar cliente", error, {
+          clientId: client.id,
+          clientName: client.name,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -293,6 +310,7 @@ export function ClientsPage() {
         });
         void loadClients();
       } catch (error) {
+        logError("clients.page.bulkUpload", "Falha no upload em massa de clientes", error);
         toast({
           title: t("clients.toasts.errorTitle"),
           description:

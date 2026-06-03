@@ -240,6 +240,53 @@ Os agentes não devem pedir confirmação para atividades operacionais normais d
 
 ---
 
+# Regra Fundamental do Fluxo
+
+## O Kanban Coordinator NUNCA desenvolve
+
+O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push, criar PR ou mover card para `In Progress`, `For Tests` ou `In Test`.
+
+Todo o desenvolvimento é responsabilidade **exclusiva** dos subagentes:
+- `developer-junior` (baixa complexidade)
+- `developer-pleno` (média complexidade)
+- `developer-senior` (alta complexidade)
+
+Toda a validação é responsabilidade **exclusiva** do subagente `qa`.
+
+## Automação Total — Nenhuma Intervenção Humana
+
+Todo o fluxo operacional entre os agentes é **100% automático, contínuo e fluido**, sem qualquer intervenção humana.
+
+A **única** intervenção humana possível e inegociável em todo o ciclo de vida de uma issue é:
+
+1. **Revisar** o PR final.
+2. **Aprovar** o PR final.
+3. **Fazer o merge** do PR final para a branch de destino.
+
+Nenhum agente, em nenhuma circunstância, deve solicitar confirmação, autorização ou validação humana para qualquer atividade operacional. Todas as movimentações de cards, criações de branch, implementações, validações técnicas, commits, pushes, criação de PRs e acionamentos entre agentes devem ocorrer **automática e obrigatoriamente** sem intervenção humana.
+
+O fluxo **só pode parar** para intervenção humana em caso de:
+- Bloqueio real (requisito de negócio ausente, critério de aceite ambíguo, dependência externa não resolvida, contrato de API inexistente, erro técnico impeditivo, risco de segurança ou perda de dados).
+- Regra anti-loop (mesmo bug reportado 2 vezes na mesma issue).
+
+Mesmo nesses casos, o bloqueio deve ser registrado com clareza antes de qualquer ação.
+
+## Proteção da Estrutura de Agentes — NUNCA Alterar
+
+Nenhuma alteração no repositório — seja novo desenvolvimento, correção de bug/fix, instalação de dependência ou qualquer outra mudança — pode modificar, remover, renomear ou desativar a estrutura atual de agentes, instruções compartilhadas ou configurações do OpenCode.
+
+Isso inclui, mas não se limita a:
+- Arquivos em `.opencode/agents/` (todos os agentes)
+- Arquivo `.opencode/instructions/kanban-flow.md`
+- Arquivo `AGENTS.md` na raiz do projeto
+- Arquivo `.opencode/opencode.json`
+
+A **única** exceção é quando o usuário solicitar **expressamente e explicitamente** a alteração desses arquivos.
+
+Qualquer agente que identificar uma tentativa de alteração desses arquivos sem solicitação explícita do usuário deve **recusar a alteração imediatamente** e informar o usuário sobre a proteção vigente.
+
+---
+
 ## Fluxo Automatizado Oficial
 
 ```text

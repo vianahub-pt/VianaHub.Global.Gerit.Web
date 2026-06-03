@@ -50,7 +50,7 @@ async function proxyRequest(
     // Loga respostas de erro da API (4xx/5xx) para diagnóstico
     if (!upstreamResponse.ok) {
       const responseBody = await upstreamResponse.text().catch(() => "");
-      logger.warn("API Gerit retornou erro", {
+      logger.error("API Gerit retornou erro", {
         context: "api.gerit.proxy",
         method,
         upstreamUrl,

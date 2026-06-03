@@ -7,7 +7,8 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
-import { normalizeClient, normalizeErrorMessage } from "@/domains/operations/clients/client-utils";
+import { logError } from "@/core/logger/client-logger";
+import { normalizeClient, normalizeClientError } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
   SelectField,
@@ -453,7 +454,12 @@ export function ClientsCreatePage() {
         });
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
-          throw new Error(normalizeErrorMessage(responsePayload, t("clients.errors.save")));
+          const normalized = normalizeClientError(responsePayload, t("clients.errors.save"));
+          const err = new Error(normalized.message);
+          if (normalized.errorId) {
+            (err as any).errorId = normalized.errorId;
+          }
+          throw err;
         }
         const normalized = normalizeClient(responsePayload);
         if (normalized) {
@@ -464,10 +470,26 @@ export function ClientsCreatePage() {
           void router.replace(`/clients-details/${normalized.id}/`);
         }
       } catch (error) {
+        logError("clients.create", "Falha ao salvar cliente", error);
+
+        let errorMessage = t("clients.errors.save");
+        let errorId: string | undefined;
+
+        if (error instanceof Error) {
+          errorMessage = error.message;
+          if ("errorId" in error) {
+            errorId = (error as any).errorId;
+          } else {
+            const idMatch = error.message.match(/ID[:\s]+([a-f0-9-]+)/i);
+            if (idMatch) errorId = idMatch[1];
+          }
+        }
+
         toast({
           title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.errors.save"),
+          description: errorId
+            ? `${errorMessage} (ID do erro: ${errorId})`
+            : errorMessage,
           variant: "destructive",
         });
       } finally {

@@ -214,6 +214,11 @@ export function parsePagedClients(payload: unknown) {
   };
 }
 
+export interface NormalizedError {
+  message: string;
+  errorId?: string;
+}
+
 export function normalizeErrorMessage(payload: unknown, fallback: string) {
   if (typeof payload !== "object" || payload === null) {
     return fallback;
@@ -253,4 +258,54 @@ export function normalizeErrorMessage(payload: unknown, fallback: string) {
   }
 
   return fallback;
+}
+
+export function normalizeClientError(payload: unknown, fallback: string): NormalizedError {
+  if (typeof payload !== "object" || payload === null) {
+    return { message: fallback };
+  }
+
+  const candidate = payload as Record<string, unknown>;
+
+  // Tentar extrair errorId do formato da API Gerit
+  // { "title": "...", "errors": { "errorId": ["Contacte o suporte com o ID: xxx"], ... } }
+  if (candidate.errors && typeof candidate.errors === "object") {
+    const errors = candidate.errors as Record<string, unknown>;
+
+    // Extrair errorId
+    const errorIdEntry = errors["errorId"] ?? errors["ID do erro"];
+    if (Array.isArray(errorIdEntry) && typeof errorIdEntry[0] === "string") {
+      const errorIdMatch = errorIdEntry[0].match(/ID[:\s]+([a-f0-9-]+)/i);
+      if (errorIdMatch) {
+        // Extrair mensagem principal tambem
+        const errorEntry = errors["error"] ?? errors["Erro"];
+        const mainMessage = Array.isArray(errorEntry) && typeof errorEntry[0] === "string"
+          ? errorEntry[0]
+          : fallback;
+
+        return {
+          message: mainMessage,
+          errorId: errorIdMatch[1],
+        };
+      }
+    }
+
+    // Fallback: extrair primeira mensagem de erro
+    const firstErrorGroup = Object.values(errors).find(
+      (value) => Array.isArray(value) && value.length > 0 && typeof value[0] === "string",
+    );
+    if (Array.isArray(firstErrorGroup) && typeof firstErrorGroup[0] === "string") {
+      return { message: firstErrorGroup[0] };
+    }
+  }
+
+  if (typeof candidate.title === "string" && candidate.title.trim()) {
+    return { message: candidate.title };
+  }
+
+  if (typeof candidate.message === "string" && candidate.message.trim()) {
+    return { message: candidate.message };
+  }
+
+  return { message: fallback };
 }

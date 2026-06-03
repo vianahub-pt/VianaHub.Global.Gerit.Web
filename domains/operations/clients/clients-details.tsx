@@ -8,6 +8,7 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
+import { logError } from "@/core/logger/client-logger";
 import { ClientItem } from "@/domains/operations/clients/client-models";
 import {
   HubGrid,
@@ -515,6 +516,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       if (clientLoadRequestRef.current !== requestId) {
         return;
       }
+      logError("clients.details.loadClient", "Falha ao carregar cliente", error, {
+        clientId: clientId ?? undefined,
+      });
       toast({
         title: t("clients.toasts.errorTitle"),
         description:
@@ -554,6 +558,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       const parsed = parsePagedContacts(payload);
       setContacts(parsed.items);
     } catch (error) {
+      logError("clients.details.loadContacts", "Falha ao carregar contactos", error, {
+        clientId: client?.id,
+      });
       toast({
         title: t("clients.toasts.errorTitle"),
         description:
@@ -592,6 +599,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       const parsed = parsePagedAddresses(payload);
       setAddresses(parsed.items);
     } catch (error) {
+      logError("clients.details.loadAddresses", "Falha ao carregar endereços", error, {
+        clientId: client?.id,
+      });
       toast({
         title: t("clients.toasts.errorTitle"),
         description:
@@ -809,6 +819,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           description: isEditing ? t("clients.toasts.updated") : t("clients.toasts.created"),
         });
       } catch (error) {
+        logError("clients.details.clientSubmit", "Falha ao salvar cliente", error, {
+          clientId: client?.id,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -850,6 +863,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       });
       await loadClient();
     } catch (error) {
+      logError("clients.details.toggleStatus", "Falha ao alterar estado do cliente", error, {
+        clientId: client?.id,
+      });
       toast({
         title: t("clients.toasts.errorTitle"),
         description:
@@ -907,6 +923,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         resetContactForm();
         await loadClientContacts();
       } catch (error) {
+        logError("clients.details.contactSubmit", "Falha ao salvar contacto", error, {
+          clientId: client?.id,
+          contactName: contactFormState.name,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -951,6 +971,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientContacts();
       } catch (error) {
+        logError("clients.details.contactToggleStatus", "Falha ao alterar estado do contacto", error, {
+          clientId: client?.id,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -986,6 +1011,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientContacts();
       } catch (error) {
+        logError("clients.details.contactDelete", "Falha ao eliminar contacto", error, {
+          clientId: client?.id,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -1049,6 +1079,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         resetAddressForm();
         await loadClientAddresses();
       } catch (error) {
+        logError("clients.details.addressSubmit", "Falha ao salvar endereço", error, {
+          clientId: client?.id,
+          street: addressFormState.street,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -1095,6 +1129,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientAddresses();
       } catch (error) {
+        logError("clients.details.addressToggleStatus", "Falha ao alterar estado do endereço", error, {
+          clientId: client?.id,
+          addressId: address.id,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -1131,6 +1169,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientAddresses();
       } catch (error) {
+        logError("clients.details.addressDelete", "Falha ao eliminar endereço", error, {
+          clientId: client?.id,
+          addressId: address.id,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -1170,6 +1212,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientContacts();
       } catch (error) {
+        logError("clients.details.contactsBulkUpload", "Falha no upload em massa de contactos", error, {
+          clientId: client?.id,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:
@@ -1211,6 +1256,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         });
         await loadClientAddresses();
       } catch (error) {
+        logError("clients.details.addressesBulkUpload", "Falha no upload em massa de endereços", error, {
+          clientId: client?.id,
+        });
         toast({
           title: t("clients.toasts.errorTitle"),
           description:

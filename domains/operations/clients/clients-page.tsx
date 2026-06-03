@@ -56,7 +56,7 @@ export function ClientsPage() {
       if (clientId) {
         router.push(`/clients-details/${clientId}/`);
       } else {
-        router.push("/clients-details/");
+        router.push("/clients/new/");
       }
     },
     [router],
@@ -392,7 +392,7 @@ export function ClientsPage() {
     const pages: number[] = [];
     const normalTotal = Math.max(1, totalPagesFromServer);
     let start = Math.max(1, page - Math.floor(maxVisible / 2));
-    let end = Math.min(normalTotal, start + maxVisible - 1);
+    const end = Math.min(normalTotal, start + maxVisible - 1);
     start = Math.max(1, end - maxVisible + 1);
     for (let index = start; index <= end; index += 1) {
       pages.push(index);

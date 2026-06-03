@@ -7,6 +7,7 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
+import { logError } from "@/core/logger/client-logger";
 import { normalizeClient, normalizeErrorMessage } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -464,6 +465,7 @@ export function ClientsCreatePage() {
           void router.replace(`/clients-details/${normalized.id}/`);
         }
       } catch (error) {
+        logError("clients.create", "Falha ao salvar cliente", error);
         toast({
           title: t("clients.toasts.errorTitle"),
           description:

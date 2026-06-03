@@ -1,5 +1,3 @@
-const LOG_ENDPOINT = "/api/log/";
-
 export function logError(
   context: string,
   message: string,
@@ -18,12 +16,5 @@ export function logError(
     meta.error = String(error);
   }
 
-  // Fire-and-forget: não espera resposta para não bloquear UI
-  fetch(LOG_ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ level: "error", message, meta }),
-  }).catch(() => {
-    // Silencioso - se falhar o log, não pode quebrar o app
-  });
+  console.error(`[${context}] ${message}`, meta);
 }

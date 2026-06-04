@@ -211,6 +211,39 @@ Quando a issue estiver pronta, o PO deve devolver o handoff para o `kanban-coord
 
 ---
 
+## Regra Obrigatória: Sempre usar `--repo` em comandos `gh`
+
+Todo comando `gh` que referencie número de issue (`gh issue`, `gh pr`, etc.) **deve** incluir o parâmetro `--repo vianahub-pt/VianaHub.Global.Gerit.Web`.
+
+O repositório `vianahub-pt/VianaHub.Global.Gerit.Web` deve ser validado dinamicamente no início da execução via `git remote get-url origin`. Se o remote apontar para outro repositório VianaHub, usar o nome correto.
+
+**Exemplos obrigatórios para todos os comandos que referenciam issue:**
+- `gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+- `gh issue edit NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --add-assignee @me`
+- `gh issue comment NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --body "..."`
+- `gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "..." --body "Closes #NUMERO"`
+- `gh pr view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+
+### Como obter o ITEM_ID do projeto com segurança
+
+O comando `gh project item-edit` não aceita `--repo`, mas o `ITEM_ID` deve ser obtido com cuidado para evitar mover acidentalmente cards de outro repositório.
+
+**Procedimento correto:**
+
+1. Obtenha o node ID global da issue no repositório correto:
+   ```bash
+   gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json id
+   ```
+
+2. Use o node ID da issue para localizar o item correspondente no board:
+   ```bash
+   gh project item-list 1 --owner vianahub-pt --format json | ConvertFrom-Json | Where-Object { $_.content.id -eq "NODE_ID_DA_ISSUE" } | Select-Object -ExpandProperty id
+   ```
+
+**Nunca** use apenas o número da issue para localizar um item no board, pois o projeto pode conter issues de múltiplos repositórios com números repetidos. Sempre verifique pelo `content.id` (node ID) ou `content.url` completo.
+
+---
+
 # Comandos Essenciais do `gh`
 
 ```bash
@@ -219,6 +252,9 @@ gh issue create --repo vianahub-pt/VianaHub.Global.Gerit.Web --title "Título" -
 
 # Criar issue usando arquivo markdown
 gh issue create --repo vianahub-pt/VianaHub.Global.Gerit.Web --title "Story: Título" --body-file story.md --label "story,frontend,priority:medium"
+
+# Obter node ID de uma issue (usado para localizar item no board com segurança)
+gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json id
 
 # Adicionar issue ao projeto
 gh project item-add 1 --owner vianahub-pt --url "https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO"
@@ -564,7 +600,7 @@ O PO não deve acionar diretamente `developer-junior`, `developer-pleno` ou `dev
 Quando a issue estiver pronta para desenvolvimento, o PO deve entregar:
 
 - Número da issue
-- Link da issue
+- Link completo da issue (URL completa do GitHub: `https://github.com/.../issues/NUMERO`)
 - Status atual do card
 - Tipo da demanda
 - Prioridade
@@ -584,7 +620,7 @@ Quando a issue estiver pronta para desenvolvimento, o PO deve entregar:
 
 ### Issue
 - Número: #NUMERO
-- Link: LINK_DA_ISSUE
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 - Status atual: To do
 
 ### Classificação do PO
@@ -702,7 +738,7 @@ Ao finalizar o trabalho do PO, responder com:
 
 ### Issue
 - Número: #NUMERO
-- Link: LINK_DA_ISSUE
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 - Status atual: To do
 
 ### Classificação

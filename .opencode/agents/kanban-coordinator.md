@@ -166,6 +166,52 @@ PO -> Developer Junior | Developer Pleno | Developer Senior -> QA
 
 ---
 
+# Regra Obrigatória: Sempre usar `--repo` em comandos `gh`
+
+Todo comando `gh` que referencie número de issue (`gh issue`, `gh pr`, etc.) **deve** incluir o parâmetro `--repo vianahub-pt/VianaHub.Global.Gerit.Web`.
+
+O repositório `vianahub-pt/VianaHub.Global.Gerit.Web` deve ser validado dinamicamente no início da execução via `git remote get-url origin`. Se o remote apontar para outro repositório VianaHub, usar o nome correto.
+
+**Exemplos obrigatórios para todos os comandos que referenciam issue:**
+- `gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+- `gh issue edit NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --add-assignee @me`
+- `gh issue comment NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --body "..."`
+- `gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "..." --body "Closes #NUMERO"`
+- `gh pr view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+
+### Como obter o ITEM_ID do projeto com segurança
+
+O comando `gh project item-edit` não aceita `--repo`, mas o `ITEM_ID` deve ser obtido com cuidado para evitar mover acidentalmente cards de outro repositório.
+
+**Procedimento correto:**
+
+1. Obtenha o node ID global da issue no repositório correto:
+   ```bash
+   gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json id
+   ```
+
+2. Use o node ID da issue para localizar o item correspondente no board:
+   ```bash
+   gh project item-list 1 --owner vianahub-pt --format json | ConvertFrom-Json | Where-Object { $_.content.id -eq "NODE_ID_DA_ISSUE" } | Select-Object -ExpandProperty id
+   ```
+
+**Nunca** use apenas o número da issue para localizar um item no board, pois o projeto pode conter issues de múltiplos repositórios com números repetidos. Sempre verifique pelo `content.id` (node ID) ou `content.url` completo.
+
+---
+
+## Regra de Handoffs: Sempre usar URL completa da issue
+
+Em todos os handoffs entre agentes (PO → Coordinator → Developer → QA), o campo **Link** deve conter a URL completa da issue no GitHub, nunca apenas o número (`#NUMERO`).
+
+**Formato obrigatório:**
+```text
+https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
+```
+
+Isso elimina qualquer ambiguidade entre reposições com números de issue semelhantes em repositórios diferentes.
+
+---
+
 # Critério de Roteamento por Complexidade
 
 O `kanban-coordinator` deve classificar cada issue antes de acionar um Developer.
@@ -364,7 +410,7 @@ O handoff para o Developer escolhido deve conter:
 - Developer selecionado
 - Motivo da seleção
 - Número da issue
-- Link da issue
+- Link completo da issue (URL completa do GitHub: `https://github.com/.../issues/NUMERO`)
 - Status atual do card
 - Tipo da demanda
 - Complexidade
@@ -382,6 +428,8 @@ O handoff para o Developer escolhido deve conter:
 
 ## Modelo de handoff para Developer
 
+**Atenção:** o campo `Link` deve ser sempre a URL completa da issue no formato `https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO`, nunca apenas o número.
+
 ```md
 ## Handoff para Developer
 
@@ -393,7 +441,7 @@ Explicar objetivamente por que este agente foi escolhido.
 
 ### Issue
 - Número: #NUMERO
-- Link: LINK_DA_ISSUE
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 - Status atual: To do
 
 ### Classificação
@@ -430,7 +478,7 @@ Explicar objetivamente por que este agente foi escolhido.
 Após o Developer mover o card para `For Tests`, o `kanban-coordinator` deve garantir que o QA receba:
 
 - Número da issue
-- Link da issue
+- Link completo da issue (URL completa do GitHub: `https://github.com/.../issues/NUMERO`)
 - Link do PR
 - Developer que implementou
 - Complexidade
@@ -444,12 +492,14 @@ Após o Developer mover o card para `For Tests`, o `kanban-coordinator` deve gar
 
 ## Modelo de handoff para QA
 
+**Atenção:** o campo `Link` da issue deve ser sempre a URL completa `https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO`, nunca apenas o número.
+
 ```md
 ## Handoff para QA
 
 ### Issue
 - Número: #NUMERO
-- Link: LINK_DA_ISSUE
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 
 ### PR
 - Link: LINK_DO_PR
@@ -509,12 +559,14 @@ Se o QA reprovar:
 
 ## Modelo de handoff de correção
 
+**Atenção:** o campo `Link` da issue deve ser sempre a URL completa `https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO`, nunca apenas o número.
+
 ```md
 ## Handoff de Correção após QA
 
 ### Issue
 - Número: #NUMERO
-- Link: LINK_DA_ISSUE
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 
 ### PR
 - Link: LINK_DO_PR
@@ -630,6 +682,7 @@ Sempre responder ao usuário com:
 
 ### Card
 - Issue: #NUMERO
+- Link: https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/issues/NUMERO
 - Status atual: Backlog/To do/In Progress/For Tests/In Test/For Deploy/Done
 - PR: LINK_DO_PR
 

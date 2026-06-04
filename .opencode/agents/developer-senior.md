@@ -1,7 +1,7 @@
 ---
 description: Developer Senior - implementa features complexas, refatorações, arquitetura frontend, segurança e integrações críticas e move cards no Kanban (To do → In Progress → For Tests)
 mode: subagent
-model: gpt/gpt-5.5
+model: gpt/gpt-5.1
 temperature: 0.1
 tools:
   write: true

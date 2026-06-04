@@ -1,7 +1,7 @@
 ---
 description: Developer Pleno - implementa features frontend intermediárias, CRUDs, formulários, grids, integrações com API existente e move cards no Kanban (To do → In Progress → For Tests)
 mode: subagent
-model: gpt/gpt-5.5
+model: gpt/gpt-4o
 temperature: 0.2
 tools:
   write: true

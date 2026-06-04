@@ -1,7 +1,7 @@
 ---
 description: Developer Senior - implementa features complexas, refatorações, arquitetura frontend, segurança e integrações críticas e move cards no Kanban (To do → In Progress → For Tests)
 mode: subagent
-model: gpt/gpt-5.5
+model: gpt/gpt-5.1
 temperature: 0.1
 tools:
   write: true
@@ -228,11 +228,47 @@ Se uma issue simples for enviada para o Developer Senior, registre o motivo e, s
 
 ---
 
+## Regra Obrigatória: Sempre usar `--repo` em comandos `gh`
+
+Todo comando `gh` que referencie número de issue (`gh issue`, `gh pr`, etc.) **deve** incluir o parâmetro `--repo vianahub-pt/VianaHub.Global.Gerit.Web`.
+
+O repositório `vianahub-pt/VianaHub.Global.Gerit.Web` deve ser validado dinamicamente no início da execução via `git remote get-url origin`. Se o remote apontar para outro repositório VianaHub, usar o nome correto.
+
+**Exemplos obrigatórios para todos os comandos que referenciam issue:**
+- `gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+- `gh issue edit NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --add-assignee @me`
+- `gh issue comment NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --body "..."`
+- `gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "..." --body "Closes #NUMERO"`
+- `gh pr view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web`
+
+### Como obter o ITEM_ID do projeto com segurança
+
+O comando `gh project item-edit` não aceita `--repo`, mas o `ITEM_ID` deve ser obtido com cuidado para evitar mover acidentalmente cards de outro repositório.
+
+**Procedimento correto:**
+
+1. Obtenha o node ID global da issue no repositório correto:
+   ```bash
+   gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json id
+   ```
+
+2. Use o node ID da issue para localizar o item correspondente no board:
+   ```bash
+   gh project item-list 1 --owner vianahub-pt --format json | ConvertFrom-Json | Where-Object { $_.content.id -eq "NODE_ID_DA_ISSUE" } | Select-Object -ExpandProperty id
+   ```
+
+**Nunca** use apenas o número da issue para localizar um item no board, pois o projeto pode conter issues de múltiplos repositórios com números repetidos. Sempre verifique pelo `content.id` (node ID) ou `content.url` completo.
+
+---
+
 # Comandos Essenciais do `gh`
 
 ```bash
 # Fazer assign a si próprio
 gh issue edit NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --add-assignee @me
+
+# Obter node ID de uma issue (usado para localizar item no board com segurança)
+gh issue view NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json id
 
 # Mover card para In Progress
 gh project item-edit --project-id PVT_kwHODGRT384BZCnv --id ITEM_ID --field-id PVTSSF_lAHODGRT384BZCnvzhUEIlE --single-select-option-id 47fc9ee4

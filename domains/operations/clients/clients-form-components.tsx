@@ -134,8 +134,8 @@ export const DOCUMENT_TYPE_OPTIONS_KEYS: Record<string, string> = {
 
 /* ---------- Client type helpers ---------- */
 
-const INDIVIDUAL_CLIENT_TYPES = new Set([1]);
-const COMPANY_CLIENT_TYPES = new Set([4]);
+const INDIVIDUAL_CLIENT_TYPES = new Set([1, 2, 3]);
+const COMPANY_CLIENT_TYPES = new Set([4, 5]);
 
 export function isIndividualType(clientType: number | undefined): boolean {
   return typeof clientType === "number" && INDIVIDUAL_CLIENT_TYPES.has(clientType);

@@ -1,7 +1,7 @@
 ---
 description: QA - valida implementações frontend React/Next.js, recomenda correções por senioridade e move cards no Kanban (For Tests → In Test → For Deploy/In Progress)
 mode: subagent
-model: gpt/gpt-4.1
+model: openai/gpt-4.1
 temperature: 0.1
 tools:
   write: true

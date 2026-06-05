@@ -1,7 +1,7 @@
 ---
 description: Developer Junior - implementa tarefas frontend simples, correções localizadas, ajustes visuais/i18n e move cards no Kanban (To do → In Progress → For Tests)
 mode: subagent
-model: gpt/gpt-4o-mini
+model: openai/gpt-4o-mini
 temperature: 0.2
 tools:
   write: true

@@ -2018,6 +2018,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           renderRowCells={contactRowCells}
           renderStatus={renderContactStatus}
           renderActions={renderContactActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.contacts.table.actions")}
           rowDensity={contactGridDensity}
           densityOptions={gridDensityOptions}
           onDensityChange={setContactGridDensity}
@@ -2154,6 +2156,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           renderRowCells={addressRowCells}
           renderStatus={renderAddressStatus}
           renderActions={renderAddressActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.addresses.table.actions")}
           rowDensity={addressGridDensity}
           densityOptions={gridDensityOptions}
           onDensityChange={setAddressGridDensity}

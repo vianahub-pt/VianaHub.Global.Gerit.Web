@@ -467,7 +467,9 @@ export function ClientsCreatePage() {
             title: t("clients.toasts.successTitle"),
             description: t("clients.toasts.created"),
           });
-          void router.replace(`/clients-details/${normalized.id}/`);
+          setTimeout(() => {
+            void router.replace(`/clients-details/${normalized.id}/`);
+          }, 1500);
         }
       } catch (error) {
         logError("clients.create", "Falha ao salvar cliente", error);

@@ -21,8 +21,6 @@ A intervenção humana deve acontecer apenas nos seguintes momentos:
 Os agentes não devem pedir confirmação para:
 
 - criar ou refinar issue;
-- mover card entre colunas do Kanban;
-- fazer assign;
 - criar branch;
 - implementar;
 - executar lint, build, typecheck e testes existentes;
@@ -30,13 +28,7 @@ Os agentes não devem pedir confirmação para:
 - fazer push da branch;
 - criar PR;
 - comentar na issue;
-- mover card para `For Tests`;
-- invocar QA;
-- mover card para `In Test`;
-- reprovar e devolver para `In Progress`;
-- encaminhar correção para o Developer adequado;
-- revalidar após correção;
-- mover card para `For Deploy` quando aprovado.
+- notificar o kanban-coordinator ao finalizar cada etapa.
 
 O fluxo só deve parar antes do PR quando existir bloqueio real, como:
 
@@ -69,7 +61,7 @@ O fluxo deve avançar automaticamente entre PO, Kanban Coordinator, Developer e 
 
 A intervenção humana só acontece na validação final, aprovação do PR e merge para a branch de destino definida no projeto.
 
-Nenhum agente deve pedir autorização para executar atividades operacionais normais do fluxo, como mover cards, criar branch, implementar, commitar, criar PR, acionar QA, reprovar, devolver para correção ou revalidar.
+A movimentação de cards é responsabilidade **exclusiva do `kanban-coordinator`**. Os demais agentes (PO, Developers, QA) devem apenas notificar o coordinator ao finalizar suas etapas. Nenhum agente deve pedir autorização para executar atividades operacionais normais do fluxo.
 
 ---
 
@@ -77,7 +69,19 @@ Nenhum agente deve pedir autorização para executar atividades operacionais nor
 
 ## O Kanban Coordinator NUNCA desenvolve
 
-O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push, criar PR ou mover card para `In Progress`, `For Tests` ou `In Test`.
+O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push ou criar PR.
+
+### O Kanban Coordinator é o Único Gestor de Cards
+
+O `kanban-coordinator` é o **único responsável** por toda movimentação de cards no board do GitHub Projects. Nenhum outro agente (PO, Developers ou QA) deve mover cards. As movimentações que o coordinator deve executar são:
+
+- Mover de `Backlog` para `To do` (após PO refinar a issue)
+- Fazer assign da issue para o Developer escolhido
+- Mover para `In Progress` (ao entregar para o Developer)
+- Mover para `For Tests` (após Developer concluir implementação)
+- Mover para `In Test` (ao acionar o QA)
+- Mover para `For Deploy` (quando QA aprovar)
+- Mover de volta para `In Progress` (em caso de reprovação do QA ou necessidade de correção)
 
 Todo o desenvolvimento é responsabilidade **exclusiva** dos subagentes:
 - `developer-junior` (baixa complexidade)
@@ -155,12 +159,12 @@ Backlog -> To do -> In Progress -> For Tests -> In Test -> For Deploy -> Done
 
 | Etapa | Status | Responsável | Ação |
 |------|--------|-------------|------|
-| Refinamento | Backlog | `po` | Criar/refinar issue, critérios de aceite, prioridade, severidade e complexidade sugerida |
-| Pronto para desenvolvimento | To do | `kanban-coordinator` | Validar prontidão, classificar complexidade e escolher Developer adequado |
-| Desenvolvimento | In Progress | `developer-junior`, `developer-pleno` ou `developer-senior` | Implementar, validar tecnicamente, criar PR e comentar issue |
-| Pronto para QA | For Tests | Developer escolhido | Entregar para QA com handoff claro |
-| Validação | In Test | `qa` | Validar critérios de aceite, build, lint, TypeScript, testes, UI/UX e regressões |
-| Aprovado para deploy/merge | For Deploy | `qa` / usuário | QA aprova e usuário revisa PR antes do merge |
+| Refinamento | Backlog | `po` + `kanban-coordinator` | PO cria/refina issue; coordinator move para Backlog |
+| Pronto para desenvolvimento | To do | `kanban-coordinator` | Validar prontidão, classificar complexidade, escolher Developer e mover para To do |
+| Desenvolvimento | In Progress | `kanban-coordinator` + Developer | Coordinator move para In Progress; Developer implementa, valida, cria PR e comenta |
+| Pronto para QA | For Tests | `kanban-coordinator` | Coordinator move para For Tests e aciona QA |
+| Validação | In Test | `kanban-coordinator` + `qa` | Coordinator move para In Test; QA valida critérios de aceite, build, lint, TypeScript, testes, UI/UX e regressões |
+| Aprovado para deploy/merge | For Deploy | `kanban-coordinator` / usuário | Coordinator move para For Deploy; usuário revisa PR antes do merge |
 | Concluído | Done | usuário / fluxo final do projeto | Item concluído após merge/deploy conforme decisão do usuário |
 
 ---
@@ -183,7 +187,7 @@ O PO deve:
 - documentar impacto frontend;
 - documentar contrato de API quando aplicável;
 - garantir Definition of Ready;
-- mover para `To do` quando estiver pronta;
+- notificar o `kanban-coordinator` quando estiver pronta (coordinator move para `To do`);
 - entregar para o `kanban-coordinator`.
 
 O PO não deve acionar diretamente `developer-junior`, `developer-pleno` ou `developer-senior`.
@@ -202,7 +206,7 @@ O coordinator deve:
 - validar a complexidade sugerida pelo PO;
 - decidir o Developer adequado;
 - fazer handoff para o Developer selecionado;
-- acompanhar a movimentação até `For Tests`;
+- **executar toda movimentação de cards** (assign, mover para `In Progress`, `For Tests`, `In Test`, `For Deploy`);
 - garantir handoff para QA;
 - receber reprovações do QA;
 - encaminhar correções para o Developer adequado;
@@ -319,7 +323,6 @@ O `qa` é responsável por validar implementações entregues em `For Tests`.
 O QA deve:
 
 - ler issue, PR e handoff do Developer;
-- mover o card para `In Test`;
 - validar critérios de aceite;
 - executar validações técnicas;
 - validar UI/UX;
@@ -328,12 +331,12 @@ O QA deve:
 - validar regressões;
 - gerar relatório em `docs/reviews/`;
 - comentar resultado na issue;
-- mover para `For Deploy` quando aprovado;
-- mover para `In Progress` quando reprovado;
+- quando aprovado, notificar o `kanban-coordinator` (coordinator move para `For Deploy`);
+- quando reprovado, notificar o `kanban-coordinator` (coordinator move para `In Progress`);
 - recomendar o Developer adequado para correção;
 - devolver reprovações ao `kanban-coordinator`.
 
-O QA não deve alterar código de produção.
+O QA não deve alterar código de produção nem mover cards.
 
 ---
 
@@ -445,6 +448,12 @@ Responsável principal:
 po
 ```
 
+Responsável pela movimentação:
+
+```text
+kanban-coordinator
+```
+
 ---
 
 ### To do
@@ -473,10 +482,10 @@ Usar quando:
 - implementação ou correção está em andamento;
 - card voltou do QA para correção.
 
-Responsável:
+Responsável pela movimentação:
 
 ```text
-developer-junior | developer-pleno | developer-senior
+kanban-coordinator
 ```
 
 ---
@@ -491,10 +500,16 @@ Usar quando:
 - issue foi comentada;
 - QA foi acionado.
 
-Responsável pela próxima ação:
+Responsável pela movimentação:
 
 ```text
-qa
+kanban-coordinator
+```
+
+Próxima ação:
+
+```text
+qa (validar)
 ```
 
 ---
@@ -505,10 +520,10 @@ Usar quando:
 
 - QA iniciou validação.
 
-Responsável:
+Responsável pela movimentação:
 
 ```text
-qa
+kanban-coordinator
 ```
 
 ---
@@ -548,6 +563,8 @@ Se o QA reprovar:
 4. QA deve recomendar o Developer adequado para correção.
 5. QA deve enviar handoff de reprovação para o `kanban-coordinator`.
 6. `kanban-coordinator` deve encaminhar a correção ao Developer recomendado.
+
+> **Nota:** O QA notifica o resultado; o `kanban-coordinator` executa a movimentação do card.
 
 ---
 

@@ -244,7 +244,11 @@ Os agentes não devem pedir confirmação para atividades operacionais normais d
 
 ## O Kanban Coordinator NUNCA desenvolve
 
-O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push, criar PR ou mover card para `In Progress`, `For Tests` ou `In Test`.
+O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push ou criar PR.
+
+### O Kanban Coordinator é o Único Gestor de Cards
+
+Toda movimentação de cards no board é feita **exclusivamente pelo `kanban-coordinator`**. Nenhum outro agente (PO, Developers ou QA) deve mover cards. O coordinator gerencia: assign, `To do`, `In Progress`, `For Tests`, `In Test`, `For Deploy` e retorno para `In Progress`.
 
 Todo o desenvolvimento é responsabilidade **exclusiva** dos subagentes:
 - `developer-junior` (baixa complexidade)
@@ -316,6 +320,8 @@ Backlog -> To do -> In Progress -> For Tests -> In Test -> For Deploy -> Done
 | 9. Correção | `kanban-coordinator` + Developer adequado | Encaminha correção sem pedir confirmação ao usuário |
 | 10. Revalidação | `qa` | Revalida até aprovação ou escalação anti-loop |
 
+> **Nota:** A movimentação de cards (In Progress, For Tests, In Test, For Deploy, In Progress) é feita **exclusivamente pelo `kanban-coordinator`**. Os agentes PO, Developers e QA notificam o coordinator, que executa as transições de coluna.
+
 ---
 
 ## Atividades que NÃO exigem confirmação humana
@@ -325,12 +331,8 @@ Os agentes não devem pedir confirmação para:
 - criar issue;
 - refinar issue;
 - adicionar issue ao GitHub Projects;
-- mover card para `Backlog`;
-- mover card para `To do`;
 - classificar complexidade;
 - escolher Developer;
-- mover card para `In Progress`;
-- fazer assign;
 - criar branch;
 - implementar;
 - executar lint;
@@ -341,11 +343,9 @@ Os agentes não devem pedir confirmação para:
 - fazer push da branch;
 - criar PR;
 - comentar issue;
-- mover card para `For Tests`;
 - acionar QA;
-- mover card para `In Test`;
-- aprovar QA e mover para `For Deploy`;
-- reprovar QA e mover para `In Progress`;
+- aprovar QA e notificar coordinator para mover para `For Deploy`;
+- reprovar QA e notificar coordinator para mover para `In Progress`;
 - encaminhar correção para Developer adequado;
 - revalidar após correção.
 
@@ -470,10 +470,9 @@ Quando o QA reprovar:
 
 1. QA comenta a issue com detalhes.
 2. QA gera relatório em `docs/reviews/`.
-3. QA move card para `In Progress`.
-4. QA recomenda o Developer adequado.
-5. QA envia handoff ao `kanban-coordinator`.
-6. `kanban-coordinator` encaminha automaticamente para correção.
+3. QA recomenda o Developer adequado.
+4. QA envia handoff ao `kanban-coordinator`.
+5. `kanban-coordinator` move card para `In Progress` e encaminha automaticamente para correção.
 
 ---
 
@@ -548,8 +547,8 @@ docs/
 - Não usar mais `developer.md` genérico no fluxo.
 - O fluxo deve passar sempre pelo `kanban-coordinator`.
 - O PO cria/refina e entrega para o `kanban-coordinator`.
-- O `kanban-coordinator` escolhe Developer por complexidade.
-- O Developer implementa, commita, cria PR e entrega ao QA automaticamente.
-- O QA aprova ou reprova automaticamente.
+- O `kanban-coordinator` escolhe Developer por complexidade e **gerencia toda movimentação de cards**.
+- O Developer implementa, commita, cria PR e notifica o coordinator automaticamente.
+- O QA aprova ou reprova e notifica o coordinator, que move os cards.
 - A intervenção humana fica apenas para revisão/aprovação/merge do PR ou bloqueios reais.
 - Sempre responder com estado atual do card, próximo responsável e pendências.

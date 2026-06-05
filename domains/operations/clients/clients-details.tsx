@@ -1300,8 +1300,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const contactColumns = useMemo<HubGridColumn<ContactItem>[]>(
     () => [
       { key: "Name", label: t("clients.contacts.table.name") },
-      { key: "Email", label: t("clients.contacts.table.email") },
       { key: "Phone", label: t("clients.contacts.table.phone") },
+      { key: "Email", label: t("clients.contacts.table.email") },
+      { key: "Primary", label: t("clients.contacts.table.primary") },
     ],
     [t],
   );
@@ -1372,10 +1373,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const contactRowCells = useCallback(
     (contact: ContactItem) => [
       contact.name,
-      contact.email ?? "-",
       contact.phoneNumber ?? "-",
+      contact.email ?? "-",
+      contact.isPrimary ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
     ],
-    [],
+    [t],
   );
 
   const renderContactStatus = useCallback(
@@ -2018,6 +2028,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           renderRowCells={contactRowCells}
           renderStatus={renderContactStatus}
           renderActions={renderContactActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.contacts.table.actions")}
           rowDensity={contactGridDensity}
           densityOptions={gridDensityOptions}
           onDensityChange={setContactGridDensity}
@@ -2154,6 +2166,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           renderRowCells={addressRowCells}
           renderStatus={renderAddressStatus}
           renderActions={renderAddressActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.addresses.table.actions")}
           rowDensity={addressGridDensity}
           densityOptions={gridDensityOptions}
           onDensityChange={setAddressGridDensity}

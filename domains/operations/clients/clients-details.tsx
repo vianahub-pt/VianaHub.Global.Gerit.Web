@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
+import { Loader2, Power, SquarePen, Trash2, ArrowLeft, Badge } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
@@ -1369,14 +1369,15 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setContactPage(1);
   }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
 
-  const contactRowCells = useCallback(
-    (contact: ContactItem) => [
-      contact.name,
-      contact.email ?? "-",
-      contact.phoneNumber ?? "-",
-    ],
-    [],
-  );
+const contactRowCells = useCallback(
+  (contact: ContactItem) => [
+    contact.name,
+    contact.email ?? "-",
+    contact.phoneNumber ?? "-",
+    contact.isPrimary ? <span className="badge badge-success">{t("clients.contacts.table.primary")}</span> : <span className="badge badge-outline">{t("clients.contacts.table.primary")}</span>,
+  ],
+  [],
+);
 
   const renderContactStatus = useCallback(
     (contact: ContactItem) => (

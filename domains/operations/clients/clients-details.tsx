@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, Power, SquarePen, Trash2, ArrowLeft, Badge } from "lucide-react";
+import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
@@ -1300,8 +1300,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const contactColumns = useMemo<HubGridColumn<ContactItem>[]>(
     () => [
       { key: "Name", label: t("clients.contacts.table.name") },
-      { key: "Email", label: t("clients.contacts.table.email") },
       { key: "Phone", label: t("clients.contacts.table.phone") },
+      { key: "Email", label: t("clients.contacts.table.email") },
+      { key: "Primary", label: t("clients.contacts.table.primary") },
     ],
     [t],
   );
@@ -1369,15 +1370,23 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setContactPage(1);
   }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
 
-const contactRowCells = useCallback(
-  (contact: ContactItem) => [
-    contact.name,
-    contact.email ?? "-",
-    contact.phoneNumber ?? "-",
-    contact.isPrimary ? <span className="badge badge-success">{t("clients.contacts.table.primary")}</span> : <span className="badge badge-outline">{t("clients.contacts.table.primary")}</span>,
-  ],
-  [],
-);
+  const contactRowCells = useCallback(
+    (contact: ContactItem) => [
+      contact.name,
+      contact.phoneNumber ?? "-",
+      contact.email ?? "-",
+      contact.isPrimary ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+    ],
+    [t],
+  );
 
   const renderContactStatus = useCallback(
     (contact: ContactItem) => (

@@ -461,15 +461,28 @@ export function ClientsCreatePage() {
           }
           throw err;
         }
+        let createdId: number | null = null;
         const normalized = normalizeClient(responsePayload);
         if (normalized) {
+          createdId = normalized.id;
+        } else {
+          // Fallback: extrai o id diretamente do payload bruto da API
+          // (o POST pode retornar formato diferente do GET)
+          const raw = responsePayload as Record<string, unknown> | null;
+          if (raw && typeof raw.id === "number") {
+            createdId = raw.id;
+          }
+        }
+
+        if (createdId !== null) {
           toast({
             title: t("clients.toasts.successTitle"),
             description: t("clients.toasts.created"),
+            duration: 5000,
           });
           setTimeout(() => {
-            void router.replace(`/clients-details/${normalized.id}/`);
-          }, 1500);
+            void router.replace(`/clients-details/${createdId}/`);
+          }, 3000);
         }
       } catch (error) {
         logError("clients.create", "Falha ao salvar cliente", error);

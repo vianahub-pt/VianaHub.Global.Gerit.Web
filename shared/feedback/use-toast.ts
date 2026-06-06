@@ -13,6 +13,7 @@ export interface ToastProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
   variant?: ToastVariant;
+  duration?: number;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }

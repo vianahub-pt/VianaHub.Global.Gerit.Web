@@ -8,7 +8,10 @@ import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
-import { normalizeClient, normalizeClientError } from "@/domains/operations/clients/client-utils";
+import {
+  normalizeClient,
+  normalizeClientError,
+} from "@/domains/operations/clients/client-utils";
 import {
   FormField,
   SelectField,
@@ -35,22 +38,21 @@ export function ClientsCreatePage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const [clientFormState, setClientFormState] = useState<ClientFormState>(initialClientFormState);
+  const [clientFormState, setClientFormState] = useState<ClientFormState>(
+    initialClientFormState,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   /* ---------- Client type change handler ---------- */
 
-  const handleClientTypeChange = useCallback(
-    (newClientType: string) => {
-      setClientFormState((prev) => ({
-        ...prev,
-        clientType: newClientType,
-        individual: { ...initialIndividualFormState },
-        company: { ...initialCompanyFormState },
-      }));
-    },
-    [],
-  );
+  const handleClientTypeChange = useCallback((newClientType: string) => {
+    setClientFormState((prev) => ({
+      ...prev,
+      clientType: newClientType,
+      individual: { ...initialIndividualFormState },
+      company: { ...initialCompanyFormState },
+    }));
+  }, []);
 
   /* ---------- Individual form field updaters ---------- */
 
@@ -83,7 +85,9 @@ export function ClientsCreatePage() {
       ? Number(clientFormState.clientType)
       : null;
 
-  const showIndividualFields = isIndividualType(resolvedClientType ?? undefined);
+  const showIndividualFields = isIndividualType(
+    resolvedClientType ?? undefined,
+  );
   const showCompanyFields = isCompanyType(resolvedClientType ?? undefined);
 
   /* ---------- Render: Individual form fields ---------- */
@@ -415,7 +419,9 @@ export function ClientsCreatePage() {
         if (isIndividualType(clientTypeNumber ?? undefined)) {
           const ind = clientFormState.individual;
           payload.individual = {
-            displayName: ind.displayName.trim() || `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
+            displayName:
+              ind.displayName.trim() ||
+              `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),
             phoneNumber: ind.phoneNumber.trim(),
@@ -425,7 +431,8 @@ export function ClientsCreatePage() {
             birthDate: ind.birthDate.length > 0 ? ind.birthDate : null,
             gender: ind.gender.length > 0 ? ind.gender : null,
             documentType: ind.documentType.length > 0 ? ind.documentType : null,
-            documentNumber: ind.documentNumber.length > 0 ? ind.documentNumber : null,
+            documentNumber:
+              ind.documentNumber.length > 0 ? ind.documentNumber : null,
             nationality: ind.nationality.length > 0 ? ind.nationality : null,
           };
         } else if (isCompanyType(clientTypeNumber ?? undefined)) {
@@ -438,12 +445,20 @@ export function ClientsCreatePage() {
             isWhatsapp: comp.isWhatsapp,
             email: comp.email.trim() || null,
             site: comp.site.trim() || null,
-            companyRegistration: comp.companyRegistration.length > 0 ? comp.companyRegistration : null,
+            companyRegistration:
+              comp.companyRegistration.length > 0
+                ? comp.companyRegistration
+                : null,
             cae: comp.cae.length > 0 ? comp.cae : null,
-            numberOfEmployee: comp.numberOfEmployee.length > 0 && !Number.isNaN(Number(comp.numberOfEmployee))
-              ? Number(comp.numberOfEmployee)
-              : null,
-            legalRepresentative: comp.legalRepresentative.length > 0 ? comp.legalRepresentative : null,
+            numberOfEmployee:
+              comp.numberOfEmployee.length > 0 &&
+              !Number.isNaN(Number(comp.numberOfEmployee))
+                ? Number(comp.numberOfEmployee)
+                : null,
+            legalRepresentative:
+              comp.legalRepresentative.length > 0
+                ? comp.legalRepresentative
+                : null,
           };
         }
 
@@ -452,9 +467,15 @@ export function ClientsCreatePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        const responsePayload = (await response
+          .json()
+          .catch(() => null)) as unknown;
+        const statusCode = response.status;
         if (!response.ok) {
-          const normalized = normalizeClientError(responsePayload, t("clients.errors.save"));
+          const normalized = normalizeClientError(
+            responsePayload,
+            t("clients.errors.save"),
+          );
           const err = new Error(normalized.message);
           if (normalized.errorId) {
             (err as any).errorId = normalized.errorId;
@@ -474,14 +495,24 @@ export function ClientsCreatePage() {
           }
         }
 
-        if (createdId !== null) {
+        const isCreated = statusCode === 201;
+
+        // If API returned 201 (created) we should show success toast even when
+        // the API doesn't return the created resource id. If we do have an id,
+        // redirect to details; otherwise redirect to list after showing toast.
+        if (isCreated || createdId !== null) {
           toast({
             title: t("clients.toasts.successTitle"),
             description: t("clients.toasts.created"),
             duration: 5000,
           });
+
           setTimeout(() => {
-            void router.replace(`/clients-details/${createdId}/`);
+            if (createdId !== null) {
+              void router.replace(`/clients-details/${createdId}/`);
+            } else {
+              void router.replace(`/clients/`);
+            }
           }, 3000);
         }
       } catch (error) {

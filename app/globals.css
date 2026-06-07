@@ -4,48 +4,72 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --background: 208 30% 96%;        /* #F2F6F8 */
+    --foreground: 0 0% 4%;            /* #0A0E10 */
+    --card: 0 0% 100%;                /* #FFFFFF */
+    --card-foreground: 0 0% 4%;       /* #0A0E10 */
+    --popover: 0 0% 100%;             /* #FFFFFF */
+    --popover-foreground: 0 0% 4%;    /* #0A0E10 */
+    --primary: 199 97% 48%;           /* #03A9F4 */
+    --primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --secondary: 208 20% 93%;         /* #E4EAEE */
+    --secondary-foreground: 0 0% 4%;  /* #0A0E10 */
+    --muted: 208 20% 93%;             /* #E4EAEE */
+    --muted-foreground: 199 8% 55%;   /* #75919F */
+    --accent: 199 97% 48%;            /* #03A9F4 */
+    --accent-foreground: 0 0% 100%;   /* #FFFFFF */
+    --destructive: 4 60% 49%;         /* #BC3232 */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 208 20% 88%;            /* #E4EAEE */
+    --input: 208 20% 93%;             /* #E4EAEE */
+    --ring: 224 100% 44%;             /* #0015AF */
     --radius: 0.5rem;
+
+    /* Elevation - Light */
+    --elevation-sunken: 208 30% 96%;
+    --elevation-sunken-border: 208 20% 88%;
+    --elevation-default: 0 0% 98%;
+    --elevation-default-border: 208 20% 88%;
+    --elevation-raised: 0 0% 100%;
+    --elevation-raised-border: 208 20% 88%;
+    --elevation-overlay: 0 0% 100%;
+    --elevation-overlay-border: 208 15% 77%;
+    --elevation-prominent: 199 97% 48%;
+    --elevation-prominent-border: 0 0% 100%;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --background: 210 20% 4%;         /* #0A0E10 */
+    --foreground: 208 30% 96%;        /* #F2F6F8 */
+    --card: 210 20% 11%;              /* #1D272B */
+    --card-foreground: 208 30% 96%;   /* #F2F6F8 */
+    --popover: 210 20% 11%;           /* #1D272B */
+    --popover-foreground: 208 30% 96%; /* #F2F6F8 */
+    --primary: 199 97% 48%;           /* #03A9F4 */
+    --primary-foreground: 0 0% 100%;  /* #FFFFFF */
+    --secondary: 210 20% 19%;         /* #253238 */
+    --secondary-foreground: 208 30% 96%; /* #F2F6F8 */
+    --muted: 210 20% 19%;             /* #253238 */
+    --muted-foreground: 199 8% 55%;   /* #75919F */
+    --accent: 199 97% 48%;            /* #03A9F4 */
+    --accent-foreground: 0 0% 100%;   /* #FFFFFF */
+    --destructive: 4 60% 49%;         /* #BC3232 */
+    --destructive-foreground: 0 0% 100%; /* #FFFFFF */
+    --border: 210 20% 7%;             /* #12191D */
+    --input: 210 20% 19%;             /* #253238 */
+    --ring: 228 100% 85%;             /* #B3BBFF */
+
+    /* Elevation - Dark */
+    --elevation-sunken: 210 20% 7%;
+    --elevation-sunken-border: 210 20% 7%;
+    --elevation-default: 210 20% 11%;
+    --elevation-default-border: 210 20% 7%;
+    --elevation-raised: 210 20% 19%;
+    --elevation-raised-border: 210 20% 7%;
+    --elevation-overlay: 210 15% 28%;
+    --elevation-overlay-border: 210 10% 30%;
+    --elevation-prominent: 199 97% 48%;
+    --elevation-prominent-border: 0 0% 100%;
   }
 }
 

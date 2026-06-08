@@ -1,5 +1,8 @@
 "use client";
 
+// @deprecated Use HubMenu (shared/layout/hub-menu.tsx) + useWorkspaceMenuConfig (domains/workspace/workspace-menu-config.ts) instead.
+// TenantSidebar will be removed in a future version.
+
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";

@@ -7,6 +7,15 @@ export {
   useDashboardShell,
 } from "@/shared/layout/use-dashboard-shell";
 export { Navbar } from "@/shared/layout/navbar";
+export { HubNav } from "@/shared/layout/hub-nav";
+export { HubMenu } from "@/shared/layout/hub-menu";
+export type { HubNavProps, HubNavVariant } from "@/shared/layout/hub-nav";
+export type {
+  HubMenuProps,
+  HubMenuItem,
+  HubMenuSection,
+  HubMenuPermission,
+} from "@/shared/layout/hub-menu";
 export { Footer } from "@/shared/layout/footer";
 export { CookieBanner } from "@/shared/layout/cookie-banner";
 export { ScrollIndicator } from "@/shared/layout/scroll-indicator";

@@ -1,6 +1,5 @@
 "use client";
 
-import clsx from "clsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
@@ -12,7 +11,9 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { DashboardShellProvider, useDashboardShell } from "@/shared/layout";
-import { TenantSidebar } from "@/shared/layout/tenant-sidebar";
+import { HubNav } from "@/shared/layout/hub-nav";
+import { HubMenu } from "@/shared/layout/hub-menu";
+import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
 function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -21,6 +22,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const { state, toggleSidebar } = useDashboardShell();
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
+  const menuSections = useWorkspaceMenuConfig();
 
   const isDark = mounted ? resolvedTheme === "dark" : false;
   const tenantName = session?.tenantName?.trim() ?? "";
@@ -61,79 +63,73 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
       data-collapsed={state.sidebarCollapsed}
     >
-        <header className="relative z-20 flex h-14 items-center justify-between border-b border-border bg-card px-4 sm:px-6 dark:border-border dark:bg-card">
-        <div className="flex min-w-0 items-center">
-          <div
-            className={clsx(
-              "flex shrink-0 items-center px-2",
-              state.sidebarCollapsed ? "w-[4.25rem]" : "w-[10.25rem]",
-            )}
+      <HubNav
+        logo={
+          <Link
+            href="/"
+            className="flex h-10 items-center justify-center rounded-full transition-colors hover:bg-secondary"
+            aria-label={copy.openDashboard}
           >
-            <Link
-              href="/"
-              className="flex h-10 w-full items-center justify-center rounded-full transition-colors hover:bg-secondary dark:hover:bg-secondary"
-              aria-label={copy.openDashboard}
+            <GeritLogo
+              variant="horizontal"
+              theme={mounted && isDark ? "dark" : "light"}
+              alt={copy.brand}
+              width={142}
+              height={36}
+              className="h-9 w-auto"
+              priority
+            />
+          </Link>
+        }
+        left={tenantName ? (
+          <>
+            <span className="mx-2 h-7 w-px shrink-0 bg-border" />
+            <p className="truncate text-sm font-medium text-muted-foreground">
+              {tenantName}
+            </p>
+          </>
+        ) : undefined}
+        right={
+          <>
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={
+                isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
+              }
             >
-              <GeritLogo
-                variant="horizontal"
-                theme={mounted && isDark ? "dark" : "light"}
-                alt={copy.brand}
-                width={142}
-                height={36}
-                className="h-9 w-auto"
-                priority
-              />
-            </Link>
-          </div>
-
-          {tenantName ? (
-            <>
-              <span className="mx-2 h-7 w-px shrink-0 bg-border dark:bg-border" />
-              <p className="truncate text-sm font-medium text-muted-foreground dark:text-muted-foreground">
-                {tenantName}
-              </p>
-            </>
-          ) : null}
-        </div>
-
-        <div className="relative ml-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setTheme(isDark ? "light" : "dark");
-            }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
-            aria-label={
-              isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
-            }
-          >
-            {mounted && isDark ? (
-              <SunMedium className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <MoonStar className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-
-          <UserProfileMenu
-            openMenuLabel={copy.openUserMenu}
-            fallbackName={copy.fallbackName}
-            fallbackEmail={copy.fallbackEmail}
-            profileLabel={copy.profileLabel}
-            profileDescription={copy.profileDescription}
-            preferencesLabel={copy.preferencesLabel}
-            signOutLabel={copy.signOutLabel}
-          />
-        </div>
-      </header>
+              {mounted && isDark ? (
+                <SunMedium className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <MoonStar className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+            <UserProfileMenu
+              openMenuLabel={copy.openUserMenu}
+              fallbackName={copy.fallbackName}
+              fallbackEmail={copy.fallbackEmail}
+              profileLabel={copy.profileLabel}
+              profileDescription={copy.profileDescription}
+              preferencesLabel={copy.preferencesLabel}
+              signOutLabel={copy.signOutLabel}
+            />
+          </>
+        }
+      />
 
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0">
-        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-secondary dark:border-border dark:bg-secondary lg:flex">
-          <TenantSidebar collapsed={state.sidebarCollapsed} />
+        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
+          <HubMenu
+            sections={menuSections}
+            collapsed={state.sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+          />
 
           <button
             type="button"
             onClick={toggleSidebar}
-            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-secondary text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground"
+            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
             aria-label={copy.toggleSidebar}
             aria-expanded={!state.sidebarCollapsed}
           >

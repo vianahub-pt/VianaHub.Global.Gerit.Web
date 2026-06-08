@@ -14,7 +14,6 @@ export type {
   HubMenuProps,
   HubMenuItem,
   HubMenuSection,
-  HubMenuPermission,
 } from "@/shared/layout/hub-menu";
 export { Footer } from "@/shared/layout/footer";
 export { CookieBanner } from "@/shared/layout/cookie-banner";

@@ -4,7 +4,7 @@ import { type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/shared/ui/utils";
-import { useAuth } from "@/platform/auth";
+
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -14,18 +14,12 @@ import {
   TooltipTrigger,
 } from "@/shared/ui/tooltip";
 
-export type HubMenuPermission = {
-  resource: string;
-  action: string;
-};
-
 export type HubMenuItem = {
   key: string;
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   matchExact?: boolean;
-  permission?: HubMenuPermission;
 };
 
 export type HubMenuSection = {
@@ -42,7 +36,6 @@ export type HubMenuProps = {
 
 export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps) {
   const pathname = usePathname();
-  const { hasPermission, isAuthenticated } = useAuth();
 
   const isActive = (item: HubMenuItem) => {
     if (item.matchExact) return pathname === item.href;
@@ -51,19 +44,6 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
     if (item.href === "/") return cleanPathname === "" || cleanPathname === "/";
     return cleanPathname.startsWith(cleanHref);
   };
-
-  const visibleSections = sections
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => {
-        if (!isAuthenticated) return false;
-        if (!item.permission) return true;
-        return hasPermission(item.permission.resource, item.permission.action);
-      }),
-    }))
-    .filter((section) => section.items.length > 0);
-
-  if (!isAuthenticated) return null;
 
   return (
     <TooltipProvider>
@@ -74,7 +54,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
         )}
       >
         <nav className="flex-1 overflow-y-auto px-2 py-4">
-          {visibleSections.map((section) => (
+          {sections.map((section) => (
             <div key={section.key} className="mb-4">
               {!collapsed && (
                 <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">

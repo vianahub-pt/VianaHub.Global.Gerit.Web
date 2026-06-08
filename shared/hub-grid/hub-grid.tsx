@@ -122,8 +122,8 @@ export function HubGrid<Item>({
   };
 
   return (
-    <section className="overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0c1721] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-      <div className="border-b border-[#dfe6ed]/80 bg-[#f4f6fb] px-6 py-4 dark:border-[#162235] dark:bg-[#0d1c29]">
+    <section className="overflow-hidden rounded-sm border border-border/80 bg-background shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-background dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+      <div className="border-b border-border/80 bg-muted px-6 py-4 dark:border-border dark:bg-muted">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
             <label className="relative block">
@@ -131,7 +131,7 @@ export function HubGrid<Item>({
               <select
                 value={statusFilter}
                 onChange={(event) => onStatusFilterChange(event.target.value)}
-                className="h-11 min-w-[10rem] rounded-sm border border-[#c9d2e0] bg-white px-4 pr-10 text-sm font-semibold text-[#1f2f3f] outline-none focus:border-[#0fb3ff] appearance-none dark:border-[#203040] dark:bg-[#101b2a] dark:text-white"
+                className="h-11 min-w-[10rem] rounded-sm border border-input bg-background px-4 pr-10 text-sm font-semibold text-foreground outline-none focus:border-ring appearance-none dark:border-input dark:bg-card dark:text-white"
               >
                 {statusFilterOptions.map((option) => (
                   <option key={option.value} value={option.value}>
@@ -139,17 +139,17 @@ export function HubGrid<Item>({
                   </option>
                 ))}
               </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[#7aa4c0]">
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 <ChevronDown className="h-4 w-4" aria-hidden="true" />
               </span>
             </label>
             <label className="relative w-1/3 min-w-[12rem]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#7aa4c0]" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white pl-10 pr-3 text-sm text-[#1f2f3f] outline-none focus:border-[#0fb3ff] dark:border-[#203040] dark:bg-[#0f1623] dark:text-white"
+                className="h-11 w-full rounded-sm border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none focus:border-ring dark:border-input dark:bg-card dark:text-white"
               />
             </label>
           </div>
@@ -166,8 +166,8 @@ export function HubGrid<Item>({
                   className={clsx(
                     "h-8 min-w-[3rem] rounded-sm border px-3 text-[0.55rem] font-semibold uppercase tracking-[0.14em] transition-colors",
                     isActive
-                      ? "bg-[#131313] dark:bg-[#8EE0FB] text-[#ffffff] dark:text-[#000000] hover:border-[#0fb3ff] hover:text-white"
-                      : "border-[#0fb3ff] dark:border-[#0fb3ff] bg-[#f4f6fb] dark:bg-[#0d1c29] text-[#08AEE5] dark:text-[#08AEE5]",
+                      ? "bg-foreground dark:bg-primary text-background dark:text-primary-foreground hover:border-ring hover:text-white"
+                      : "border-ring dark:border-ring bg-muted dark:bg-muted text-primary dark:text-primary",
                   )}
                 >
                   {option.label}
@@ -176,31 +176,31 @@ export function HubGrid<Item>({
             })}
           </div>
         </div>
-        <p className="mt-4 text-xs font-semibold text-[#000000] dark:text-[#8EE0FB]">
+        <p className="mt-4 text-xs font-semibold text-foreground dark:text-primary">
           {pageCaption}
         </p>
       </div>
 
       <div className="px-6 py-4">
-        <div className="rounded-sm border border-[#dfe6ed]/70 bg-white shadow-inner dark:border-[#142435] dark:bg-[#0b1520]">
+        <div className="rounded-sm border border-border/70 bg-background shadow-inner dark:border-border dark:bg-card">
           <table className="w-full table-fixed border-collapse">
             <thead>
-              <tr className="bg-[#f3f5fb] text-center text-xs uppercase tracking-[0.08em] text-[#6b7280] border-b border-[#dfe6ed]/70 dark:bg-[#0f1d26] dark:text-[#7aa4c0] dark:border-[#142436]">
+              <tr className="bg-muted text-center text-xs uppercase tracking-[0.08em] text-muted-foreground border-b border-border/70 dark:bg-muted dark:text-muted-foreground dark:border-border">
                 {columns.map((column, columnIndex) => {
                   const isSorted = sortBy === column.key;
                   const sortable = column.sortable ?? true;
                   const icon =
                     isSorted && sortDirection === "asc" ? (
                       <ChevronUp
-                        className="h-3.5 w-3.5 text-[#08aee5]"
+                        className="h-3.5 w-3.5 text-primary"
                         aria-hidden="true"
                       />
                     ) : (
                       <ChevronDown
                         className={clsx(
                           "h-3.5 w-3.5 transition-colors",
-                          isSorted && sortable
-                            ? "text-[#08aee5]"
+                            isSorted && sortable
+                            ? "text-primary"
                             : "text-transparent",
                         )}
                         aria-hidden="true"
@@ -216,14 +216,14 @@ export function HubGrid<Item>({
                         rowDensityCellPadding,
                         column.headerClassName,
                         hasLeftBorder &&
-                          "border-l border-[#e4e8f0]/60 dark:border-[#22323d]",
+                          "border-l border-border/60 dark:border-border",
                       )}
                     >
                       <button
                         type="button"
                         onClick={() => sortable && onSort(column.key)}
                         className={clsx(
-                          "flex w-full items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-[#8da7b4] transition-colors",
+                          "flex w-full items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors",
                           sortable
                             ? "hover:text-white"
                             : "cursor-default opacity-70",
@@ -252,7 +252,7 @@ export function HubGrid<Item>({
                     className={clsx(
                       "w-[7rem] px-4 font-medium text-center",
                       rowDensityCellPadding,
-                      "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                      "border-l border-border/80 dark:border-border",
                     )}
                   >
                     {statusColumnLabel}
@@ -263,7 +263,7 @@ export function HubGrid<Item>({
                     className={clsx(
                       "w-[9rem] px-4 font-medium text-center",
                       rowDensityCellPadding,
-                      "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                      "border-l border-border/80 dark:border-border",
                     )}
                   >
                     {actionsColumnLabel}
@@ -275,7 +275,7 @@ export function HubGrid<Item>({
               {loading ? (
                 <tr>
                   <td colSpan={columnCount} className="px-4 py-12">
-                    <div className="flex items-center justify-center gap-2 text-[#4f5c6a] dark:text-[#9eb1bc]">
+                    <div className="flex items-center justify-center gap-2 text-muted-foreground dark:text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       {loadingText}
                     </div>
@@ -285,7 +285,7 @@ export function HubGrid<Item>({
                 <tr>
                   <td
                     colSpan={columnCount}
-                    className="px-4 py-12 text-center text-sm text-[#4f5c6a] dark:text-[#9eb1bc]"
+                    className="px-4 py-12 text-center text-sm text-muted-foreground dark:text-muted-foreground"
                   >
                     {emptyText}
                   </td>
@@ -313,8 +313,8 @@ export function HubGrid<Item>({
                           : undefined
                       }
                       className={clsx(
-                        "border-b border-[#dfe6ed]/70 bg-white text-[#11191f] transition-colors hover:bg-[#ebeff7] dark:border-[#172a36] dark:bg-[#1f2f3e] dark:text-[#d6e6ee] dark:hover:bg-[#223544]",
-                        isSelected && "border-l-4 border-[#08aee5]",
+                        "border-b border-border/70 bg-background text-foreground transition-colors hover:bg-muted dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted",
+                        isSelected && "border-l-4 border-primary",
                         onRowClick ? "cursor-pointer" : undefined,
                       )}
                     >
@@ -326,8 +326,8 @@ export function HubGrid<Item>({
                             rowDensityCellPadding,
                             column.cellClassName,
                             columnIndex > 0 &&
-                              "border-l border-[#e4e8f0]/60 dark:border-[#12202c]",
-                            "border-b border-[#dfe6ed]/70 dark:border-[#12202c]",
+                              "border-l border-border/60 dark:border-border",
+                            "border-b border-border/70 dark:border-border",
                           )}
                         >
                           {cells[columnIndex]}
@@ -338,7 +338,7 @@ export function HubGrid<Item>({
                           className={clsx(
                             "w-[7rem] px-4 text-center text-sm",
                             rowDensityCellPadding,
-                            "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                            "border-l border-border/80 dark:border-border",
                           )}
                         >
                           <div className="flex items-center justify-center gap-1">
@@ -351,7 +351,7 @@ export function HubGrid<Item>({
                           className={clsx(
                             "w-[9rem] px-4 text-center",
                             rowDensityCellPadding,
-                            "border-l border-[#dce3ea]/80 dark:border-[#12202c]",
+                            "border-l border-border/80 dark:border-border",
                           )}
                         >
                           <div className="flex justify-center gap-1">
@@ -368,13 +368,13 @@ export function HubGrid<Item>({
         </div>
       </div>
 
-      <footer className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-4 text-sm text-[#4f5c6a] dark:border-[#162235] dark:bg-[#0d1c29] dark:text-[#9eb1bc]">
+      <footer className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-t border-border/70 bg-muted px-6 py-4 text-sm text-muted-foreground dark:border-border dark:bg-muted dark:text-muted-foreground">
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
             disabled={page <= 1 || loading}
             onClick={handlePreviousPage}
-            className="flex h-9 items-center justify-center rounded-sm border border-[#142435] bg-[#131313] dark:bg-[#8EE0FB] px-4 text-sm font-semibold text-[#ffffff] dark:text-[#000000] disabled:cursor-not-allowed disabled:opacity-80"
+            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80"
           >
             {paginationPreviousLabel}
           </button>
@@ -386,8 +386,8 @@ export function HubGrid<Item>({
               className={clsx(
                 "flex h-9 min-w-[2.75rem] items-center justify-center rounded-sm px-3 text-sm font-semibold transition-colors",
                 pageNumber === page
-                  ? "bg-[#08aee5] text-white"
-                  : "border border-[#0fb3ff] dark:border-[#0fb3ff] bg-[#f4f6fb] dark:bg-[#0d1c29] text-[#08AEE5] dark:text-[#08AEE5]",
+                  ? "bg-primary text-primary-foreground"
+                  : "border border-ring dark:border-ring bg-muted dark:bg-muted text-primary dark:text-primary",
               )}
             >
               {pageNumber}
@@ -397,21 +397,21 @@ export function HubGrid<Item>({
             type="button"
             disabled={page >= totalPages || loading}
             onClick={handleNextPage}
-            className="flex h-9 items-center justify-center rounded-sm border border-[#142435] bg-[#131313] dark:bg-[#8EE0FB] px-4 text-sm font-semibold text-[#ffffff] dark:text-[#000000] disabled:cursor-not-allowed disabled:opacity-80"
+            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80"
           >
             {paginationNextLabel}
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-4">
-          <span className="text-sm text-[#000000] dark:text-[#8EE0FB]">
+          <span className="text-sm text-foreground dark:text-primary">
             {paginationPageLabel} {page} / {totalPages}
           </span>
-          <label className="flex items-center gap-2 text-sm text-[#000000] dark:text-[#8EE0FB]">
+          <label className="flex items-center gap-2 text-sm text-foreground dark:text-primary">
             <span>{paginationPerPageLabel}</span>
             <select
               value={pageSize}
               onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="h-9 rounded-sm border border-[#142435] bg-[#09111a] px-2 text-sm font-semibold text-white outline-none focus:border-[#0fb3ff]"
+              className="h-9 rounded-sm border border-border bg-card px-2 text-sm font-semibold text-white outline-none focus:border-ring"
             >
               {pageSizeOptions.map((option) => (
                 <option key={option} value={option}>

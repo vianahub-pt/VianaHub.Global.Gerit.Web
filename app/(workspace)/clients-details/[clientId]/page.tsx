@@ -4,7 +4,7 @@ import { ClientsDetailsPage } from "@/domains/operations/clients";
 function ClientsDetailsPageFallback() {
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center">
-      <p className="text-sm text-[#7aa4c0] dark:text-[#84a0c0]">A carregar...</p>
+      <p className="text-sm text-muted-foreground dark:text-muted-foreground">A carregar...</p>
     </div>
   );
 }

@@ -53,15 +53,15 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   }, [isAuthenticated, isHydrating, router]);
 
   if (isHydrating || !isAuthenticated) {
-    return <div className="h-screen bg-[#041118]" aria-hidden="true" />;
+    return <div className="h-screen bg-background" aria-hidden="true" />;
   }
 
   return (
     <div
-      className="gerit-shell h-screen overflow-hidden bg-[#f3f5f7] text-[#11191f] dark:bg-[#041118] dark:text-slate-100"
+      className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
       data-collapsed={state.sidebarCollapsed}
     >
-      <header className="relative z-20 flex h-14 items-center justify-between border-b border-[#d9dee2] bg-[#f7f8fa] px-4 sm:px-6 dark:border-[#17313a] dark:bg-[#041118]">
+        <header className="relative z-20 flex h-14 items-center justify-between border-b border-border bg-card px-4 sm:px-6 dark:border-border dark:bg-card">
         <div className="flex min-w-0 items-center">
           <div
             className={clsx(
@@ -71,7 +71,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           >
             <Link
               href="/"
-              className="flex h-10 w-full items-center justify-center rounded-full transition-colors hover:bg-[#edf3f6] dark:hover:bg-[#0d1f28]"
+              className="flex h-10 w-full items-center justify-center rounded-full transition-colors hover:bg-secondary dark:hover:bg-secondary"
               aria-label={copy.openDashboard}
             >
               <GeritLogo
@@ -88,8 +88,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
 
           {tenantName ? (
             <>
-              <span className="mx-2 h-7 w-px shrink-0 bg-[#d7dfe3] dark:bg-[#21424d]" />
-              <p className="truncate text-sm font-medium text-[#4a5860] dark:text-[#b9cbd3]">
+              <span className="mx-2 h-7 w-px shrink-0 bg-border dark:bg-border" />
+              <p className="truncate text-sm font-medium text-muted-foreground dark:text-muted-foreground">
                 {tenantName}
               </p>
             </>
@@ -102,7 +102,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             onClick={() => {
               setTheme(isDark ? "light" : "dark");
             }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#ced5da] bg-[#f8fafb] text-[#73818a] transition-colors hover:text-[#11191f] dark:border-[#23414b] dark:bg-[#06161d] dark:text-[#a0b2ba] dark:hover:text-white"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
             aria-label={
               isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
             }
@@ -127,13 +127,13 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       </header>
 
       <div className="flex h-[calc(100vh-3.5rem)] min-h-0">
-        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-[#d9dee2] bg-[#eef1f4] dark:border-[#17313a] dark:bg-[#07161d] lg:flex">
+        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-secondary dark:border-border dark:bg-secondary lg:flex">
           <TenantSidebar collapsed={state.sidebarCollapsed} />
 
           <button
             type="button"
             onClick={toggleSidebar}
-            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-[#d9dee2] bg-[#eef1f4] text-[#acb5bb] transition-colors hover:text-[#526168] dark:border-[#17313a] dark:bg-[#07161d] dark:text-[#8096a0] dark:hover:text-white"
+            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-secondary text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground"
             aria-label={copy.toggleSidebar}
             aria-expanded={!state.sidebarCollapsed}
           >
@@ -145,7 +145,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </button>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#f5f6f8] dark:bg-[#0a171f]">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background dark:bg-background">
           {children}
         </main>
       </div>

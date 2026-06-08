@@ -192,14 +192,14 @@ function getHeaderTone({
   isWeekend: boolean;
 }) {
   if (isActive) {
-    return "bg-[#eef3f5] text-[#21b6ec] dark:bg-[#091821] dark:text-[#15bfff]";
+    return "bg-muted text-primary dark:bg-card dark:text-primary";
   }
 
   if (isWeekend) {
-    return "bg-[#eef1f3] text-[#6d7980] dark:bg-[#07131a] dark:text-[#b8c6cd]";
+    return "bg-muted text-muted-foreground dark:bg-background dark:text-muted-foreground";
   }
 
-  return "bg-[#e6eaed] text-[#445159] dark:bg-[#0b1820] dark:text-[#d7e1e7]";
+  return "bg-muted text-foreground dark:bg-card dark:text-foreground";
 }
 
 function getBodyTone({
@@ -210,14 +210,14 @@ function getBodyTone({
   isWeekend: boolean;
 }) {
   if (isActive) {
-    return "bg-[#f4f4f5] dark:bg-[#1a2a35]";
+    return "bg-muted dark:bg-card";
   }
 
   if (isWeekend) {
-    return "bg-[#fafbfc] dark:bg-[#06131a]";
+    return "bg-background dark:bg-background";
   }
 
-  return "bg-[#fcfcfd] dark:bg-[#13212b]";
+  return "bg-card dark:bg-card";
 }
 
 function GeritDashboardHomeContent() {
@@ -638,11 +638,11 @@ function GeritDashboardHomeContent() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div className="flex flex-col gap-3 border-b border-[#d9dee2] bg-[#eff2f4] px-4 py-3 dark:border-[#17313a] dark:bg-[#22303a] sm:px-6 md:flex-row md:items-center md:justify-between md:py-2">
+      <div className="flex flex-col gap-3 border-b border-border bg-muted px-4 py-3 dark:border-border dark:bg-muted sm:px-6 md:flex-row md:items-center md:justify-between md:py-2">
         <div className="flex items-center overflow-x-auto">
           <button
             type="button"
-            className="flex h-9 items-center border border-[#d3d9de] bg-[#f8f9fa] px-4 text-sm font-medium text-[#b0b9bf] dark:border-[#3a4c55] dark:bg-[#2f414b] dark:text-[#d1dde2]"
+            className="flex h-9 items-center border border-border bg-card px-4 text-sm font-medium text-muted-foreground dark:border-border dark:bg-card dark:text-muted-foreground"
             aria-current="page"
           >
             {copy.tabs.calendar}
@@ -656,8 +656,8 @@ function GeritDashboardHomeContent() {
               className={clsx(
                 "flex h-9 items-center border border-l-0 px-4 text-sm font-medium transition-colors",
                 state.calendarView === tabKey
-                  ? "border-[#d3d9de] bg-[#f8f9fa] text-[#11191f] dark:border-[#3a4c55] dark:bg-[#2f414b] dark:text-white"
-                  : "border-[#d3d9de] bg-[#eff2f4] text-[#6d7980] hover:bg-[#f7f8fa] dark:border-[#3a4c55] dark:bg-[#22303a] dark:text-[#d1dde2] dark:hover:bg-[#2b3b44]",
+                  ? "border-border bg-card text-foreground dark:border-border dark:bg-card dark:text-foreground"
+                  : "border-border bg-muted text-muted-foreground hover:bg-secondary dark:border-border dark:bg-muted dark:text-muted-foreground dark:hover:bg-secondary",
               )}
               aria-current={state.calendarView === tabKey ? "page" : undefined}
             >
@@ -673,19 +673,19 @@ function GeritDashboardHomeContent() {
               onClick={() => {
                 setRangePickerOpen((current) => !current);
               }}
-              className="flex h-9 items-center gap-2 border border-[#d3d9de] bg-[#f8f9fa] px-4 text-sm font-medium text-[#65727a] dark:border-[#3a4c55] dark:bg-[#22303a] dark:text-[#d7e1e7]"
+              className="flex h-9 items-center gap-2 border border-border bg-card px-4 text-sm font-medium text-muted-foreground dark:border-border dark:bg-card dark:text-muted-foreground"
               aria-expanded={rangePickerOpen}
             >
               <CalendarDays
-                className="h-4 w-4 text-[#b5bcc2] dark:text-[#9db1b9]"
+                className="h-4 w-4 text-muted-foreground dark:text-muted-foreground"
                 aria-hidden="true"
               />
               {buttonPeriodLabel}
             </button>
 
             {rangePickerOpen ? (
-              <div className="gerit-animate-enter absolute right-0 top-11 z-30 flex w-[48rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-[#d3d9de] bg-[#f8f9fa] shadow-[0_24px_48px_rgba(15,23,42,0.14)] dark:border-[#3a4c55] dark:bg-[#22303a] dark:shadow-[0_24px_48px_rgba(0,0,0,0.4)]">
-                <div className="w-40 shrink-0 border-r border-[#d3d9de] bg-[#f6f8f9] py-2 dark:border-[#3a4c55] dark:bg-[#1c2b34]">
+              <div className="gerit-animate-enter absolute right-0 top-11 z-30 flex w-[48rem] max-w-[calc(100vw-2rem)] overflow-hidden rounded-sm border border-border bg-card shadow-[0_24px_48px_rgba(15,23,42,0.14)] dark:border-border dark:bg-card dark:shadow-[0_24px_48px_rgba(0,0,0,0.4)]">
+                <div className="w-40 shrink-0 border-r border-border bg-secondary py-2 dark:border-border dark:bg-secondary">
                   {rangeShortcuts.map((shortcut) => (
                     <button
                       key={shortcut.id}
@@ -697,8 +697,8 @@ function GeritDashboardHomeContent() {
                       className={clsx(
                         "flex w-full items-center px-4 py-3 text-left text-sm transition-colors",
                         shortcut.active
-                          ? "bg-[#11b7ff] text-white"
-                          : "text-[#4b5961] hover:bg-[#eef3f6] dark:text-[#d1dde2] dark:hover:bg-[#2b3b44]",
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary dark:text-muted-foreground dark:hover:bg-secondary",
                       )}
                     >
                       {shortcut.label}
@@ -716,7 +716,7 @@ function GeritDashboardHomeContent() {
 
                     return (
                       <div key={pickerMonthLabel} className="min-w-0 flex-1">
-                        <div className="mb-3 text-center text-sm font-semibold text-[#48565e] dark:text-[#d1dde2]">
+                        <div className="mb-3 text-center text-sm font-semibold text-foreground dark:text-foreground">
                           {pickerMonthLabel}
                         </div>
 
@@ -724,7 +724,7 @@ function GeritDashboardHomeContent() {
                           {weekdayHeaders.map((weekday) => (
                             <div
                               key={`${pickerMonthLabel}-${weekday}`}
-                              className="flex h-8 items-center justify-center text-xs font-medium text-[#6d7980] dark:text-[#9fb0b8]"
+                              className="flex h-8 items-center justify-center text-xs font-medium text-muted-foreground dark:text-muted-foreground"
                             >
                               {weekday}
                             </div>
@@ -764,19 +764,19 @@ function GeritDashboardHomeContent() {
                                 className={clsx(
                                   "flex h-9 items-center justify-center rounded text-sm transition-colors",
                                   cell.isCurrentMonth
-                                    ? "text-[#445159] hover:bg-[#eef3f5] dark:text-[#d7e1e7] dark:hover:bg-[#2b3b44]"
-                                    : "text-[#a7b0b6] hover:bg-[#eef3f5] dark:text-[#667882] dark:hover:bg-[#2b3b44]",
+                                    ? "text-foreground hover:bg-secondary dark:text-foreground dark:hover:bg-secondary"
+                                    : "text-muted-foreground hover:bg-secondary dark:text-muted-foreground dark:hover:bg-secondary",
                                   (isWeekStart || isWeekEnd) &&
-                                    "bg-[#3d8fd6] text-white hover:bg-[#3d8fd6] dark:bg-[#3d8fd6] dark:text-white dark:hover:bg-[#3d8fd6]",
+                                    "bg-primary text-primary-foreground hover:bg-primary dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary",
                                   isWeekMiddle &&
-                                    "bg-[#d6ebfb] text-[#266eb1] hover:bg-[#d6ebfb] dark:bg-[#25557c] dark:text-[#dff1ff] dark:hover:bg-[#25557c]",
+                                    "bg-primary/20 text-primary hover:bg-primary/20 dark:bg-primary dark:text-primary dark:hover:bg-primary",
                                   isSelectedDay &&
                                     !isMonthView &&
                                     !isDayView &&
-                                    "ring-2 ring-inset ring-[#1a6fb7]",
+                                    "ring-2 ring-inset ring-primary",
                                   isSelectedDay &&
                                     (isMonthView || isDayView) &&
-                                    "bg-[#3d8fd6] text-white hover:bg-[#3d8fd6] dark:bg-[#3d8fd6] dark:text-white dark:hover:bg-[#3d8fd6]",
+                                    "bg-primary text-primary-foreground hover:bg-primary dark:bg-primary dark:text-primary-foreground dark:hover:bg-primary",
                                 )}
                               >
                                 {cell.dayNumber}
@@ -794,7 +794,7 @@ function GeritDashboardHomeContent() {
           <button
             type="button"
             onClick={handlePreviousPeriod}
-            className="flex h-9 w-10 items-center justify-center border border-l-0 border-[#d3d9de] bg-[#f8f9fa] text-[#b5bcc2] transition-colors hover:text-[#526168] dark:border-[#3a4c55] dark:bg-[#22303a] dark:text-[#9db1b9] dark:hover:text-white"
+            className="flex h-9 w-10 items-center justify-center border border-l-0 border-border bg-card text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
             aria-label={previousPeriodLabel}
           >
             <ChevronLeft className="h-4 w-4" aria-hidden="true" />
@@ -802,7 +802,7 @@ function GeritDashboardHomeContent() {
           <button
             type="button"
             onClick={handleNextPeriod}
-            className="flex h-9 w-10 items-center justify-center border border-l-0 border-[#d3d9de] bg-[#f8f9fa] text-[#b5bcc2] transition-colors hover:text-[#526168] dark:border-[#3a4c55] dark:bg-[#22303a] dark:text-[#9db1b9] dark:hover:text-white"
+            className="flex h-9 w-10 items-center justify-center border border-l-0 border-border bg-card text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
             aria-label={nextPeriodLabel}
           >
             <ChevronRight className="h-4 w-4" aria-hidden="true" />
@@ -819,12 +819,12 @@ function GeritDashboardHomeContent() {
         )}
       >
         {isMonthView ? (
-          <section className="min-w-[52rem] overflow-hidden rounded-sm border border-[#dce1e5] bg-[#f6f7f8] dark:border-[#17313a] dark:bg-[#0a171e]">
-            <div className="grid grid-cols-7 border-b border-[#dce1e5] dark:border-[#17313a]">
+          <section className="min-w-[52rem] overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+            <div className="grid grid-cols-7 border-b border-border dark:border-border">
               {weekdayHeaders.map((weekday) => (
                 <div
                   key={weekday}
-                  className="flex h-11 items-center justify-center border-r border-[#dce1e5] bg-[#edf1f4] text-sm font-medium text-[#526168] last:border-r-0 dark:border-[#17313a] dark:bg-[#0f1d25] dark:text-[#c8d5db]"
+                  className="flex h-11 items-center justify-center border-r border-border bg-secondary text-sm font-medium text-foreground last:border-r-0 dark:border-border dark:bg-secondary dark:text-foreground"
                 >
                   {weekday}
                 </div>
@@ -840,18 +840,18 @@ function GeritDashboardHomeContent() {
                   className={clsx(
                     "flex h-28 flex-col items-start justify-start border-r border-b px-3 py-3 text-left transition-colors last:border-r-0",
                     cell.isCurrentMonth
-                      ? "border-[#e4e8eb] bg-[#fbfcfd] text-[#3e4a52] hover:bg-[#f3f6f8] dark:border-[#233944] dark:bg-[#13212b] dark:text-[#d7e1e7] dark:hover:bg-[#162733]"
-                      : "border-[#e4e8eb] bg-[#f3f5f7] text-[#a2adb4] hover:bg-[#edf2f5] dark:border-[#233944] dark:bg-[#0d1a22] dark:text-[#647985] dark:hover:bg-[#12212a]",
-                    cell.isWeekend && "dark:bg-[#0c171f]",
+                      ? "border-border bg-card text-foreground hover:bg-muted dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-card"
+                      : "border-border bg-muted text-muted-foreground hover:bg-muted dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-card",
+                    cell.isWeekend && "dark:bg-background",
                     isSameDay(cell.date, referenceDate) &&
-                      "ring-2 ring-inset ring-[#11b7ff] dark:ring-[#11b7ff]",
+                      "ring-2 ring-inset ring-primary dark:ring-primary",
                   )}
                 >
                   <span
                     className={clsx(
                       "inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-semibold",
                       isSameDay(cell.date, referenceDate)
-                        ? "bg-[#11b7ff] text-white"
+                        ? "bg-primary text-white"
                         : cell.isCurrentMonth
                           ? "text-inherit"
                           : "text-inherit/90",
@@ -861,7 +861,7 @@ function GeritDashboardHomeContent() {
                   </span>
 
                   {isSameDay(cell.date, todayDate) ? (
-                    <span className="mt-2 text-xs font-medium text-[#11b7ff]">
+                    <span className="mt-2 text-xs font-medium text-primary">
                       Gerit
                     </span>
                   ) : null}
@@ -872,7 +872,7 @@ function GeritDashboardHomeContent() {
         ) : (
           <section
             className={clsx(
-              "min-h-0 flex h-full flex-1 flex-col overflow-hidden rounded-sm border border-[#dce1e5] bg-[#f6f7f8] dark:border-[#17313a] dark:bg-[#0a171e]",
+              "min-h-0 flex h-full flex-1 flex-col overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card",
               isDayView ? "min-w-[24rem]" : "min-w-[68rem]",
             )}
           >
@@ -884,7 +884,7 @@ function GeritDashboardHomeContent() {
                   : "grid-cols-[4rem_repeat(7,minmax(8.75rem,1fr))]",
               )}
             >
-              <div className="flex h-[3.25rem] items-center gap-1 border-b border-r border-[#dce1e5] bg-[#edf1f4] px-3 dark:border-[#17313a] dark:bg-[#0f1d25]">
+              <div className="flex h-[3.25rem] items-center gap-1 border-b border-r border-border bg-secondary px-3 dark:border-border dark:bg-secondary">
                 <button
                   type="button"
                   onClick={() => setSlotMinutes(60)}
@@ -892,8 +892,8 @@ function GeritDashboardHomeContent() {
                   className={clsx(
                     "flex h-8 w-8 items-center justify-center border transition-colors disabled:cursor-default",
                     slotMinutes === 60
-                      ? "border-[#bcc6cc] bg-[#f8f9fa] text-[#526168] dark:border-[#335260] dark:bg-[#19303b] dark:text-white"
-                      : "border-[#d4dbe0] bg-[#eef2f5] text-[#b8c0c5] hover:text-[#526168] dark:border-[#213844] dark:bg-[#13222b] dark:text-[#90a4ad] dark:hover:text-white",
+                      ? "border-border bg-card text-foreground dark:border-border dark:bg-card dark:text-foreground"
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground dark:border-border dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground",
                   )}
                   aria-pressed={slotMinutes === 60}
                   aria-label={copy.zoomOut}
@@ -907,8 +907,8 @@ function GeritDashboardHomeContent() {
                   className={clsx(
                     "flex h-8 w-8 items-center justify-center border transition-colors disabled:cursor-default",
                     slotMinutes === 30
-                      ? "border-[#bcc6cc] bg-[#f8f9fa] text-[#526168] dark:border-[#335260] dark:bg-[#19303b] dark:text-white"
-                      : "border-[#d4dbe0] bg-[#eef2f5] text-[#b8c0c5] hover:text-[#526168] dark:border-[#213844] dark:bg-[#13222b] dark:text-[#90a4ad] dark:hover:text-white",
+                      ? "border-border bg-card text-foreground dark:border-border dark:bg-card dark:text-foreground"
+                      : "border-border bg-secondary text-muted-foreground hover:text-foreground dark:border-border dark:bg-secondary dark:text-muted-foreground dark:hover:text-foreground",
                   )}
                   aria-pressed={slotMinutes === 30}
                   aria-label={copy.zoomIn}
@@ -921,7 +921,7 @@ function GeritDashboardHomeContent() {
                 <div
                   key={day.key}
                   className={clsx(
-                    "flex h-[3.25rem] flex-col items-center justify-center border-b border-r border-[#dce1e5] px-4 text-center text-xs dark:border-[#17313a]",
+                    "flex h-[3.25rem] flex-col items-center justify-center border-b border-r border-border px-4 text-center text-xs dark:border-border",
                     getHeaderTone({
                       isActive: day.isActive,
                       isWeekend: day.isWeekend,
@@ -963,7 +963,7 @@ function GeritDashboardHomeContent() {
 
                   return (
                     <Fragment key={slot.label}>
-                      <div className="flex h-[4rem] items-start justify-end border-r border-[#e1e5e8] bg-[#fbfcfd] pr-2 pt-3 text-[0.72rem] text-[#b3bcc2] dark:border-[#17313a] dark:bg-[#13212b] dark:text-[#8ea3ad]">
+                      <div className="flex h-[4rem] items-start justify-end border-r border-border bg-card pr-2 pt-3 text-[0.72rem] text-muted-foreground dark:border-border dark:bg-card dark:text-muted-foreground">
                         {slot.label}
                       </div>
 
@@ -979,14 +979,14 @@ function GeritDashboardHomeContent() {
                             });
                           }}
                           className={clsx(
-                            "relative h-[4rem] border-r border-b border-dashed border-[#e4e8eb] text-left transition-colors dark:border-[#233944]",
+                            "relative h-[4rem] border-r border-b border-dashed border-border text-left transition-colors dark:border-border",
                             getBodyTone({
                               isActive: day.isActive,
                               isWeekend: day.isWeekend,
                             }),
                             selectedGridCell?.dayKey === day.key &&
                               selectedGridCell?.slotLabel === slot.label &&
-                              "ring-2 ring-inset ring-[#11b7ff]",
+                              "ring-2 ring-inset ring-primary",
                           )}
                           aria-pressed={
                             selectedGridCell?.dayKey === day.key &&
@@ -996,11 +996,11 @@ function GeritDashboardHomeContent() {
                           {day.isToday && containsCurrentTime ? (
                             <>
                               <span
-                                className="absolute left-2 h-2 w-2 -translate-y-1/2 rounded-full bg-[#11b7ff] shadow-[0_0_12px_rgba(17,183,255,0.9)]"
+                                className="absolute left-2 h-2 w-2 -translate-y-1/2 rounded-full bg-primary shadow-[0_0_12px_rgba(17,183,255,0.9)]"
                                 style={{ top: `${currentTimeOffset}%` }}
                               />
                               <span
-                                className="absolute left-3 h-[0.18rem] w-[82%] -translate-y-1/2 rounded-full bg-[#11b7ff] shadow-[0_0_18px_rgba(17,183,255,0.7)]"
+                                className="absolute left-3 h-[0.18rem] w-[82%] -translate-y-1/2 rounded-full bg-primary shadow-[0_0_18px_rgba(17,183,255,0.7)]"
                                 style={{ top: `${currentTimeOffset}%` }}
                               />
                             </>

@@ -64,7 +64,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       data-collapsed={state.sidebarCollapsed}
     >
       <HubNav
-        logo={
+        left={
           <Link
             href="/"
             className="flex h-10 items-center justify-center rounded-full transition-colors hover:bg-secondary"
@@ -81,10 +81,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             />
           </Link>
         }
-        left={tenantName ? (
+        logo={tenantName ? (
           <>
-            <span className="mx-2 h-7 w-px shrink-0 bg-border" />
-            <p className="truncate text-sm font-medium text-muted-foreground">
+            <span className="mx-2 text-muted-foreground" aria-hidden="true">|</span>
+            <p className="truncate text-sm font-semibold text-foreground">
               {tenantName}
             </p>
           </>

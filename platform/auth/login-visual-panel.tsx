@@ -2,7 +2,6 @@
 
 import { useTheme } from "next-themes";
 import Image from "next/image";
-import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { useEffect, useState } from "react";
 
 export function LoginVisualPanel() {
@@ -20,13 +19,13 @@ export function LoginVisualPanel() {
     : "/gerit-login-dark.png";
 
   return (
-    <aside className="relative hidden h-[100dvh] overflow-hidden lg:block lg:col-span-2">
+    <aside className="relative hidden h-[100dvh] overflow-hidden lg:block">
       <Image
         src={imageSrc}
         alt=""
         fill
         priority
-        sizes="(min-width: 1024px) 66vw, 100vw"
+        sizes="(min-width: 1024px) 50vw, 100vw"
         className="object-cover"
       />
       {!isLight && (
@@ -38,28 +37,21 @@ export function LoginVisualPanel() {
         </>
       )}
 
-      {!isLight && (
-        <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
-          <GeritLogo
-            variant="horizontal"
-            theme="dark"
-            alt="Gerit"
-            width={142}
-            height={36}
-            className="h-9 w-auto"
-            priority
-          />
-          <h2 className="mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight text-white xl:text-4xl">
-            Operacao, agenda e produtividade numa unica entrada.
-          </h2>
-          <p className="mt-4 max-w-xs text-sm leading-6 text-white/72 xl:text-base">
-            Aceda ao ecossistema de gestao com uma interface focada em rapidez,
-            contexto e continuidade de trabalho.
-          </p>
-        </div>
-      )}
+      <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
+        <h2 className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
+          isLight ? "text-gray-900" : "text-white"
+        }`}>
+          Operacao, agenda e produtividade numa unica entrada.
+        </h2>
+        <p className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
+          isLight ? "text-gray-600" : "text-white/72"
+        }`}>
+          Aceda ao ecossistema de gestao com uma interface focada em rapidez,
+          contexto e continuidade de trabalho.
+        </p>
+      </div>
 
-      <div className="absolute right-0 top-0 h-full w-px bg-white/10" />
+      <div className="absolute right-0 top-0 h-full w-px bg-border" />
     </aside>
   );
 }

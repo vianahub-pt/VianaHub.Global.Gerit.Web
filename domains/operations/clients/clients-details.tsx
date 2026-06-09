@@ -1393,7 +1393,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-muted-foreground dark:text-muted-foreground",
         )}
       >
         {contact.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -1408,30 +1408,30 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleContactEdit(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#1f2f3f] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
           title={t("clients.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleContactToggleStatus(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
           title={
             contact.isActive
               ? t("clients.actions.deactivate")
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleContactDelete(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
       </div>
     ),
@@ -1540,7 +1540,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-muted-foreground dark:text-muted-foreground",
         )}
       >
         {address.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -1555,30 +1555,30 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleAddressEdit(address)}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#1f2f3f] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
           title={t("clients.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleAddressToggleStatus(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
           title={
             address.isActive
               ? t("clients.actions.deactivate")
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleAddressDelete(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
       </div>
     ),
@@ -1639,8 +1639,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1754,7 +1754,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         </div>
         {/* Line 7: Observações — abaixo do grid */}
         <div className="mt-4">
-          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+          <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
           <textarea
@@ -1766,7 +1766,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+            className="w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-input dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
           />
         </div>
       </div>
@@ -1778,8 +1778,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1875,7 +1875,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           />
           {/* Line 7: Observações (full width) */}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
             <textarea
@@ -1887,7 +1887,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+              className="w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-input dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
             />
           </div>
         </div>
@@ -1922,7 +1922,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => router.push("/clients/")}
-          className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+          className="inline-flex items-center gap-2 rounded-sm border border-border bg-background px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           {t("clients.actions.back")}
@@ -1930,7 +1930,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="submit"
           disabled={submittingClient}
-          className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+          className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
         >
           {submittingClient && <Loader2 className="h-4 w-4 animate-spin" />}
           {t("clients.actions.save")}
@@ -1944,7 +1944,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderContactsTab = () => {
     if (!loadedTabs.has("contactos")) {
       return (
-        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
         </div>
       );
@@ -1955,7 +1955,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Contact form */}
         <form
           onSubmit={(e) => void handleContactSubmit(e)}
-          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+          className="rounded-sm border border-border bg-card p-4 dark:border-border dark:bg-card"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField
@@ -1987,7 +1987,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             <button
               type="submit"
               disabled={contactSubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
             >
               {contactSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editingContact ? t("clients.actions.save") : t("clients.actions.add")}
@@ -1996,13 +1996,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               <button
                 type="button"
                 onClick={resetContactForm}
-                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
               >
                 {t("clients.actions.cancel")}
               </button>
             )}
             {/* Bulk upload */}
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
               {contactsBulkUploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
@@ -2069,7 +2069,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderAddressesTab = () => {
     if (!loadedTabs.has("enderecos")) {
       return (
-        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
         </div>
       );
@@ -2080,7 +2080,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Address form */}
         <form
           onSubmit={(e) => void handleAddressSubmit(e)}
-          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+          className="rounded-sm border border-border bg-card p-4 dark:border-border dark:bg-card"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField
@@ -2125,7 +2125,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             <button
               type="submit"
               disabled={addressSubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
             >
               {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
@@ -2134,13 +2134,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               <button
                 type="button"
                 onClick={resetAddressForm}
-                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
               >
                 {t("clients.actions.cancel")}
               </button>
             )}
             {/* Bulk upload */}
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
               {addressesBulkUploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
@@ -2209,21 +2209,21 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#243143]">
+        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-muted px-4 py-4 sm:px-6 dark:bg-muted">
           {/* ---------- Header ---------- */}
-          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-background px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-primary dark:hover:bg-muted dark:hover:text-primary"
                 title={t("clients.actions.back")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold text-[#0f172a] dark:text-white sm:text-3xl">
+                  <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                     {isEditing
                       ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
                       : t("clients.form.newTitle")}
@@ -2241,7 +2241,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {client ? client.clientTypeDescription ?? "" : t("clients.detail.helper")}
                 </p>
               </div>
@@ -2268,8 +2268,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {/* ---------- Loading state ---------- */}
           {loadingClient && (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-[#08aee5]" />
-              <span className="ml-3 text-sm text-[#7aa4c0] dark:text-[#84a0c0]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-3 text-sm text-muted-foreground dark:text-muted-foreground">
                 {t("clients.loading")}
               </span>
             </div>

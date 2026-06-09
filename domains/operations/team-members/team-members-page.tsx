@@ -211,17 +211,17 @@ export function TeamMembersPage() {
       {
         key: "Name",
         label: t("teamMembers.table.name"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Function",
         label: t("teamMembers.table.function"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "TaxNumber",
         label: t("teamMembers.table.taxNumber"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
     ],
     [t],
@@ -649,8 +649,8 @@ export function TeamMembersPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           member.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+            ? "text-foreground dark:text-foreground"
+            : "text-foreground dark:text-foreground",
         )}
       >
         {member.isActive
@@ -670,10 +670,10 @@ export function TeamMembersPage() {
             event.stopPropagation();
             handleTeamMemberSelection(member);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={t("teamMembers.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -681,14 +681,14 @@ export function TeamMembersPage() {
             event.stopPropagation();
             void handleToggleStatus(member);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={
             member.isActive
               ? t("teamMembers.actions.deactivate")
               : t("teamMembers.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -696,10 +696,10 @@ export function TeamMembersPage() {
             event.stopPropagation();
             void handleDeleteTeamMember(member);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive"
           title={t("teamMembers.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
       </div>
     ),
@@ -708,9 +708,9 @@ export function TeamMembersPage() {
   const gridToolbar = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-[#d1d9e5] bg-white px-4 text-sm font-medium text-[#1f2f3f] transition-colors hover:border-[#b4c2d9] hover:bg-[#f0f3fb] dark:border-[#405360] dark:bg-[#263844] dark:text-[#c9d8df] dark:hover:bg-[#2c404c]">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
           {bulkUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#08aee5]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : null}
           {t("teamMembers.bulk.upload.label")}
           <input
@@ -728,7 +728,7 @@ export function TeamMembersPage() {
         <button
           type="button"
           onClick={showCreateForm}
-          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#08aee5] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6]"
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
           {t("teamMembers.actions.add")}
@@ -758,14 +758,14 @@ export function TeamMembersPage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#253542]">
-          <div className="mb-5 overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0d1c29] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-5 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
+          <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 bg-muted px-6 py-5 dark:border-border dark:bg-muted">
               <div>
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[#0f172a] dark:text-white">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-foreground dark:text-foreground">
                   {t("teamMembers.title")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {t("teamMembers.subtitle")}
                 </p>
               </div>
@@ -823,15 +823,15 @@ export function TeamMembersPage() {
 
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-[#d9dee2] bg-white p-5 dark:border-[#18303c] dark:bg-[#1f2f3e]">
+              <section className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-[#0f172a] dark:text-[#d6e6ee]">
+                    <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                       {isEditing
                         ? t("teamMembers.form.editTitle")
                         : t("teamMembers.form.newTitle")}
                     </h2>
-                    <p className="text-sm text-[#4f5c6a] dark:text-[#9eb1bc]">
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                       {isEditing
                         ? t("teamMembers.form.subtitle")
                         : t("teamMembers.detail.helper")}
@@ -842,8 +842,8 @@ export function TeamMembersPage() {
                       className={clsx(
                         "inline-flex rounded-full px-3 py-1 text-xs font-semibold",
                         selectedTeamMember.isActive
-                          ? "text-[#3E515B] dark:text-[#84a0c0]"
-                          : "text-[#3E515B] dark:text-[#84a0c0]",
+                          ? "text-foreground dark:text-foreground"
+                          : "text-foreground dark:text-foreground",
                       )}
                     >
                       {selectedTeamMember.isActive
@@ -859,7 +859,7 @@ export function TeamMembersPage() {
                 >
                   <div className="space-y-3">
                     <label className="block">
-                      <span className="mb-1.5 block text-sm text-[#6b7280] dark:text-[#b2c5cf]">
+                      <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.name")}
                       </span>
                       <input
@@ -870,11 +870,11 @@ export function TeamMembersPage() {
                             name: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none focus:border-[#11b7ff] dark:border-[#38505d] dark:bg-[#263844] dark:text-[#d6e6ee]"
+                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                     <label className="block">
-                      <span className="mb-1.5 block text-sm text-[#6b7280] dark:text-[#b2c5cf]">
+                      <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.function")}
                       </span>
                       <input
@@ -885,11 +885,11 @@ export function TeamMembersPage() {
                             functionName: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none focus:border-[#11b7ff] dark:border-[#38505d] dark:bg-[#263844] dark:text-[#d6e6ee]"
+                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                     <label className="block">
-                      <span className="mb-1.5 block text-sm text-[#6b7280] dark:text-[#b2c5cf]">
+                      <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.taxNumber")}
                       </span>
                       <input
@@ -900,7 +900,7 @@ export function TeamMembersPage() {
                             taxNumber: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none focus:border-[#11b7ff] dark:border-[#38505d] dark:bg-[#263844] dark:text-[#d6e6ee]"
+                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                   </div>
@@ -910,7 +910,7 @@ export function TeamMembersPage() {
                       <button
                         type="button"
                         onClick={hideDetail}
-                        className="h-10 rounded-md border border-[#38505d] px-4 text-sm font-medium text-[#c4d6de]"
+                        className="h-10 rounded-md border border-border px-4 text-sm font-medium text-muted-foreground"
                       >
                         {t("teamMembers.actions.cancel")}
                       </button>
@@ -918,7 +918,7 @@ export function TeamMembersPage() {
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="inline-flex h-10 items-center gap-2 rounded-md bg-[#08aee5] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                      className="inline-flex h-10 items-center gap-2 rounded-md bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-60"
                     >
                       {submitting ? (
                         <Loader2 className="h-4 w-4 animate-spin" />

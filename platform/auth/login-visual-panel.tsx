@@ -16,8 +16,8 @@ export function LoginVisualPanel() {
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,12,19,0.18)_0%,rgba(0,12,19,0.28)_45%,rgba(0,9,14,0.74)_88%,rgba(0,7,11,0.92)_100%)]" />
       <div className="absolute inset-y-0 right-0 w-24 bg-[linear-gradient(90deg,transparent_0%,rgba(2,10,14,0.92)_100%)]" />
-      <div className="absolute left-[12%] top-[18%] h-44 w-44 rounded-full bg-[#12d7ff]/18 blur-3xl" />
-      <div className="absolute bottom-[16%] left-[18%] h-52 w-52 rounded-full bg-[#ff8d32]/14 blur-3xl" />
+      <div className="absolute left-[12%] top-[18%] h-44 w-44 rounded-full bg-primary/18 blur-3xl" />
+      <div className="absolute bottom-[16%] left-[18%] h-52 w-52 rounded-full bg-primary/14 blur-3xl" />
 
       <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
         <GeritLogo

@@ -65,10 +65,10 @@ export function HubTabs<T extends string>({
                 aria-selected={isActive}
                 onClick={() => handleChange(tab.id)}
                 className={clsx(
-                  "rounded-t-md border border-transparent px-5 py-2 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#08aee5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0b1826]",
+                  "rounded-t-md border border-transparent px-5 py-2 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
-                    ? "border-b-[#ffffff] dark:border-b-[#1d272c] border-t border-l border-r border-[#e1e9ef] dark:border-[#000000] bg-[#ffffff] dark:bg-[#1d272c] text-[#000000] dark:text-[#ffffff]"
-                    : "border-b-[#e4eaee] dark:border-b-[#1d272c] border-t border-l border-r border-[#e1e9ef] dark:border-[#000000] bg-[#e4eaee] dark:bg-[#000000] text-[#000000] dark:text-[#ffffff]",
+                    ? "border-b-card dark:border-b-card border-t border-l border-r border-border dark:border-border bg-card dark:bg-card text-foreground dark:text-foreground"
+                    : "border-b-secondary dark:border-b-card border-t border-l border-r border-border dark:border-border bg-secondary dark:bg-border text-foreground dark:text-foreground",
                 )}
               >
                 {tab.label}
@@ -77,7 +77,7 @@ export function HubTabs<T extends string>({
           })}
         </nav>
       </div>
-      <div className="px-6 py-5 border border-[#e4eaee] dark:border-[#000000] border-t-[#ffffff] dark:border-t-[#1d272c] rounded-b-md bg-white dark:bg-[#1d272c]">
+      <div className="px-6 py-5 border border-border dark:border-border border-t-card dark:border-t-card rounded-b-md bg-card dark:bg-card">
         {currentTab?.panel}
       </div>
     </div>

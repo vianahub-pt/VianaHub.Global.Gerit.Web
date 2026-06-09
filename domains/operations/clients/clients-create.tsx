@@ -95,8 +95,8 @@ export function ClientsCreatePage() {
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -210,7 +210,7 @@ export function ClientsCreatePage() {
         </div>
         {/* Line 7: Observações — abaixo do grid */}
         <div className="mt-4">
-          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+          <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
           <textarea
@@ -222,7 +222,7 @@ export function ClientsCreatePage() {
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+            className="w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-border dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
           />
         </div>
       </div>
@@ -234,8 +234,8 @@ export function ClientsCreatePage() {
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -331,7 +331,7 @@ export function ClientsCreatePage() {
           />
           {/* Line 7: Observações (full width) */}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
             <textarea
@@ -343,7 +343,7 @@ export function ClientsCreatePage() {
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+              className="w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-border dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
             />
           </div>
         </div>
@@ -552,23 +552,23 @@ export function ClientsCreatePage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#243143]">
+        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           {/* ---------- Header ---------- */}
-          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-primary dark:hover:bg-secondary dark:hover:text-primary"
                 title={t("clients.actions.back")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-semibold text-[#0f172a] dark:text-white sm:text-3xl">
+                <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                   {t("clients.form.newTitle")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {t("clients.detail.helper")}
                 </p>
               </div>
@@ -578,7 +578,7 @@ export function ClientsCreatePage() {
           {/* ---------- Form ---------- */}
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
             {/* Client type selector */}
-            <div className="rounded-sm border border-[#dfe6ed]/80 bg-white p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f]">
+            <div className="rounded-sm border border-border/80 bg-card p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <SelectField
                   label={t("clients.form.clientType")}
@@ -602,7 +602,7 @@ export function ClientsCreatePage() {
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary dark:border-input dark:bg-card dark:text-muted-foreground dark:hover:border-ring dark:hover:text-primary"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {t("clients.actions.back")}
@@ -610,7 +610,7 @@ export function ClientsCreatePage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+                className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {t("clients.actions.save")}

@@ -67,7 +67,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         left={
           <Link
             href="/"
-            className="flex h-10 items-center justify-center rounded-full transition-colors hover:bg-secondary"
+            className="flex items-center justify-center rounded-lg transition-colors hover:bg-secondary px-1.5 py-1"
             aria-label={copy.openDashboard}
           >
             <GeritLogo
@@ -76,7 +76,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
               alt={copy.brand}
               width={142}
               height={36}
-              className="h-9 w-auto"
+              className="h-8 w-auto"
               priority
             />
           </Link>

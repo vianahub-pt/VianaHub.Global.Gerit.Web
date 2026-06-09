@@ -1,18 +1,31 @@
 "use client";
 
+import { useTheme } from "next-themes";
 import Image from "next/image";
 import { GeritLogo } from "@/shared/ui/gerit-logo";
+import { useEffect, useState } from "react";
 
 export function LoginVisualPanel() {
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const imageSrc = mounted && resolvedTheme === "light"
+    ? "/gerit-login-light.png"
+    : "/gerit-login-dark.png";
+
   return (
-    <aside className="relative hidden h-[100dvh] overflow-hidden lg:block">
+    <aside className="relative hidden h-[100dvh] overflow-hidden lg:block lg:col-span-2">
       <Image
-        src="/login-wallpaper.jpg"
+        src={imageSrc}
         alt=""
         fill
         priority
-        sizes="(min-width: 1024px) 58vw, 100vw"
-        className="object-cover object-left-top"
+        sizes="(min-width: 1024px) 66vw, 100vw"
+        className="object-cover"
       />
       <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,12,19,0.18)_0%,rgba(0,12,19,0.28)_45%,rgba(0,9,14,0.74)_88%,rgba(0,7,11,0.92)_100%)]" />
       <div className="absolute inset-y-0 right-0 w-24 bg-[linear-gradient(90deg,transparent_0%,rgba(2,10,14,0.92)_100%)]" />

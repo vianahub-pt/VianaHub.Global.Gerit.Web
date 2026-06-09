@@ -190,7 +190,7 @@ export function LoginScreen() {
 
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-background text-white">
-      <div className="relative grid h-[100dvh] lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
+      <div className="relative grid h-[100dvh] lg:grid-cols-3">
         <LoginVisualPanel />
         <Suspense
           fallback={
@@ -201,7 +201,7 @@ export function LoginScreen() {
           }
         ></Suspense>
 
-        <section className="relative flex h-[100dvh] items-center justify-center px-5 py-4 sm:px-8 sm:py-6">
+        <section className="relative flex h-[100dvh] items-center justify-center px-5 sm:px-8">
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,14,19,0.7)_0%,rgba(3,14,19,0.96)_100%)] lg:bg-[linear-gradient(180deg,rgba(3,14,19,0)_0%,rgba(3,14,19,0)_100%)]" />
           <div
             className="gerit-animate-enter relative w-full max-w-[24rem] rounded-[28px] border border-white/10 bg-background/88 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.36)] supports-[backdrop-filter]:bg-background/72 supports-[backdrop-filter]:backdrop-blur-xl sm:p-7"

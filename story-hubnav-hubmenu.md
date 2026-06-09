@@ -1,0 +1,113 @@
+## Descrição
+Como **desenvolvedor frontend**, quero que a estrutura de navegação atual (navbar e menu lateral esquerdo) seja separada em **dois componentes independentes, genéricos e dinâmicos** (`HubNav` e `HubMenu`), para que possam ser reutilizados em qualquer parte da aplicação e o menu lateral seja preenchido dinamicamente com base nas **permissions** contidas no accessToken do usuário autenticado.
+
+## Classificação
+- **Tipo:** story
+- **Prioridade:** Alta
+- **Severidade:** Não aplicável
+- **Complexidade sugerida pelo PO:** Alta
+- **Developer provável:** developer-senior
+- **Motivo da complexidade:** A feature envolve refatoração estrutural de componentes de layout compartilhados (`shared/layout`), integração com o sistema de autenticação (`useAuth`, `permissions`, `hasPermission`), criação de API de configuração de menu baseada em permissões dinâmicas e alteração de componentes consumidos por toda a aplicação (workspace-shell, client-layout). O impacto é transversal e exige análise de causa raiz para evitar regressões.
+
+## Contexto
+Atualmente o layout da aplicação possui dois componentes de navegação acoplados ao shell do workspace:
+
+1. **`Navbar`** (`shared/layout/navbar.tsx`): Componente minimalista e praticamente vazio, usado apenas em rotas públicas pelo `ClientLayout`. A navbar real (com logo, nome do tenant, tema e menu do usuário) está embutida diretamente no `WorkspaceShell`.
+
+2. **`TenantSidebar`** (`shared/layout/tenant-sidebar.tsx`): Menu lateral esquerdo com itens hardcoded divididos em seções ("Managing" e "Supporting Data"). Não há filtro por permissões — todos os itens aparecem para qualquer usuário autenticado, independentemente do seu nível de acesso.
+
+## O que precisa ser feito
+
+### 1. HubNav — Componente de Navbar Genérico
+Criar o componente `HubNav` em `shared/layout/hub-nav.tsx` que:
+- Seja totalmente independente e autossuficiente
+- Aceite um `logo` (componente ReactNode) e `items` (ações/botões à direita) via props
+- Tenha variantes de estilo (ex.: `sticky`, `static`, `transparent`)
+- Suporte slots para: left (logo), center (navegação opcional), right (ações/ícones)
+- Preserve o comportamento atual da navbar do workspace (sticky, backdrop-blur, z-50, altura fixa)
+- Substitua o `<header>` embutido no `WorkspaceShell` e o `Navbar` atual
+
+### 2. HubMenu — Componente de Menu Lateral Genérico e Dinâmico
+Criar o componente `HubMenu` em `shared/layout/hub-menu.tsx` que:
+- Seja preenchido exclusivamente com base nas **permissions** do accessToken (via `useAuth().permissions` ou `useAuth().hasPermission`)
+- Aceite uma **configuração de menu** via props (seções, itens, ícones, permissões necessárias)
+- Cada item de menu deve ter um campo opcional `permission` (ex.: `{ resource: "Clients", action: "Read" }`) verificado com `hasPermission(resource, action)`
+- Itens sem `permission` especificada são considerados públicos (exibidos para qualquer usuário autenticado)
+- Suporte estado `collapsed` (sidebar reduzida) igual ao comportamento atual
+- Destaque visual para o item ativo com base na rota atual (`usePathname`)
+- Suporte seções com título e divisores
+- Preserve a aparência visual atual (cores, hover, active state, icon positioning)
+
+### 3. Integração
+- Refatorar `WorkspaceShell` para usar `HubNav` e `HubMenu` no lugar do header embutido e do `TenantSidebar`
+- Migrar a configuração de menu do `TenantSidebar` para uma configuração tipada em arquivo separado (ex.: `domains/workspace/workspace-menu-config.ts`)
+- Remover ou marcar como obsoleto o componente `TenantSidebar`
+- Substituir `Navbar` atual por `HubNav` com props reduzidas
+
+## Critérios de Aceite
+- [ ] `HubNav` é um componente independente que aceita logo e itens de ação por props, sem dependência direta de contexto de workspace
+- [ ] `HubNav` suporta variantes de posicionamento (sticky, static) e preserva o visual atual (backdrop-blur, z-50, borda, altura h-14)
+- [ ] `HubMenu` filtra itens de menu dinamicamente com base nas permissions do accessToken, exibindo apenas itens cujo `hasPermission(resource, action)` retorne `true`
+- [ ] Itens de menu sem `permission` especificada são exibidos para qualquer usuário autenticado
+- [ ] `HubMenu` suporta estado `collapsed` com comportamento idêntico ao atual (largura reduzida, tooltip)
+- [ ] `HubMenu` destaca o item ativo com base na rota atual e mantém indicador visual (barra lateral esquerda)
+- [ ] `HubMenu` suporta seções com título e itens agrupados
+- [ ] `WorkspaceShell` refatorado para usar `HubNav` e `HubMenu`, mantendo todo o comportamento atual
+- [ ] A configuração de menu do workspace é externalizada em arquivo próprio com tipos bem definidos
+- [ ] Componente `Navbar` antigo é refatorado para usar `HubNav`
+- [ ] Componente `TenantSidebar` é removido ou mantido como legado com aviso de depreciação
+- [ ] Nenhuma regressão visual ou funcional no layout do workspace
+- [ ] i18n existente para labels do menu é preservado
+- [ ] Lint, build e typecheck passam sem erros
+
+## Cenário de Sucesso
+**Dado que** um usuário autenticado acessa o workspace
+**Quando** o `HubMenu` é renderizado
+**Então** apenas os itens de menu cuja permissão correspondente existe no accessToken são exibidos
+
+## Cenário de Insucesso
+**Dado que** um usuário autenticado não possui determinada permissão
+**Quando** o `HubMenu` renderiza a seção correspondente
+**Então** o item sem permissão não é renderizado
+
+## Cenários de Borda
+- **Loading:** Enquanto o auth não hidrata, o `HubMenu` deve renderizar vazio ou com placeholder
+- **Empty state (sem permissões):** Se o usuário não tiver nenhuma permissão, exibir apenas seções públicas
+- **Erro de permissão:** Se o claims do token não contiver `permissions`, exibir apenas itens públicos
+- **Collapsed:** Sidebar colapsado esconde labels e mostra tooltips
+- **Responsividade:** Em mobile (< lg), sidebar oculto (comportamento atual)
+- **Rota não encontrada:** Nenhum item deve aparecer como ativo
+
+## Impacto Frontend
+- **Rotas/Telas:** Todas as telas do workspace (dashboard, operations/*, workspace/*, settings/*)
+- **Componentes:** `shared/layout/hub-nav.tsx` (novo), `shared/layout/hub-menu.tsx` (novo), `shared/layout/workspace-shell.tsx` (refatorar), `shared/layout/tenant-sidebar.tsx` (remover/legado), `shared/layout/navbar.tsx` (refatorar), `shared/layout/index.ts` (atualizar exports)
+- **Hooks:** `useAuth`, `usePathname`, `useDashboardShell`
+- **Types:** `HubMenuConfig`, `HubMenuSection`, `HubMenuItem`, `HubNavProps`
+- **i18n:** Labels em `workspace.sidebar.*` — preservar
+- **Riscos de regressão:** Alteração no `WorkspaceShell` impacta todas as páginas do workspace
+
+## Contrato de API
+- **Endpoint:** Não aplicável (sem nova chamada de API)
+- **Fonte:** `useAuth().permissions: Record<string, string[]>` do accessToken decodificado
+- **Verificação:** `useAuth().hasPermission(resource: string, action: string): boolean`
+
+## UI/UX Esperado
+- Layout do workspace deve permanecer visualmente idêntico
+- Navbar (HubNav) e Sidebar (HubMenu) mantendo a mesma aparência atual
+- Itens não autorizados simplesmente não aparecem
+- Comportamento responsivo preservado
+- Acessibilidade mantida (keyboard, aria-current, aria-label)
+
+## Definition of Ready
+- [x] Requisitos de negócio claros
+- [x] Critérios de aceite objetivos
+- [x] Cenários de sucesso, insucesso e borda definidos
+- [x] Contrato de API conhecido (permissions do accessToken)
+- [x] Impacto em rotas/componentes identificado
+- [x] Regras de UI/UX descritas
+- [x] Prioridade definida
+- [x] Complexidade sugerida pelo PO definida
+- [x] Sem bloqueios para o Developer iniciar
+
+## Labels sugeridas
+`story`, `frontend`, `react`, `nextjs`, `refactor`, `priority:high`, `complexity:high`, `navigation`, `layout`

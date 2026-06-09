@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { cn } from "@/shared/ui/utils";
 
 type GeritLogoVariant = "horizontal" | "wordmark";
 type GeritLogoTheme = "light" | "dark";
@@ -47,7 +48,7 @@ export function GeritLogo({
       width={width ?? intrinsicSize.width}
       height={height ?? intrinsicSize.height}
       priority={priority}
-      className={className}
+      className={cn("block", className)}
     />
   );
 }

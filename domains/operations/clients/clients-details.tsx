@@ -451,6 +451,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setLoadingClient(true);
     try {
       const response = await fetchWithAuth(`/api/gerit/v1/clients/${clientId}`, { method: "GET" });
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.errors.load")));
@@ -551,6 +552,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         `/api/gerit/v1/clients/${client.id}/contacts/paged?${query.toString()}`,
         { method: "GET" },
       );
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.contacts.errors.load")));
@@ -592,6 +594,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         `/api/gerit/v1/clients/${client.id}/addresses/paged?${query.toString()}`,
         { method: "GET" },
       );
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.addresses.errors.load")));
@@ -764,6 +767,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(normalizeErrorMessage(responsePayload, t("clients.errors.save")));
@@ -851,6 +855,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         ? `/api/gerit/v1/clients/${client.id}/deactivate`
         : `/api/gerit/v1/clients/${client.id}/activate`;
       const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+      if (!response) return;
       const responsePayload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(responsePayload, t("clients.errors.status")));
@@ -908,6 +913,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -957,6 +963,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           ? `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -999,6 +1006,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}`,
           { method: "DELETE" },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1064,6 +1072,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1115,6 +1124,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           ? `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1157,6 +1167,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/addresses/${address.id}`,
           { method: "DELETE" },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1197,6 +1208,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/contacts/bulk-upload`,
           { method: "POST", body: formData },
         );
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1241,6 +1253,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/addresses/bulk-upload`,
           { method: "POST", body: formData },
         );
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(

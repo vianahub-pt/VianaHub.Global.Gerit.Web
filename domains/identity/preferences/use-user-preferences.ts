@@ -656,7 +656,7 @@ export function useUserPreferences() {
           },
         );
 
-        if (ignore) {
+        if (!response || ignore) {
           return;
         }
 
@@ -724,7 +724,7 @@ export function useUserPreferences() {
       },
     );
 
-    if (!response.ok) {
+    if (!response || !response.ok) {
       return null;
     }
 
@@ -757,6 +757,7 @@ export function useUserPreferences() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       if (!response.ok) {
         const responsePayload = (await response
           .json()

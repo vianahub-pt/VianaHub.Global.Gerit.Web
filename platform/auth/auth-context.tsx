@@ -18,7 +18,7 @@ import {
 } from "@/platform/storage";
 
 const AUTH_STORAGE_KEY = STORAGE_KEYS.authSession;
-const ACCESS_TOKEN_REFRESH_BUFFER_MS = 30000;
+const ACCESS_TOKEN_REFRESH_BUFFER_MS = 60000;
 
 export interface AuthSession {
   accessToken: string;
@@ -315,7 +315,7 @@ const AuthContext = createContext<{
   signOut: () => void;
   signOutAndRedirect: () => void;
   refreshSession: () => Promise<AuthSession | null>;
-  fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  fetchWithAuth: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response | null>;
   hasPermission: (resource: string, action: string) => boolean;
 } | null>(null);
 
@@ -508,7 +508,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const activeSession = await getActiveSession();
 
       if (!activeSession) {
-        throw new Error("Sessao expirada.");
+        return null;
       }
 
       const buildHeaders = (accessToken: string) => {
@@ -535,7 +535,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const renewedSession = await refreshSession();
 
       if (!renewedSession) {
-        throw new Error("Sessao expirada.");
+        return null;
       }
 
       response = await fetch(input, {
@@ -545,7 +545,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (response.status === 401) {
         signOutAndRedirect();
-        throw new Error("Sessao expirada.");
+        return null;
       }
 
       return response;

@@ -323,6 +323,7 @@ export function EquipmentsPage() {
         },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as EquipmentsPagedResponse;
 
@@ -394,6 +395,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -442,6 +444,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -491,6 +494,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -679,6 +683,7 @@ export function EquipmentsPage() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       const responsePayload = (await response
         .json()
         .catch(() => null)) as unknown;

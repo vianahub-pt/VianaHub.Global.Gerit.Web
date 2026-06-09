@@ -50,7 +50,7 @@ export function SubscriptionProvider({
           `/api/gerit/v1/subscriptions/tenant/${activeTenantId}`,
         );
 
-        if (!response.ok) {
+        if (!response || !response.ok) {
           if (!disposed) {
             setState({
               tenantId: activeTenantId,

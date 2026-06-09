@@ -467,6 +467,7 @@ export function ClientsCreatePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response
           .json()
           .catch(() => null)) as unknown;

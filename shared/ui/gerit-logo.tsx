@@ -30,6 +30,12 @@ const logoSizes: Record<GeritLogoVariant, { width: number; height: number }> = {
   wordmark: { width: 520, height: 120 },
 };
 
+/** object-position para centralizar o conteúdo visual do SVG dentro do container */
+const logoObjectPosition: Record<GeritLogoVariant, string> = {
+  horizontal: "69% center",
+  wordmark: "50% center",
+};
+
 export function GeritLogo({
   variant = "horizontal",
   theme = "light",
@@ -49,6 +55,7 @@ export function GeritLogo({
       height={height ?? intrinsicSize.height}
       priority={priority}
       className={cn("block", className)}
+      style={{ objectPosition: logoObjectPosition[variant] }}
     />
   );
 }

@@ -9,7 +9,7 @@ import {
   Trash2,
   UserRoundPlus,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -21,6 +21,7 @@ import {
   type HubGridColumn,
   type RowDensity,
 } from "@/shared/hub-grid";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ClientItem } from "@/domains/operations/clients/client-models";
 import {
   ClientsPagedResponse,
@@ -50,6 +51,8 @@ export function ClientsPage() {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [clientsBulkUploading, setClientsBulkUploading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteConfirmClientRef = useRef<ClientItem | null>(null);
   const [sortBy, setSortBy] = useState<SortColumn>("Name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -230,15 +233,20 @@ export function ClientsPage() {
   );
 
   const handleDeleteClient = useCallback(
-    async (client: ClientItem) => {
-      const confirmed = window.confirm(
-        t("clients.confirm.delete", { name: client.name }),
-      );
-      if (!confirmed) {
-        return;
-      }
+    (client: ClientItem) => {
+      deleteConfirmClientRef.current = client;
+      setDeleteConfirmOpen(true);
+    },
+    [],
+  );
 
-      try {
+  const handleDeleteConfirm = useCallback(async () => {
+    const client = deleteConfirmClientRef.current;
+    deleteConfirmClientRef.current = null;
+    setDeleteConfirmOpen(false);
+    if (!client) return;
+
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}`,
           {
@@ -462,7 +470,7 @@ export function ClientsPage() {
             event.stopPropagation();
             openClientDetails(client.id);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -473,7 +481,7 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleToggleStatus(client);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             client.isActive
               ? t("clients.actions.deactivate")
@@ -491,7 +499,7 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleDeleteClient(client);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -568,6 +576,19 @@ export function ClientsPage() {
           />
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          deleteConfirmClientRef.current
+            ? t("clients.confirm.delete", { name: deleteConfirmClientRef.current.name })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleDeleteConfirm()}
+      />
     </WorkspaceShell>
   );
 }

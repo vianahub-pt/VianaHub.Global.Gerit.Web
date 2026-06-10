@@ -19,3 +19,18 @@ export {
   ToastDescription,
   ToastAction,
 } from "@/shared/ui/toast";
+export { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+export type { ConfirmDialogProps } from "@/shared/ui/confirm-dialog";
+export {
+  AlertDialog,
+  AlertDialogPortal,
+  AlertDialogOverlay,
+  AlertDialogTrigger,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/shared/ui/alert-dialog";

@@ -16,9 +16,12 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Globe,
   LoaderCircle,
   LockKeyhole,
   Mail,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useToast } from "@/shared/feedback/use-toast";
 import {
@@ -27,9 +30,13 @@ import {
   useLoginForm,
 } from "@/platform/auth/use-login-form";
 import {
+  SUPPORTED_LANGUAGES,
+  type Language,
   useTranslation,
 } from "@/platform/i18n";
 import { useAuth } from "@/platform/auth";
+import { GeritLogo } from "@/shared/ui/gerit-logo";
+import { useTheme } from "next-themes";
 
 const LoginVisualPanel = lazy(async () => {
   const module = await import("./login-visual-panel");
@@ -89,6 +96,12 @@ export function LoginScreen() {
   const passwordInputId = useId();
   const passwordErrorId = `${passwordInputId}-error`;
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const {
     state: authState,
     isAuthenticated,
@@ -96,7 +109,7 @@ export function LoginScreen() {
     signIn,
   } = useAuth();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { language, setLanguage, t } = useTranslation();
   const {
     state,
     emailError,
@@ -188,6 +201,48 @@ export function LoginScreen() {
             role="region"
             aria-label={t("auth.login.title")}
           >
+            <div className="mb-7 flex items-start justify-between gap-4">
+              <GeritLogo
+                variant="wordmark"
+                theme={resolvedTheme === "light" ? "light" : "dark"}
+                alt={t("auth.login.brand")}
+                width={118}
+                height={28}
+                className="h-7 w-auto"
+                priority
+              />
+              <div className="flex items-center gap-2">
+                {mounted && (
+                  <button
+                    type="button"
+                    onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t("auth.login.toggleTheme")}
+                  >
+                    {resolvedTheme === "light" ? (
+                      <Moon className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Sun className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+                <div className="relative">
+                  <Globe className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <select
+                    value={language}
+                    onChange={(event) => setLanguage(event.target.value as Language)}
+                    className="h-8 appearance-none rounded-full border border-white/10 bg-black/10 pl-7 pr-7 text-[0.72rem] font-semibold text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t("auth.login.localeLabel")}
+                  >
+                    {SUPPORTED_LANGUAGES.map((option) => (
+                      <option key={option} value={option}>
+                        {t(`language.short.${option}`)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
             <div>
               <h1 className="mt-4 font-[family:var(--font-login)] text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
                 {t("auth.login.title")}

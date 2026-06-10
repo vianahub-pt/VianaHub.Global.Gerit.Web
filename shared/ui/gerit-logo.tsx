@@ -20,8 +20,8 @@ const logoSources: Record<GeritLogoVariant, Record<GeritLogoTheme, string>> = {
     dark: "/logo/gerit-horizontal-dark.svg",
   },
   wordmark: {
-    light: "/logo/gerit-wordmark-light.svg",
-    dark: "/logo/gerit-wordmark-dark.svg",
+    light: "/logo/gerit-horizontal-light.svg",
+    dark: "/logo/gerit-horizontal-dark.svg",
   },
 };
 

@@ -32,6 +32,8 @@
   "auth.login.toasts.registerDescription": "The registration action is not connected to a route yet.",
   "auth.login.visualFallbackTitle": "Gerit",
   "auth.login.visualFallbackBody": "Loading the authentication visual panel.",
+  "auth.login.visualPanelTagline": "Operations, schedule and productivity in a single entry point.",
+  "auth.login.visualPanelBody": "Access the management ecosystem with an interface focused on speed, context and workflow continuity.",
   "auth.login.emailLabel": "Work email",
   "auth.login.genericAuthError": "Unable to authenticate with the provided credentials.",
   "common.yes": "Yes",

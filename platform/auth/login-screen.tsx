@@ -36,6 +36,13 @@ import {
 } from "@/platform/i18n";
 import { useAuth } from "@/platform/auth";
 import { GeritLogo } from "@/shared/ui/gerit-logo";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 import { useTheme } from "next-themes";
 
 const LoginVisualPanel = lazy(async () => {
@@ -204,7 +211,7 @@ export function LoginScreen() {
             <div className="mb-7 flex items-start justify-between gap-4">
               <GeritLogo
                 variant="wordmark"
-                theme={resolvedTheme === "light" ? "light" : "dark"}
+                theme={mounted ? (resolvedTheme === "light" ? "light" : "dark") : "light"}
                 alt={t("auth.login.brand")}
                 width={118}
                 height={28}
@@ -227,19 +234,25 @@ export function LoginScreen() {
                   </button>
                 )}
                 <div className="relative">
-                  <Globe className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                  <select
+                  <Globe className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Select
                     value={language}
-                    onChange={(event) => setLanguage(event.target.value as Language)}
-                    className="h-8 appearance-none rounded-full border border-white/10 bg-black/10 pl-7 pr-7 text-[0.72rem] font-semibold text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                    aria-label={t("auth.login.localeLabel")}
+                    onValueChange={(value) => setLanguage(value as Language)}
                   >
-                    {SUPPORTED_LANGUAGES.map((option) => (
-                      <option key={option} value={option}>
-                        {t(`language.short.${option}`)}
-                      </option>
-                    ))}
-                  </select>
+                    <SelectTrigger
+                      className="h-8 w-[4.5rem] pl-7 pr-2"
+                      aria-label={t("auth.login.localeLabel")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_LANGUAGES.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {t(`language.short.${option}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

@@ -32,6 +32,8 @@
   "auth.login.toasts.registerDescription": "La acción de registro aún no está conectada a una ruta.",
   "auth.login.visualFallbackTitle": "Gerit",
   "auth.login.visualFallbackBody": "Cargando el panel visual de autenticación.",
+  "auth.login.visualPanelTagline": "Operación, agenda y productividad en un único punto de entrada.",
+  "auth.login.visualPanelBody": "Acceda al ecosistema de gestión con una interfaz centrada en la rapidez, el contexto y la continuidad del trabajo.",
   "auth.login.emailLabel": "Correo corporativo",
   "auth.login.genericAuthError": "No se pudo autenticar con las credenciales proporcionadas.",
   "common.yes": "Sí",

@@ -3,10 +3,12 @@
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/platform/i18n";
 
 export function LoginVisualPanel() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setMounted(true);
@@ -17,6 +19,24 @@ export function LoginVisualPanel() {
   const imageSrc = isLight
     ? "/gerit-login-light.png"
     : "/gerit-login-dark.png";
+
+  /* Antes da hidratação, exibe um fundo neutro para evitar
+     que o tema escuro apareça erroneamente no tema claro. */
+  if (!mounted) {
+    return (
+      <aside className="relative hidden h-[100dvh] overflow-hidden lg:block" aria-hidden="true">
+        <div className="absolute inset-0 bg-background" />
+        <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
+          <h2 className="mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight text-foreground xl:text-4xl">
+            {t("auth.login.visualPanelTagline")}
+          </h2>
+          <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground xl:text-base">
+            {t("auth.login.visualPanelBody")}
+          </p>
+        </div>
+      </aside>
+    );
+  }
 
   return (
     <aside className="relative hidden h-[100dvh] overflow-hidden lg:block">
@@ -43,13 +63,12 @@ export function LoginVisualPanel() {
         <h2 className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
           isLight ? "text-gray-950" : "text-white"
         }`}>
-          Operacao, agenda e produtividade numa unica entrada.
+          {t("auth.login.visualPanelTagline")}
         </h2>
         <p className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
           isLight ? "text-gray-800" : "text-white/72"
         }`}>
-          Aceda ao ecossistema de gestao com uma interface focada em rapidez,
-          contexto e continuidade de trabalho.
+          {t("auth.login.visualPanelBody")}
         </p>
       </div>
 

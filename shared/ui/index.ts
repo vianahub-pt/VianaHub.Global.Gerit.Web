@@ -19,3 +19,11 @@ export {
   ToastDescription,
   ToastAction,
 } from "@/shared/ui/toast";
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+} from "@/shared/ui/select";

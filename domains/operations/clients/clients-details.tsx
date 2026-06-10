@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -358,6 +359,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [contactFormState, setContactFormState] = useState<ContactFormState>(initialContactFormState);
   const [editingContact, setEditingContact] = useState<ContactItem | null>(null);
   const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactDeleteConfirmOpen, setContactDeleteConfirmOpen] = useState(false);
+  const contactDeleteRef = useRef<ContactItem | null>(null);
   const [contactsBulkUploading, setContactsBulkUploading] = useState(false);
 
   /* ---------- Addresses state ---------- */
@@ -367,6 +370,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [addressFormState, setAddressFormState] = useState<AddressFormState>(initialAddressFormState);
   const [editingAddress, setEditingAddress] = useState<AddressItem | null>(null);
   const [addressSubmitting, setAddressSubmitting] = useState(false);
+  const [addressDeleteConfirmOpen, setAddressDeleteConfirmOpen] = useState(false);
+  const addressDeleteRef = useRef<AddressItem | null>(null);
   const [addressesBulkUploading, setAddressesBulkUploading] = useState(false);
 
   /* ---------- Tab & lazy loading state ---------- */
@@ -995,13 +1000,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   );
 
   const handleContactDelete = useCallback(
-    async (contact: ContactItem) => {
-      const confirmed = window.confirm(
-        t("clients.contacts.confirm.delete", { name: contact.name }),
-      );
-      if (!confirmed) return;
-      if (!client?.id) return;
-      try {
+    (contact: ContactItem) => {
+      contactDeleteRef.current = contact;
+      setContactDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleContactDeleteConfirm = useCallback(async () => {
+    const contact = contactDeleteRef.current;
+    contactDeleteRef.current = null;
+    setContactDeleteConfirmOpen(false);
+    if (!contact || !client?.id) return;
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}`,
           { method: "DELETE" },
@@ -1155,14 +1166,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   );
 
   const handleAddressDelete = useCallback(
-    async (address: AddressItem) => {
-      const label = address.street ?? t("clients.addresses.table.street");
-      const confirmed = window.confirm(
-        t("clients.addresses.confirm.delete", { street: label }),
-      );
-      if (!confirmed) return;
-      if (!client?.id) return;
-      try {
+    (address: AddressItem) => {
+      addressDeleteRef.current = address;
+      setAddressDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleAddressDeleteConfirm = useCallback(async () => {
+    const address = addressDeleteRef.current;
+    addressDeleteRef.current = null;
+    setAddressDeleteConfirmOpen(false);
+    if (!address || !client?.id) return;
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}/addresses/${address.id}`,
           { method: "DELETE" },
@@ -1421,7 +1437,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleContactEdit(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1429,7 +1445,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleContactToggleStatus(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             contact.isActive
               ? t("clients.actions.deactivate")
@@ -1441,7 +1457,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleContactDelete(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1568,7 +1584,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleAddressEdit(address)}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1576,7 +1592,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleAddressToggleStatus(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             address.isActive
               ? t("clients.actions.deactivate")
@@ -1588,7 +1604,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleAddressDelete(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -2235,6 +2251,21 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
+                <nav aria-label="Breadcrumb" className="mb-1">
+                  <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <li>
+                      <button type="button" onClick={() => router.push("/clients/")} className="hover:text-primary transition-colors">
+                        {t("clients.title")}
+                      </button>
+                    </li>
+                    <li aria-hidden="true">/</li>
+                    <li className="text-foreground font-medium" aria-current="page">
+                      {isEditing
+                        ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
+                        : t("clients.form.newTitle")}
+                    </li>
+                  </ol>
+                </nav>
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                     {isEditing
@@ -2314,6 +2345,32 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={contactDeleteConfirmOpen}
+        onOpenChange={setContactDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          contactDeleteRef.current
+            ? t("clients.contacts.confirm.delete", { name: contactDeleteRef.current.name })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleContactDeleteConfirm()}
+      />
+      <ConfirmDialog
+        open={addressDeleteConfirmOpen}
+        onOpenChange={setAddressDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          addressDeleteRef.current
+            ? t("clients.addresses.confirm.delete", { street: addressDeleteRef.current.street ?? t("clients.addresses.table.street") })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleAddressDeleteConfirm()}
+      />
     </WorkspaceShell>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronDown, ChevronUp, Loader2, Search } from "lucide-react";
+import { ChevronDown, ChevronUp, Inbox, Loader2, Search } from "lucide-react";
 import type { ReactNode } from "react";
 
 export type RowDensity = "compact" | "medium" | "expanded";
@@ -164,7 +164,7 @@ export function HubGrid<Item>({
                   title={option.label}
                   aria-pressed={isActive}
                   className={clsx(
-                    "h-8 min-w-[3rem] rounded-sm border px-3 text-[0.55rem] font-semibold uppercase tracking-[0.14em] transition-colors",
+                    "h-8 min-w-[3rem] rounded-sm border px-3 text-[0.55rem] font-semibold uppercase tracking-[0.14em] transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                     isActive
                       ? "bg-foreground dark:bg-primary text-background dark:text-primary-foreground hover:border-ring hover:text-white"
                       : "border-ring dark:border-ring bg-muted dark:bg-muted text-primary dark:text-primary",
@@ -182,7 +182,7 @@ export function HubGrid<Item>({
       </div>
 
       <div className="px-6 py-4">
-        <div className="rounded-sm border border-border/70 bg-background shadow-inner dark:border-border dark:bg-card">
+        <div className="overflow-x-auto rounded-sm border border-border/70 bg-background shadow-inner dark:border-border dark:bg-card">
           <table className="w-full table-fixed border-collapse">
             <thead>
               <tr className="bg-muted text-center text-xs uppercase tracking-[0.08em] text-muted-foreground border-b border-border/70 dark:bg-muted dark:text-muted-foreground dark:border-border">
@@ -222,21 +222,21 @@ export function HubGrid<Item>({
                       <button
                         type="button"
                         onClick={() => sortable && onSort(column.key)}
-                        className={clsx(
-                          "flex w-full items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors",
-                          sortable
-                            ? "hover:text-white"
-                            : "cursor-default opacity-70",
-                        )}
-                        aria-sort={
+                      aria-sort={
                           isSorted
                             ? sortDirection === "asc"
                               ? "ascending"
                               : "descending"
                             : "none"
                         }
-                        disabled={!sortable}
-                      >
+                      disabled={!sortable}
+                      className={clsx(
+                        "flex w-full items-center justify-center gap-2 text-[0.65rem] font-semibold uppercase tracking-[0.08em] text-muted-foreground transition-colors focus-visible:ring-2 focus-visible:ring-ring",
+                        sortable
+                          ? "hover:text-white"
+                          : "cursor-default opacity-70",
+                      )}
+                    >
                         <span className="text-sm font-semibold uppercase tracking-[0.06em]">
                           {column.label}
                         </span>
@@ -287,7 +287,10 @@ export function HubGrid<Item>({
                     colSpan={columnCount}
                     className="px-4 py-12 text-center text-sm text-muted-foreground dark:text-muted-foreground"
                   >
-                    {emptyText}
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <Inbox className="h-8 w-8 text-muted-foreground/50" aria-hidden="true" />
+                      <span>{emptyText}</span>
+                    </div>
                   </td>
                 </tr>
               ) : (
@@ -312,6 +315,17 @@ export function HubGrid<Item>({
                             }
                           : undefined
                       }
+                      onKeyDown={
+                        onRowClick
+                          ? (event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                onRowClick(item);
+                              }
+                            }
+                          : undefined
+                      }
+                      tabIndex={onRowClick ? 0 : undefined}
                       className={clsx(
                         "border-b border-border/70 bg-background text-foreground transition-colors hover:bg-muted dark:border-border dark:bg-card dark:text-foreground dark:hover:bg-muted",
                         isSelected && "border-l-4 border-primary",
@@ -374,7 +388,7 @@ export function HubGrid<Item>({
             type="button"
             disabled={page <= 1 || loading}
             onClick={handlePreviousPage}
-            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80"
+            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
           >
             {paginationPreviousLabel}
           </button>
@@ -384,7 +398,7 @@ export function HubGrid<Item>({
               type="button"
               onClick={() => onPageChange(pageNumber)}
               className={clsx(
-                "flex h-9 min-w-[2.75rem] items-center justify-center rounded-sm px-3 text-sm font-semibold transition-colors",
+                "flex h-9 min-w-[2.75rem] items-center justify-center rounded-sm px-3 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-ring",
                 pageNumber === page
                   ? "bg-primary text-primary-foreground"
                   : "border border-ring dark:border-ring bg-muted dark:bg-muted text-primary dark:text-primary",
@@ -397,7 +411,7 @@ export function HubGrid<Item>({
             type="button"
             disabled={page >= totalPages || loading}
             onClick={handleNextPage}
-            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80"
+            className="flex h-9 items-center justify-center rounded-sm border border-border bg-foreground dark:bg-primary px-4 text-sm font-semibold text-background dark:text-primary-foreground disabled:cursor-not-allowed disabled:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
           >
             {paginationNextLabel}
           </button>

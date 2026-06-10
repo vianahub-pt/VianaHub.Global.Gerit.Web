@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { SquarePen, Trash2, UserRoundPlus, Power, Loader2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
@@ -12,6 +12,7 @@ import {
   type HubGridColumn,
   type RowDensity,
 } from "@/shared/hub-grid";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   useIdentityPreferences,
   type DateFormatPreference,
@@ -270,6 +271,8 @@ export function UsersPage() {
   const [formState, setFormState] =
     useState<UserFormState>(initialUserFormState);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteConfirmUserRef = useRef<UserItem | null>(null);
 
   const detailVisible = userDetailMode !== "hidden";
 
@@ -494,16 +497,20 @@ export function UsersPage() {
   );
 
   const handleDeleteUser = useCallback(
-    async (user: UserItem) => {
-      const confirmed = window.confirm(
-        t("users.confirm.delete", { name: user.name }),
-      );
+    (user: UserItem) => {
+      deleteConfirmUserRef.current = user;
+      setDeleteConfirmOpen(true);
+    },
+    [],
+  );
 
-      if (!confirmed) {
-        return;
-      }
+  const handleDeleteUserConfirm = useCallback(async () => {
+    const user = deleteConfirmUserRef.current;
+    deleteConfirmUserRef.current = null;
+    setDeleteConfirmOpen(false);
+    if (!user) return;
 
-      try {
+    try {
         const response = await fetchWithAuth(`/api/gerit/v1/users/${user.id}`, {
           method: "DELETE",
         });
@@ -636,7 +643,7 @@ export function UsersPage() {
             event.stopPropagation();
             handleUserSelection(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -647,7 +654,7 @@ export function UsersPage() {
             event.stopPropagation();
             void handleToggleStatus(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             user.isActive
               ? t("users.actions.deactivate")
@@ -662,7 +669,7 @@ export function UsersPage() {
             event.stopPropagation();
             void handleDeleteUser(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -952,6 +959,19 @@ export function UsersPage() {
           ) : null}
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t("users.toasts.validationTitle")}
+        description={
+          deleteConfirmUserRef.current
+            ? t("users.confirm.delete", { name: deleteConfirmUserRef.current.name })
+            : ""
+        }
+        confirmLabel={t("users.actions.delete")}
+        cancelLabel={t("users.actions.cancel")}
+        onConfirm={() => void handleDeleteUserConfirm()}
+      />
     </WorkspaceShell>
   );
 }

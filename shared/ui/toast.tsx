@@ -47,6 +47,7 @@ const Toast = React.forwardRef<
 >(({ className, variant = "default", ...props }, ref) => (
   <ToastPrimitives.Root
     ref={ref}
+    role={variant === "destructive" ? "alert" : "status"}
     className={cn(
       "group pointer-events-auto relative flex w-full items-center justify-between",
       "overflow-hidden rounded-md border p-4 pr-6 shadow-lg transition-all",

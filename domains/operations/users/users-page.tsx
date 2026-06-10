@@ -897,7 +897,7 @@ export function UsersPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.name")}
                     </span>
                     <input
@@ -913,7 +913,7 @@ export function UsersPage() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.email")}
                     </span>
                     <textarea

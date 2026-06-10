@@ -373,7 +373,7 @@ export function ClientsCreatePage() {
         if (!ind.firstName.trim() || !ind.lastName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.individualRequired"),
+            description: `${t("clients.validation.individualRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;
@@ -383,7 +383,7 @@ export function ClientsCreatePage() {
         if (!comp.legalName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.companyRequired"),
+            description: `${t("clients.validation.companyRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;
@@ -394,7 +394,7 @@ export function ClientsCreatePage() {
         if (!ind.firstName.trim() || !ind.lastName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.individualRequired"),
+            description: `${t("clients.validation.individualRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;

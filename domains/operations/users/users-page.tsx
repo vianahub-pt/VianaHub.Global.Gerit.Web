@@ -624,8 +624,8 @@ export function UsersPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           user.isActive
-            ? "text-foreground dark:text-foreground"
-            : "text-foreground dark:text-foreground",
+            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
         )}
       >
         {user.isActive ? t("users.status.active") : t("users.status.inactive")}
@@ -643,7 +643,7 @@ export function UsersPage() {
             event.stopPropagation();
             handleUserSelection(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -654,7 +654,7 @@ export function UsersPage() {
             event.stopPropagation();
             void handleToggleStatus(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             user.isActive
               ? t("users.actions.deactivate")
@@ -669,7 +669,7 @@ export function UsersPage() {
             event.stopPropagation();
             void handleDeleteUser(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -728,7 +728,7 @@ export function UsersPage() {
     if (!name) {
       toast({
         title: t("users.toasts.validationTitle"),
-        description: t("users.validation.required"),
+        description: `${t("users.validation.required")} ${t("users.validation.suggestion")}`,
         variant: "destructive",
       });
       return;
@@ -904,7 +904,7 @@ export function UsersPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.name")}
                     </span>
                     <input
@@ -920,10 +920,11 @@ export function UsersPage() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.email")}
                     </span>
-                    <textarea
+                    <input
+                      type="email"
                       value={formState.email}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -931,8 +932,7 @@ export function UsersPage() {
                           email: event.target.value,
                         }))
                       }
-                      rows={3}
-                      className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
+                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("users.form.email")}
                     />
                   </label>

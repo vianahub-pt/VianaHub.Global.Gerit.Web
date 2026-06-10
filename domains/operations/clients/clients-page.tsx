@@ -449,8 +449,8 @@ export function ClientsPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           client.isActive
-            ? "text-foreground dark:text-foreground"
-            : "text-foreground dark:text-foreground",
+            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
         )}
       >
         {client.isActive
@@ -470,7 +470,7 @@ export function ClientsPage() {
             event.stopPropagation();
             openClientDetails(client.id);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
@@ -481,7 +481,7 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleToggleStatus(client);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             client.isActive
               ? t("clients.actions.deactivate")
@@ -499,7 +499,7 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleDeleteClient(client);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />

@@ -1437,7 +1437,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleContactEdit(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1445,7 +1445,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleContactToggleStatus(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             contact.isActive
               ? t("clients.actions.deactivate")
@@ -1457,7 +1457,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleContactDelete(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1584,7 +1584,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleAddressEdit(address)}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
           <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
@@ -1592,7 +1592,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleAddressToggleStatus(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             address.isActive
               ? t("clients.actions.deactivate")
@@ -1604,7 +1604,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => void handleAddressDelete(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />

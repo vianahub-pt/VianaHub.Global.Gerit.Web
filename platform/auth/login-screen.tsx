@@ -14,8 +14,6 @@ import {
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
-  Building2,
-  ChevronDown,
   Eye,
   EyeOff,
   LoaderCircle,
@@ -29,13 +27,9 @@ import {
   useLoginForm,
 } from "@/platform/auth/use-login-form";
 import {
-  SUPPORTED_LANGUAGES,
-  type Language,
   useTranslation,
 } from "@/platform/i18n";
-import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { useAuth } from "@/platform/auth";
-import Image from "next/image";
 
 const LoginVisualPanel = lazy(async () => {
   const module = await import("./login-visual-panel");
@@ -102,7 +96,7 @@ export function LoginScreen() {
     signIn,
   } = useAuth();
   const { toast } = useToast();
-  const { language, setLanguage, t } = useTranslation();
+  const { t } = useTranslation();
   const {
     state,
     emailError,
@@ -135,13 +129,6 @@ export function LoginScreen() {
       router.replace("/");
     }
   }, [isAuthenticated, router]);
-
-  const handleLocaleChange = useCallback(
-    (nextLocale: Language) => {
-      setLanguage(nextLocale);
-    },
-    [setLanguage],
-  );
 
   const handleEmailSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -181,16 +168,9 @@ export function LoginScreen() {
     [prepareSubmit, router, signIn, t, toast],
   );
 
-  const handleRegisterClick = useCallback(() => {
-    toast({
-      title: t("auth.login.toasts.registerTitle"),
-      description: t("auth.login.toasts.registerDescription"),
-    });
-  }, [t, toast]);
-
   return (
     <div className="relative h-[100dvh] overflow-hidden bg-background text-white">
-      <div className="relative grid h-[100dvh] lg:grid-cols-[minmax(0,1.15fr)_minmax(24rem,0.85fr)]">
+      <div className="relative grid h-[100dvh] lg:grid-cols-2">
         <LoginVisualPanel />
         <Suspense
           fallback={
@@ -201,47 +181,13 @@ export function LoginScreen() {
           }
         ></Suspense>
 
-        <section className="relative flex h-[100dvh] items-center justify-center px-5 py-4 sm:px-8 sm:py-6">
+        <section className="relative flex h-[100dvh] items-center justify-center px-5 sm:px-8">
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,14,19,0.7)_0%,rgba(3,14,19,0.96)_100%)] lg:bg-[linear-gradient(180deg,rgba(3,14,19,0)_0%,rgba(3,14,19,0)_100%)]" />
           <div
             className="gerit-animate-enter relative w-full max-w-[24rem] rounded-[28px] border border-white/10 bg-background/88 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.36)] supports-[backdrop-filter]:bg-background/72 supports-[backdrop-filter]:backdrop-blur-xl sm:p-7"
             role="region"
             aria-label={t("auth.login.title")}
           >
-            <div className="mb-7 flex items-start justify-between gap-4">
-              <GeritLogo
-                variant="wordmark"
-                theme="dark"
-                alt={t("auth.login.brand")}
-                width={118}
-                height={28}
-                className="h-7 w-auto"
-                priority
-              />
-              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-black/10 p-1">
-                <span className="sr-only">{t("auth.login.localeLabel")}</span>
-                {SUPPORTED_LANGUAGES.map((option) => {
-                  const isActive = option === language;
-
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      onClick={() => handleLocaleChange(option)}
-                      className={`rounded-full px-3 py-1.5 text-[0.72rem] font-semibold transition-colors ${
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:text-white"
-                      }`}
-                      aria-pressed={isActive}
-                    >
-                      {t(`language.short.${option}`)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <hr className="my-6 border-white/10" />
             <div>
               <h1 className="mt-4 font-[family:var(--font-login)] text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
                 {t("auth.login.title")}
@@ -374,16 +320,6 @@ export function LoginScreen() {
               </p>
             </form>
 
-            <p className="mt-6 text-center text-xs leading-6 text-muted-foreground">
-              {t("auth.login.footerPrefix")}{" "}
-              <button
-                type="button"
-                onClick={handleRegisterClick}
-                className="font-semibold text-foreground underline decoration-foreground/35 underline-offset-4 transition-colors hover:text-primary"
-              >
-                {t("auth.login.footerAction")}
-              </button>
-            </p>
           </div>
         </section>
       </div>

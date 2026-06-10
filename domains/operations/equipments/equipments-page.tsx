@@ -831,7 +831,7 @@ export function EquipmentsPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.name")}
                     </span>
                     <input
@@ -847,7 +847,7 @@ export function EquipmentsPage() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.serialNumber")}
                     </span>
                     <input
@@ -863,7 +863,7 @@ export function EquipmentsPage() {
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground dark:text-muted-foreground">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.type")}
                     </span>
                     <input

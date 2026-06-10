@@ -1,12 +1,12 @@
 <svg width="520" height="120" viewBox="0 0 520 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="gerit-word-light" x1="26" y1="93" x2="280" y2="42" gradientUnits="userSpaceOnUse">
+    <linearGradient id="gerit-word-light" x1="135.5" y1="93" x2="389.5" y2="42" gradientUnits="userSpaceOnUse">
       <stop stop-color="#06A8A8"/>
       <stop offset="1" stop-color="#11B7FF"/>
     </linearGradient>
   </defs>
-  <text x="18" y="74" fill="#0D1C24" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="1.5">Gerit</text>
-  <path d="M22 94H198C236 94 267 72 279 42" stroke="url(#gerit-word-light)" stroke-width="6" stroke-linecap="round"/>
-  <circle cx="22" cy="94" r="6" fill="#06A8A8"/>
-  <circle cx="279" cy="42" r="6" fill="#11B7FF"/>
+  <text x="127.5" y="74" fill="#0D1C24" font-family="Segoe UI, Arial, sans-serif" font-size="68" font-weight="700" letter-spacing="1.5">Gerit</text>
+  <path d="M131.5 94H307.5C345.5 94 376.5 72 388.5 42" stroke="url(#gerit-word-light)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="131.5" cy="94" r="6" fill="#06A8A8"/>
+  <circle cx="388.5" cy="42" r="6" fill="#11B7FF"/>
 </svg>

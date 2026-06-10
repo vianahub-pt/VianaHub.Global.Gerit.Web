@@ -85,6 +85,8 @@ export function ClientsPage() {
         },
       );
 
+      if (!response) return;
+
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(
@@ -194,6 +196,7 @@ export function ClientsPage() {
           ? `/api/gerit/v1/clients/${client.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -242,6 +245,7 @@ export function ClientsPage() {
             method: "DELETE",
           },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -291,6 +295,7 @@ export function ClientsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(

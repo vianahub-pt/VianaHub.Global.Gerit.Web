@@ -83,7 +83,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
 
   return (
     <>
-      {!isImmersiveRoute && (
+      {!isImmersiveRoute && !isLoginRoute && (
         <>
           {/* Indicador de progresso de leitura acessível */}
           <div
@@ -116,7 +116,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         {children}
       </main>
 
-      {!isImmersiveRoute && (
+      {!isImmersiveRoute && !isLoginRoute && (
         <>
           {/* Rodapé */}
           <Footer />

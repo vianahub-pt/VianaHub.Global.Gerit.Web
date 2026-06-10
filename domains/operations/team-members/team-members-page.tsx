@@ -332,6 +332,7 @@ export function TeamMembersPage() {
         { method: "GET" },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as TeamMembersPagedResponse;
 
@@ -436,6 +437,7 @@ export function TeamMembersPage() {
           body: JSON.stringify(payload),
         });
 
+        if (!response) return;
         const responsePayload = (await response
           .json()
           .catch(() => null)) as unknown;
@@ -492,6 +494,7 @@ export function TeamMembersPage() {
           : `/api/gerit/v1/team-members/${member.id}/activate`;
 
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response
           .json()
           .catch(() => null)) as unknown;
@@ -540,6 +543,7 @@ export function TeamMembersPage() {
           `/api/gerit/v1/team-members/${member.id}`,
           { method: "DELETE" },
         );
+        if (!response) return;
         const responsePayload = (await response
           .json()
           .catch(() => null)) as unknown;
@@ -596,6 +600,7 @@ export function TeamMembersPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {

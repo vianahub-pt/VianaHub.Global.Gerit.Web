@@ -394,6 +394,7 @@ export function UsersPage() {
         },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as UsersPagedResponse;
 
@@ -463,6 +464,7 @@ export function UsersPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -506,6 +508,7 @@ export function UsersPage() {
           method: "DELETE",
         });
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -553,6 +556,7 @@ export function UsersPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -745,6 +749,7 @@ export function UsersPage() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       const responsePayload = (await response
         .json()
         .catch(() => null)) as unknown;

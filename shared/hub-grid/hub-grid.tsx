@@ -164,7 +164,7 @@ export function HubGrid<Item>({
                   title={option.label}
                   aria-pressed={isActive}
                   className={clsx(
-                    "h-8 min-w-[3rem] rounded-sm border px-3 text-[0.55rem] font-semibold uppercase tracking-[0.14em] transition-colors",
+                    "h-10 min-w-[3rem] rounded-sm border px-3 text-[0.65rem] font-semibold uppercase tracking-[0.14em] transition-colors",
                     isActive
                       ? "bg-foreground dark:bg-primary text-background dark:text-primary-foreground hover:border-ring hover:text-white"
                       : "border-ring dark:border-ring bg-muted dark:bg-muted text-primary dark:text-primary",
@@ -183,7 +183,7 @@ export function HubGrid<Item>({
 
       <div className="px-6 py-4">
         <div className="rounded-sm border border-border/70 bg-background shadow-inner dark:border-border dark:bg-card">
-          <table className="w-full table-fixed border-collapse">
+            <table className="w-full table-fixed border-collapse" aria-busy={loading}>
             <thead>
               <tr className="bg-muted text-center text-xs uppercase tracking-[0.08em] text-muted-foreground border-b border-border/70 dark:bg-muted dark:text-muted-foreground dark:border-border">
                 {columns.map((column, columnIndex) => {

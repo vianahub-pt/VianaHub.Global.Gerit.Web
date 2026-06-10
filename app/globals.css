@@ -182,7 +182,8 @@ html.dark .gerit-calendar-scrollbar::-webkit-scrollbar-thumb {
 
   .gerit-animate-enter,
   .gerit-timer-live,
-  .gerit-sidebar {
+  .gerit-sidebar,
+  .animate-slide-in-left {
     animation: none !important;
     transition: none !important;
   }

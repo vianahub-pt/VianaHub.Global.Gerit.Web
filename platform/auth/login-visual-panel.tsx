@@ -41,19 +41,18 @@ export function LoginVisualPanel() {
 
       <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
         <h2 className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
-          isLight ? "text-gray-900" : "text-white"
+          isLight ? "text-gray-950" : "text-white"
         }`}>
           Operacao, agenda e produtividade numa unica entrada.
         </h2>
         <p className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
-          isLight ? "text-gray-600" : "text-white/72"
+          isLight ? "text-gray-800" : "text-white/72"
         }`}>
           Aceda ao ecossistema de gestao com uma interface focada em rapidez,
           contexto e continuidade de trabalho.
         </p>
       </div>
 
-      <div className="absolute right-0 top-0 h-full w-px bg-border" />
     </aside>
   );
 }

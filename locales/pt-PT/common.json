@@ -23,6 +23,7 @@
   "auth.login.footerPrefix": "Não tem uma conta?",
   "auth.login.footerAction": "Registar",
   "auth.login.localeLabel": "Idioma",
+  "auth.login.toggleTheme": "Alternar tema",
   "auth.login.errors.emailEmpty": "Introduza o seu e-mail profissional para continuar.",
   "auth.login.errors.emailInvalid": "Introduza um endereço de e-mail válido.",
   "auth.login.errors.passwordEmpty": "Introduza a sua palavra-passe para autenticar.",

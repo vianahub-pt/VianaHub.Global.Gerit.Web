@@ -19,6 +19,14 @@ export {
   ToastDescription,
   ToastAction,
 } from "@/shared/ui/toast";
+export {
+  Select,
+  SelectGroup,
+  SelectValue,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+} from "@/shared/ui/select";
 export { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 export type { ConfirmDialogProps } from "@/shared/ui/confirm-dialog";
 export {

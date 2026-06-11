@@ -32,6 +32,8 @@
   "auth.login.toasts.registerDescription": "A ação de cadastro ainda não está conectada a uma rota.",
   "auth.login.visualFallbackTitle": "Gerit",
   "auth.login.visualFallbackBody": "Carregando o painel visual de autenticação.",
+  "auth.login.visualPanelTagline": "Operação, agenda e produtividade numa única entrada.",
+  "auth.login.visualPanelBody": "Acesse o ecossistema de gestão com uma interface focada em rapidez, contexto e continuidade de trabalho.",
   "auth.login.emailLabel": "E-mail corporativo",
   "auth.login.genericAuthError": "Não foi possível autenticar com as credenciais fornecidas.",
   "workspace.brand": "Gerit",

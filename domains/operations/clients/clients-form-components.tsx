@@ -203,6 +203,8 @@ interface FormFieldProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+  error?: string;
+  errorId?: string;
 }
 
 export function FormField({
@@ -214,21 +216,40 @@ export function FormField({
   disabled,
   required,
   className,
+  error,
+  errorId,
 }: FormFieldProps) {
+  const inputId = errorId || undefined;
   return (
     <div className={clsx("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
+      <label
+        htmlFor={inputId}
+        className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground"
+      >
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
       <input
+        id={inputId}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 dark:border-border dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && errorId ? `${errorId}-error` : undefined}
+        className={clsx(
+          "rounded-sm border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring",
+          error
+            ? "border-red-500 focus:border-red-500 dark:border-red-500"
+            : "border-border bg-card focus:border-ring dark:border-border dark:bg-card",
+        )}
       />
+      {error && errorId && (
+        <p id={`${errorId}-error`} className="text-xs text-red-500" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

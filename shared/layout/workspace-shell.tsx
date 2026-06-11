@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { ChevronLeft, ChevronRight, MoonStar, SunMedium } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
 import { useAuth } from "@/platform/auth";
@@ -22,7 +22,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const { state, toggleSidebar } = useDashboardShell();
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const menuSections = useWorkspaceMenuConfig();
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
 
   const isDark = mounted ? resolvedTheme === "dark" : false;
   const tenantName = session?.tenantName?.trim() ?? "";
@@ -54,6 +57,18 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isHydrating, router]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        hamburgerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [mobileMenuOpen]);
+
   if (isHydrating || !isAuthenticated) {
     return <div className="h-screen bg-background" aria-hidden="true" />;
   }
@@ -65,21 +80,34 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     >
       <HubNav
         left={
-          <Link
-            href="/"
-            className="flex items-center justify-center rounded-lg transition-colors hover:bg-secondary px-2 py-1"
-            aria-label={copy.openDashboard}
-          >
-            <GeritLogo
-              variant="horizontal"
-              theme={mounted && isDark ? "dark" : "light"}
-              alt={copy.brand}
-              width={142}
-              height={36}
-              className="h-8 w-auto"
-              priority
-            />
-          </Link>
+          <>
+            <button
+              ref={hamburgerRef}
+              type="button"
+              className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Abrir menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <Link
+              href="/"
+              className="flex items-center justify-center rounded-lg transition-colors hover:bg-secondary px-2 py-1"
+              aria-label={copy.openDashboard}
+            >
+              <GeritLogo
+                variant="horizontal"
+                theme={mounted && isDark ? "dark" : "light"}
+                alt={copy.brand}
+                width={142}
+                height={36}
+                className="h-8 w-auto"
+                priority
+              />
+            </Link>
+          </>
         }
         logo={tenantName ? (
           <>
@@ -118,7 +146,42 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         }
       />
 
-      <div className="flex h-[calc(100vh-3.5rem)] min-h-0">
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setMobileMenuOpen(false)}
+          />
+          <aside
+            id="mobile-menu"
+            ref={mobileMenuRef}
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-xl animate-slide-in-left"
+          >
+            <div className="flex h-14 items-center justify-between border-b px-4">
+              <GeritLogo variant="horizontal" width={120} height={30} />
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  hamburgerRef.current?.focus();
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Fechar menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <HubMenu sections={menuSections} collapsed={false} onToggleCollapse={() => {}} />
+          </aside>
+        </div>
+      )}
+
+      <div
+        className="flex h-[calc(100vh-3.5rem)] min-h-0"
+        aria-hidden={mobileMenuOpen ? true : undefined}
+      >
         <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
           <HubMenu
             sections={menuSections}

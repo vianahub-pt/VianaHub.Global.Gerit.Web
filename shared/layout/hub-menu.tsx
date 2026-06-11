@@ -72,6 +72,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
                           <TooltipTrigger asChild>
                             <Link
                               href={item.href}
+                              aria-label={item.label}
                               className={cn(
                                 "flex h-9 w-full items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-secondary",
                                 active && "bg-secondary text-primary",

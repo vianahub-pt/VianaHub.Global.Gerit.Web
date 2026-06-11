@@ -8,6 +8,8 @@ export {
   TooltipContent,
   TooltipProvider,
 } from "@/shared/ui/tooltip";
+export { Input } from "@/shared/ui/input";
+export { Textarea } from "@/shared/ui/textarea";
 export { cn } from "@/shared/ui/utils";
 export { Toaster } from "@/shared/ui/toaster";
 export {

@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
@@ -867,7 +868,7 @@ export function TeamMembersPage() {
                       <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.name")}
                       </span>
-                      <input
+                      <Input
                         value={formState.name}
                         onChange={(event) =>
                           setFormState((current) => ({
@@ -875,14 +876,13 @@ export function TeamMembersPage() {
                             name: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                     <label className="block">
                       <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.function")}
                       </span>
-                      <input
+                      <Input
                         value={formState.functionName}
                         onChange={(event) =>
                           setFormState((current) => ({
@@ -890,14 +890,13 @@ export function TeamMembersPage() {
                             functionName: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                     <label className="block">
                       <span className="mb-1.5 block text-sm text-muted-foreground dark:text-muted-foreground">
                         {t("teamMembers.form.taxNumber")}
                       </span>
-                      <input
+                      <Input
                         value={formState.taxNumber}
                         onChange={(event) =>
                           setFormState((current) => ({
@@ -905,7 +904,6 @@ export function TeamMembersPage() {
                             taxNumber: event.target.value,
                           }))
                         }
-                        className="h-10 w-full rounded-md border border-border bg-card px-3 text-sm text-foreground outline-none focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       />
                     </label>
                   </div>

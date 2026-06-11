@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
@@ -907,7 +908,7 @@ export function UsersPage() {
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.name")}
                     </span>
-                    <input
+                    <Input
                       value={formState.name}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -915,7 +916,6 @@ export function UsersPage() {
                           name: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("users.form.name")}
                     />
                   </label>
@@ -923,7 +923,7 @@ export function UsersPage() {
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.email")}
                     </span>
-                    <input
+                    <Input
                       type="email"
                       value={formState.email}
                       onChange={(event) =>
@@ -932,7 +932,6 @@ export function UsersPage() {
                           email: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("users.form.email")}
                     />
                   </label>

@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import { Input } from "@/shared/ui/input";
 
 /* ---------- Individual form state ---------- */
 
@@ -229,7 +230,7 @@ export function FormField({
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
-      <input
+      <Input
         id={inputId}
         type={type}
         value={value}
@@ -239,10 +240,9 @@ export function FormField({
         aria-invalid={error ? true : undefined}
         aria-describedby={error && errorId ? `${errorId}-error` : undefined}
         className={clsx(
-          "rounded-sm border px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring",
           error
-            ? "border-red-500 focus:border-red-500 dark:border-red-500"
-            : "border-border bg-card focus:border-ring dark:border-border dark:bg-card",
+            ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/55"
+            : "",
         )}
       />
       {error && errorId && (

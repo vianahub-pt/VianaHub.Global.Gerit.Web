@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { ChevronDown, ChevronUp, Inbox, Loader2, Search } from "lucide-react";
 import type { ReactNode } from "react";
+import { Input } from "@/shared/ui/input";
 
 export type RowDensity = "compact" | "medium" | "expanded";
 
@@ -145,11 +146,11 @@ export function HubGrid<Item>({
             </label>
             <label className="relative w-1/3 min-w-[12rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <input
+              <Input
                 value={searchValue}
                 onChange={(event) => onSearchChange(event.target.value)}
                 placeholder={searchPlaceholder}
-                className="h-11 w-full rounded-sm border border-input bg-background pl-10 pr-3 text-sm text-foreground outline-none focus:border-ring dark:border-input dark:bg-card dark:text-white"
+                className="pl-10"
               />
             </label>
           </div>

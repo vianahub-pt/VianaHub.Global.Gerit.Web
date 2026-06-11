@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { Textarea } from "@/shared/ui/textarea";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -1786,7 +1787,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
-          <textarea
+          <Textarea
             value={clientFormState.note}
             onChange={(event) =>
               setClientFormState((prev) => ({
@@ -1795,7 +1796,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-input dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
           />
         </div>
       </div>
@@ -1907,7 +1907,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
-            <textarea
+            <Textarea
               value={clientFormState.note}
               onChange={(event) =>
                 setClientFormState((prev) => ({
@@ -1916,7 +1916,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-input dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
             />
           </div>
         </div>

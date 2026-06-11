@@ -12,6 +12,7 @@ import {
   normalizeClient,
   normalizeClientError,
 } from "@/domains/operations/clients/client-utils";
+import { Textarea } from "@/shared/ui/textarea";
 import {
   FormField,
   SelectField,
@@ -213,7 +214,7 @@ export function ClientsCreatePage() {
           <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
-          <textarea
+          <Textarea
             value={clientFormState.note}
             onChange={(event) =>
               setClientFormState((prev) => ({
@@ -222,7 +223,6 @@ export function ClientsCreatePage() {
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-border dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
           />
         </div>
       </div>
@@ -334,7 +334,7 @@ export function ClientsCreatePage() {
             <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
-            <textarea
+            <Textarea
               value={clientFormState.note}
               onChange={(event) =>
                 setClientFormState((prev) => ({
@@ -343,7 +343,6 @@ export function ClientsCreatePage() {
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring dark:border-border dark:bg-card dark:text-foreground dark:placeholder:text-muted-foreground dark:focus:border-ring"
             />
           </div>
         </div>

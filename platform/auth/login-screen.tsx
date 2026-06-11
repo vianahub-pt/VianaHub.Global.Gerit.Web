@@ -276,10 +276,10 @@ export function LoginScreen() {
                   aria-describedby={
                     emailError !== "" ? emailErrorId : undefined
                   }
-                  className={`h-12 w-full rounded-[14px] border bg-card pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 ${
+                  className={`h-12 w-full rounded-full border bg-black/10 pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 ${
                     emailError !== ""
                       ? "border-destructive"
-                      : "border-white/16 focus:border-ring"
+                      : "border-white/10 focus:border-ring"
                   }`}
                 />
               </div>
@@ -319,10 +319,10 @@ export function LoginScreen() {
                         ? passwordErrorId
                         : undefined
                     }
-                    className={`h-12 w-full rounded-[14px] border bg-card pl-11 pr-12 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-70 ${
+                    className={`h-12 w-full rounded-full border bg-black/10 pl-11 pr-12 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-70 ${
                       passwordError !== "" || authState.error
                         ? "border-destructive"
-                        : "border-white/16 focus:border-ring"
+                        : "border-white/10 focus:border-ring"
                     }`}
                   />
                   <button

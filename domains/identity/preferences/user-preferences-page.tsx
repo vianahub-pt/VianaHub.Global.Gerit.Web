@@ -16,6 +16,13 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
+import {
   type AppearancePreference,
   type CurrencyCodePreference,
   type DateFormatPreference,
@@ -117,19 +124,18 @@ function PreferenceSelect({
       <span className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
         {label}
       </span>
-      <select
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-        className="h-12 rounded-2xl border border-input bg-background px-4 text-sm text-foreground outline-none transition-colors focus:border-ring dark:border-border dark:bg-card dark:text-foreground dark:focus:border-ring"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-12 rounded-2xl border border-input bg-card px-4 text-sm text-foreground outline-none transition-colors focus:border-ring dark:border-border dark:bg-card dark:text-foreground dark:focus:border-ring">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </label>
   );
 }

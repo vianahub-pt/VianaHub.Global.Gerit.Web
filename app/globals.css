@@ -15,7 +15,7 @@
     --secondary: 208 20% 93%;         /* #E4EAEE */
     --secondary-foreground: 0 0% 4%;  /* #0A0E10 */
     --muted: 208 20% 93%;             /* #E4EAEE */
-    --muted-foreground: 199 8% 55%;   /* #75919F */
+    --muted-foreground: 199 8% 38%;   /* #63737B — WCAG AA 5.1:1 on muted */
     --accent: 199 97% 48%;            /* #03A9F4 */
     --accent-foreground: 0 0% 100%;   /* #FFFFFF */
     --destructive: 4 60% 49%;         /* #BC3232 */
@@ -50,7 +50,7 @@
     --secondary: 210 20% 19%;         /* #253238 */
     --secondary-foreground: 208 30% 96%; /* #F2F6F8 */
     --muted: 210 20% 19%;             /* #253238 */
-    --muted-foreground: 199 8% 55%;   /* #75919F */
+    --muted-foreground: 199 8% 68%;   /* #A5B3BA — WCAG AA 5.8:1 on muted */
     --accent: 199 97% 48%;            /* #03A9F4 */
     --accent-foreground: 0 0% 100%;   /* #FFFFFF */
     --destructive: 4 60% 49%;         /* #BC3232 */
@@ -182,7 +182,8 @@ html.dark .gerit-calendar-scrollbar::-webkit-scrollbar-thumb {
 
   .gerit-animate-enter,
   .gerit-timer-live,
-  .gerit-sidebar {
+  .gerit-sidebar,
+  .animate-slide-in-left {
     animation: none !important;
     transition: none !important;
   }

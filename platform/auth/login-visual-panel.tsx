@@ -3,10 +3,12 @@
 import { useTheme } from "next-themes";
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { useTranslation } from "@/platform/i18n";
 
 export function LoginVisualPanel() {
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const { t } = useTranslation();
 
   useEffect(() => {
     setMounted(true);
@@ -18,6 +20,24 @@ export function LoginVisualPanel() {
     ? "/gerit-login-light.png"
     : "/gerit-login-dark.png";
 
+  /* Antes da hidratação, exibe um fundo neutro para evitar
+     que o tema escuro apareça erroneamente no tema claro. */
+  if (!mounted) {
+    return (
+      <aside className="relative hidden h-[100dvh] overflow-hidden lg:block" aria-hidden="true">
+        <div className="absolute inset-0 bg-background" />
+        <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
+          <h2 className="mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight text-foreground xl:text-4xl">
+            {t("auth.login.visualPanelTagline")}
+          </h2>
+          <p className="mt-4 max-w-xs text-sm leading-6 text-muted-foreground xl:text-base">
+            {t("auth.login.visualPanelBody")}
+          </p>
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="relative hidden h-[100dvh] overflow-hidden lg:block">
       <Image
@@ -28,30 +48,30 @@ export function LoginVisualPanel() {
         sizes="(min-width: 1024px) 50vw, 100vw"
         className="object-cover"
       />
-      {!isLight && (
+      {!isLight ? (
         <>
           <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,12,19,0.18)_0%,rgba(0,12,19,0.28)_45%,rgba(0,9,14,0.74)_88%,rgba(0,7,11,0.92)_100%)]" />
           <div className="absolute inset-y-0 right-0 w-24 bg-[linear-gradient(90deg,transparent_0%,rgba(2,10,14,0.92)_100%)]" />
           <div className="absolute left-[12%] top-[18%] h-44 w-44 rounded-full bg-primary/18 blur-3xl" />
           <div className="absolute bottom-[16%] left-[18%] h-52 w-52 rounded-full bg-primary/14 blur-3xl" />
         </>
+      ) : (
+        <div className="absolute inset-y-0 right-0 w-32 bg-gradient-to-l from-background via-background/80 to-transparent" />
       )}
 
       <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
         <h2 className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
-          isLight ? "text-gray-900" : "text-white"
+          isLight ? "text-gray-950" : "text-white"
         }`}>
-          Operacao, agenda e produtividade numa unica entrada.
+          {t("auth.login.visualPanelTagline")}
         </h2>
         <p className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
-          isLight ? "text-gray-600" : "text-white/72"
+          isLight ? "text-gray-800" : "text-white/72"
         }`}>
-          Aceda ao ecossistema de gestao com uma interface focada em rapidez,
-          contexto e continuidade de trabalho.
+          {t("auth.login.visualPanelBody")}
         </p>
       </div>
 
-      <div className="absolute right-0 top-0 h-full w-px bg-border" />
     </aside>
   );
 }

@@ -16,9 +16,12 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  Globe,
   LoaderCircle,
   LockKeyhole,
   Mail,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useToast } from "@/shared/feedback/use-toast";
 import {
@@ -27,9 +30,20 @@ import {
   useLoginForm,
 } from "@/platform/auth/use-login-form";
 import {
+  SUPPORTED_LANGUAGES,
+  type Language,
   useTranslation,
 } from "@/platform/i18n";
 import { useAuth } from "@/platform/auth";
+import { GeritLogo } from "@/shared/ui/gerit-logo";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
+import { useTheme } from "next-themes";
 
 const LoginVisualPanel = lazy(async () => {
   const module = await import("./login-visual-panel");
@@ -89,6 +103,12 @@ export function LoginScreen() {
   const passwordInputId = useId();
   const passwordErrorId = `${passwordInputId}-error`;
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const { resolvedTheme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const {
     state: authState,
     isAuthenticated,
@@ -96,7 +116,7 @@ export function LoginScreen() {
     signIn,
   } = useAuth();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { language, setLanguage, t } = useTranslation();
   const {
     state,
     emailError,
@@ -188,6 +208,54 @@ export function LoginScreen() {
             role="region"
             aria-label={t("auth.login.title")}
           >
+            <div className="mb-7 flex items-start justify-between gap-4">
+              <GeritLogo
+                variant="wordmark"
+                theme={mounted ? (resolvedTheme === "light" ? "light" : "dark") : "light"}
+                alt={t("auth.login.brand")}
+                width={118}
+                height={28}
+                className="h-7 w-auto"
+                priority
+              />
+              <div className="flex items-center gap-2">
+                {mounted && (
+                  <button
+                    type="button"
+                    onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    aria-label={t("auth.login.toggleTheme")}
+                  >
+                    {resolvedTheme === "light" ? (
+                      <Moon className="h-4 w-4" aria-hidden="true" />
+                    ) : (
+                      <Sun className="h-4 w-4" aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+                <div className="relative">
+                  <Globe className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                  <Select
+                    value={language}
+                    onValueChange={(value) => setLanguage(value as Language)}
+                  >
+                    <SelectTrigger
+                      className="h-8 w-[4.5rem] pl-7 pr-2"
+                      aria-label={t("auth.login.localeLabel")}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_LANGUAGES.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {t(`language.short.${option}`)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
             <div>
               <h1 className="mt-4 font-[family:var(--font-login)] text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
                 {t("auth.login.title")}
@@ -221,10 +289,10 @@ export function LoginScreen() {
                   aria-describedby={
                     emailError !== "" ? emailErrorId : undefined
                   }
-                  className={`h-12 w-full rounded-[14px] border bg-card pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 ${
+                  className={`h-12 w-full rounded-full border bg-black/10 pl-11 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 ${
                     emailError !== ""
                       ? "border-destructive"
-                      : "border-white/16 focus:border-ring"
+                      : "border-white/10 focus:border-ring"
                   }`}
                 />
               </div>
@@ -264,10 +332,10 @@ export function LoginScreen() {
                         ? passwordErrorId
                         : undefined
                     }
-                    className={`h-12 w-full rounded-[14px] border bg-card pl-11 pr-12 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-70 ${
+                    className={`h-12 w-full rounded-full border bg-black/10 pl-11 pr-12 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/55 disabled:opacity-70 ${
                       passwordError !== "" || authState.error
                         ? "border-destructive"
-                        : "border-white/16 focus:border-ring"
+                        : "border-white/10 focus:border-ring"
                     }`}
                   />
                   <button

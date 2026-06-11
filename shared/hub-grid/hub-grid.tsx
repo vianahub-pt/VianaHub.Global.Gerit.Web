@@ -131,7 +131,7 @@ export function HubGrid<Item>({
               <select
                 value={statusFilter}
                 onChange={(event) => onStatusFilterChange(event.target.value)}
-                className="h-11 min-w-[10rem] rounded-sm border border-input bg-background px-4 pr-10 text-sm font-semibold text-foreground outline-none focus:border-ring appearance-none dark:border-input dark:bg-card dark:text-white"
+                className="h-11 min-w-[10rem] rounded-sm border border-input bg-card px-4 pr-10 text-sm font-semibold text-foreground outline-none focus:border-ring appearance-none dark:border-input dark:bg-card dark:text-white"
               >
                 {statusFilterOptions.map((option) => (
                   <option key={option.value} value={option.value}>

@@ -136,7 +136,7 @@ export function HubGrid<Item>({
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
             <span className="sr-only">{statusFilterLabel}</span>
             <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-              <SelectTrigger className="h-11 min-w-[10rem] rounded-sm border border-input bg-card px-4 pr-10 text-sm font-semibold text-foreground outline-none focus:border-ring dark:border-input dark:bg-card dark:text-white" aria-label={statusFilterLabel}>
+              <SelectTrigger className="min-w-[10rem]" aria-label={statusFilterLabel}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -427,7 +427,7 @@ export function HubGrid<Item>({
           <label className="flex items-center gap-2 text-sm text-foreground dark:text-primary">
             <span>{paginationPerPageLabel}</span>
             <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-              <SelectTrigger className="h-9 w-auto min-w-[4rem] rounded-sm border border-border bg-card px-2 text-sm font-semibold text-white outline-none focus:border-ring" aria-label={paginationPerPageLabel}>
+              <SelectTrigger className="w-auto min-w-[4rem]" aria-label={paginationPerPageLabel}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

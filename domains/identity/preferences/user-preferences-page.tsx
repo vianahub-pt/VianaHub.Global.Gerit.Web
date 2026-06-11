@@ -125,7 +125,7 @@ function PreferenceSelect({
         {label}
       </span>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-12 rounded-2xl border border-input bg-card px-4 text-sm text-foreground outline-none transition-colors focus:border-ring dark:border-border dark:bg-card dark:text-foreground dark:focus:border-ring">
+        <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

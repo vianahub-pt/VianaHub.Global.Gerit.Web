@@ -291,7 +291,7 @@ export function SelectField({
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger className="rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 dark:border-border dark:bg-card dark:text-foreground dark:focus:border-ring">
+        <SelectTrigger>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>

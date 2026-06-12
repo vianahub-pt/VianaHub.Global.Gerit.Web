@@ -17,7 +17,6 @@ import { useDashboardShell, WorkspaceShell } from "@/shared/layout";
 const viewTabs = ["month", "week", "day"] as const;
 const calendarStartMinutes = 0;
 const calendarEndMinutes = 24 * 60;
-const baseReferenceDate = new Date(2026, 2, 6);
 const calendarRowHeightPx = 64;
 type DateFormatPreference = "DD-MM-YYYY" | "MM/DD/YYYY" | "DD/MM/YYYY";
 type TimeFormatPreference = "24h" | "12h";
@@ -231,7 +230,7 @@ function GeritDashboardHomeContent() {
   const [timeFormatPreference, setTimeFormatPreference] =
     useState<TimeFormatPreference>("24h");
   const [referenceDate, setReferenceDate] = useState(() =>
-    startOfDay(baseReferenceDate),
+    startOfDay(new Date()),
   );
   const [selectedGridCell, setSelectedGridCell] = useState<{
     dayKey: string;
@@ -314,7 +313,7 @@ function GeritDashboardHomeContent() {
     [slotMinutes, timeFormatPreference],
   );
   const todayDate = useMemo(
-    () => startOfDay(currentDateTime ?? baseReferenceDate),
+    () => startOfDay(currentDateTime ?? new Date()),
     [currentDateTime],
   );
   const currentTimeMinutes = useMemo(

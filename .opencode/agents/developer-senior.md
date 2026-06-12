@@ -1,7 +1,7 @@
 ---
 description: Developer Senior - implementa features complexas, refatorações, arquitetura frontend, segurança e integrações críticas
 mode: subagent
-model: openai/gpt-5.1
+model: opencode/nemotron-3-ultra-free
 temperature: 0.1
 tools:
   write: true

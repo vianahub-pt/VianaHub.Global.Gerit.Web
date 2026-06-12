@@ -1,7 +1,7 @@
 ---
 description: Developer Pleno - implementa features frontend intermediárias, CRUDs, formulários, grids e integrações com API existente
 mode: subagent
-model: openai/gpt-4o
+model: opencode/nemotron-3-ultra-free
 temperature: 0.2
 tools:
   write: true

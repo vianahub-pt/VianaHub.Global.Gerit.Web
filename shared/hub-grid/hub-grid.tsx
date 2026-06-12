@@ -136,7 +136,7 @@ export function HubGrid<Item>({
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
             <span className="sr-only">{statusFilterLabel}</span>
             <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-              <SelectTrigger className="min-w-[10rem] flex-1" aria-label={statusFilterLabel}>
+              <SelectTrigger className="max-w-[12rem] flex-1" aria-label={statusFilterLabel}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>

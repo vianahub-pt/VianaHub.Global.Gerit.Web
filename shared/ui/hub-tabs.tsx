@@ -77,7 +77,7 @@ export function HubTabs<T extends string>({
           })}
         </nav>
       </div>
-      <div className="px-6 py-5 border border-border dark:border-border border-t-card dark:border-t-card rounded-b-md bg-card dark:bg-card">
+      <div className="px-6 py-5 border border-border dark:border-border border-t-card dark:border-t-card rounded-b-md bg-surface dark:bg-surface">
         {currentTab?.panel}
       </div>
     </div>

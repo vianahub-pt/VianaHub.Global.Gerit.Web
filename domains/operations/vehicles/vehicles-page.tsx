@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
@@ -179,7 +180,7 @@ export function VehiclesPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<VehicleStatusFilter>("active");
+    useState<VehicleStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");
@@ -806,7 +807,7 @@ export function VehiclesPage() {
           />
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+              <section className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
@@ -828,7 +829,7 @@ export function VehiclesPage() {
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("vehicles.form.plate")}
                     </span>
-                    <input
+                    <Input
                       value={formState.licensePlate}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -836,7 +837,6 @@ export function VehiclesPage() {
                           licensePlate: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("vehicles.form.plate")}
                     />
                   </label>
@@ -844,7 +844,7 @@ export function VehiclesPage() {
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("vehicles.form.brand")}
                     </span>
-                    <input
+                    <Input
                       value={formState.brand}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -852,7 +852,6 @@ export function VehiclesPage() {
                           brand: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("vehicles.form.brand")}
                     />
                   </label>
@@ -860,7 +859,7 @@ export function VehiclesPage() {
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("vehicles.form.model")}
                     </span>
-                    <input
+                    <Input
                       value={formState.model}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -868,7 +867,6 @@ export function VehiclesPage() {
                           model: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-border bg-card px-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("vehicles.form.model")}
                     />
                   </label>

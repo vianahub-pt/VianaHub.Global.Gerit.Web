@@ -1,7 +1,7 @@
 ---
 description: QA - valida implementações frontend React/Next.js e recomenda correções por senioridade
 mode: subagent
-model: openai/gpt-4.1
+model: opencode/north-mini-code-free
 temperature: 0.1
 tools:
   write: true

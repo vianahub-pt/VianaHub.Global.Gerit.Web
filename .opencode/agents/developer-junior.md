@@ -1,7 +1,7 @@
 ---
 description: Developer Junior - implementa tarefas frontend simples, correções localizadas e ajustes visuais/i18n
 mode: subagent
-model: openai/gpt-4o-mini
+model: opencode/big-pickle
 temperature: 0.2
 tools:
   write: true

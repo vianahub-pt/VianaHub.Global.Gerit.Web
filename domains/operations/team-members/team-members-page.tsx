@@ -185,7 +185,7 @@ export function TeamMembersPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<TeamMemberStatusFilter>("active");
+    useState<TeamMemberStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");

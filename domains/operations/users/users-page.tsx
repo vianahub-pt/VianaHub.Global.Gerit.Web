@@ -255,7 +255,7 @@ export function UsersPage() {
     locale: userLocale,
   } = preferences.state;
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("active");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");

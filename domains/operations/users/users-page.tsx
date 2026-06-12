@@ -885,7 +885,7 @@ export function UsersPage() {
           />
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+              <section className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground dark:text-foreground">

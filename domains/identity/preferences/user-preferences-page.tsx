@@ -264,7 +264,7 @@ export function UserPreferencesPage() {
 
               {preferences.state.activeTab === "general" ? (
                 <div className="grid gap-6 xl:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
-                  <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-card">
+                  <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-surface">
                     <div className="flex items-start gap-3">
                       <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/10 text-primary dark:bg-primary/10 dark:text-primary">
                         <Palette className="h-5 w-5" aria-hidden="true" />
@@ -355,7 +355,7 @@ export function UserPreferencesPage() {
                       })}
                     </div>
 
-                    <div className="mt-8 rounded-[1.5rem] border border-input bg-card p-5 dark:border-border dark:bg-card">
+                    <div className="mt-8 rounded-[1.5rem] border border-input bg-card p-5 dark:border-border dark:bg-surface">
                       <div className="flex items-start gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-background text-primary dark:bg-background dark:text-primary">
                           <Globe2 className="h-5 w-5" aria-hidden="true" />
@@ -401,7 +401,7 @@ export function UserPreferencesPage() {
                     </div>
                   </section>
 
-                  <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-card">
+                  <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-surface">
                     <div className="flex items-start gap-3">
                       <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ring/10 text-ring dark:bg-ring/10 dark:text-ring">
                         <Clock3 className="h-5 w-5" aria-hidden="true" />
@@ -470,7 +470,7 @@ export function UserPreferencesPage() {
                   </section>
                 </div>
               ) : (
-                <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-card">
+                <section className="rounded-[1.75rem] border border-border bg-background p-5 dark:border-border dark:bg-surface">
                   <div className="flex items-start gap-3">
                     <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ring/10 text-ring dark:bg-ring/10 dark:text-ring">
                       <BellRing className="h-5 w-5" aria-hidden="true" />

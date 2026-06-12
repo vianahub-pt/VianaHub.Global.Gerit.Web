@@ -36,6 +36,10 @@
     --elevation-overlay-border: 208 15% 77%;
     --elevation-prominent: 199 97% 48%;
     --elevation-prominent-border: 0 0% 100%;
+
+    /* Surface (form container) - same as card in light mode */
+    --surface: 0 0% 100%;
+    --surface-foreground: 0 0% 4%;
   }
 
   .dark {
@@ -70,6 +74,10 @@
     --elevation-overlay-border: 210 10% 30%;
     --elevation-prominent: 199 97% 48%;
     --elevation-prominent-border: 0 0% 100%;
+
+    /* Surface (form container) - 15% less color (lighter) than card/inputs */
+    --surface: 210 12% 14%;
+    --surface-foreground: 208 30% 88%;
   }
 }
 

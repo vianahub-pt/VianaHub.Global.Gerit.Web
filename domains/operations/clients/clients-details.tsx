@@ -1669,7 +1669,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
@@ -1807,7 +1807,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
@@ -1983,7 +1983,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Contact form */}
         <form
           onSubmit={(e) => void handleContactSubmit(e)}
-          className="rounded-sm border border-border bg-card p-4 dark:border-border dark:bg-card"
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField
@@ -2108,7 +2108,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Address form */}
         <form
           onSubmit={(e) => void handleAddressSubmit(e)}
-          className="rounded-sm border border-border bg-card p-4 dark:border-border dark:bg-card"
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField

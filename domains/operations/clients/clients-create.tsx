@@ -96,7 +96,7 @@ export function ClientsCreatePage() {
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
@@ -234,7 +234,7 @@ export function ClientsCreatePage() {
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-border bg-card p-5 dark:border-border dark:bg-card">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
         <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
@@ -591,7 +591,7 @@ export function ClientsCreatePage() {
           {/* ---------- Form ---------- */}
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
             {/* Client type selector */}
-            <div className="rounded-sm border border-border/80 bg-card p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card">
+            <div className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <SelectField
                   label={t("clients.form.clientType")}

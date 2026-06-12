@@ -16,15 +16,16 @@ export function LoginVisualPanel() {
 
   const isLight = mounted && resolvedTheme === "light";
 
-  const imageSrc = isLight
-    ? "/gerit-login-light.png"
-    : "/gerit-login-dark.png";
+  const imageSrc = isLight ? "/gerit-login-light.jpg" : "/gerit-login-dark.jpg";
 
   /* Antes da hidratação, exibe um fundo neutro para evitar
      que o tema escuro apareça erroneamente no tema claro. */
   if (!mounted) {
     return (
-      <aside className="relative hidden h-[100dvh] overflow-hidden lg:block" aria-hidden="true">
+      <aside
+        className="relative hidden h-[100dvh] overflow-hidden lg:block"
+        aria-hidden="true"
+      >
         <div className="absolute inset-0 bg-background" />
         <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
           <h2 className="mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight text-foreground xl:text-4xl">
@@ -60,18 +61,21 @@ export function LoginVisualPanel() {
       )}
 
       <div className="absolute bottom-24 left-10 max-w-sm xl:left-14">
-        <h2 className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
-          isLight ? "text-gray-950" : "text-white"
-        }`}>
+        <h2
+          className={`mt-4 font-[family:var(--font-login)] text-3xl font-semibold leading-tight xl:text-4xl ${
+            isLight ? "text-gray-950" : "text-white"
+          }`}
+        >
           {t("auth.login.visualPanelTagline")}
         </h2>
-        <p className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
-          isLight ? "text-gray-800" : "text-white/72"
-        }`}>
+        <p
+          className={`mt-4 max-w-xs text-sm leading-6 xl:text-base ${
+            isLight ? "text-gray-800" : "text-white/72"
+          }`}
+        >
           {t("auth.login.visualPanelBody")}
         </p>
       </div>
-
     </aside>
   );
 }

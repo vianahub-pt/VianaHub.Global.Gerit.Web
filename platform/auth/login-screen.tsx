@@ -2,8 +2,6 @@
 
 import {
   FormEvent,
-  Suspense,
-  lazy,
   useCallback,
   useEffect,
   useId,
@@ -11,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { LoginVisualPanel } from "./login-visual-panel";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
@@ -44,11 +43,6 @@ import {
   SelectValue,
 } from "@/shared/ui/select";
 import { useTheme } from "next-themes";
-
-const LoginVisualPanel = lazy(async () => {
-  const module = await import("./login-visual-panel");
-  return { default: module.LoginVisualPanel };
-});
 
 function resolveEmailErrorMessage(
   error: EmailValidationError,
@@ -84,7 +78,7 @@ function LoginVisualFallback({ title, body }: { title: string; body: string }) {
     >
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_22%_32%,rgba(27,199,255,0.22),transparent_24%),radial-gradient(circle_at_36%_68%,rgba(255,146,74,0.16),transparent_18%),linear-gradient(135deg,#03131b_0%,#071d28_40%,#02070b_100%)]" />
       <div className="absolute bottom-12 left-10 max-w-sm xl:left-14">
-        <p className="font-[family:var(--font-login)] text-xs uppercase tracking-[0.42em] text-primary">
+        <p className="font-sans text-xs uppercase tracking-[0.42em] text-primary">
           {title}
         </p>
         <p className="mt-4 max-w-xs text-sm leading-6 text-foreground/72 xl:text-base">
@@ -192,14 +186,6 @@ export function LoginScreen() {
     <div className="relative h-[100dvh] overflow-hidden bg-background text-white">
       <div className="relative grid h-[100dvh] lg:grid-cols-2">
         <LoginVisualPanel />
-        <Suspense
-          fallback={
-            <LoginVisualFallback
-              title={t("auth.login.visualFallbackTitle")}
-              body={t("auth.login.visualFallbackBody")}
-            />
-          }
-        ></Suspense>
 
         <section className="relative flex h-[100dvh] items-center justify-center px-5 sm:px-8">
           <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(3,14,19,0.7)_0%,rgba(3,14,19,0.96)_100%)] lg:bg-[linear-gradient(180deg,rgba(3,14,19,0)_0%,rgba(3,14,19,0)_100%)]" />
@@ -211,7 +197,13 @@ export function LoginScreen() {
             <div className="mb-7 flex items-start justify-between gap-4">
               <GeritLogo
                 variant="wordmark"
-                theme={mounted ? (resolvedTheme === "light" ? "light" : "dark") : "light"}
+                theme={
+                  mounted
+                    ? resolvedTheme === "light"
+                      ? "light"
+                      : "dark"
+                    : "light"
+                }
                 alt={t("auth.login.brand")}
                 width={118}
                 height={28}
@@ -222,7 +214,9 @@ export function LoginScreen() {
                 {mounted && (
                   <button
                     type="button"
-                    onClick={() => setTheme(resolvedTheme === "light" ? "dark" : "light")}
+                    onClick={() =>
+                      setTheme(resolvedTheme === "light" ? "dark" : "light")
+                    }
                     className="inline-flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label={t("auth.login.toggleTheme")}
                   >
@@ -257,7 +251,7 @@ export function LoginScreen() {
               </div>
             </div>
             <div>
-              <h1 className="mt-4 font-[family:var(--font-login)] text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
+              <h1 className="mt-4 font-sans text-[2rem] font-semibold tracking-[-0.04em] text-foreground">
                 {t("auth.login.title")}
               </h1>
               <p className="mt-2 max-w-[18rem] text-sm leading-6 text-muted-foreground">
@@ -387,7 +381,6 @@ export function LoginScreen() {
                 {authState.error ?? passwordErrorMessage}
               </p>
             </form>
-
           </div>
         </section>
       </div>

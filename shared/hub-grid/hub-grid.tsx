@@ -136,7 +136,7 @@ export function HubGrid<Item>({
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
             <span className="sr-only">{statusFilterLabel}</span>
             <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-              <SelectTrigger className="min-w-[10rem]" aria-label={statusFilterLabel}>
+              <SelectTrigger className="min-w-[10rem] flex-1" aria-label={statusFilterLabel}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -147,7 +147,7 @@ export function HubGrid<Item>({
                 ))}
               </SelectContent>
             </Select>
-            <label className="relative w-1/3 min-w-[12rem]">
+            <label className="relative flex-1 min-w-[12rem] max-w-[24rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchValue}
@@ -157,7 +157,7 @@ export function HubGrid<Item>({
               />
             </label>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {densityOptions.map((option) => {
               const isActive = rowDensity === option.key;
               return (

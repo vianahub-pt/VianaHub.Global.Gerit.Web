@@ -177,7 +177,7 @@ export function EquipmentsPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<EquipmentStatusFilter>("active");
+    useState<EquipmentStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");

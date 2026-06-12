@@ -158,7 +158,7 @@ export function TeamsPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<TeamStatusFilter>("active");
+  const [statusFilter, setStatusFilter] = useState<TeamStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");

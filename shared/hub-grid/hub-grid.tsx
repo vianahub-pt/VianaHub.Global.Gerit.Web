@@ -4,6 +4,13 @@ import clsx from "clsx";
 import { ChevronDown, ChevronUp, Inbox, Loader2, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { Input } from "@/shared/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 
 export type RowDensity = "compact" | "medium" | "expanded";
 
@@ -127,23 +134,19 @@ export function HubGrid<Item>({
       <div className="border-b border-border/80 bg-muted px-6 py-4 dark:border-border dark:bg-muted">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
-            <label className="relative block">
-              <span className="sr-only">{statusFilterLabel}</span>
-              <select
-                value={statusFilter}
-                onChange={(event) => onStatusFilterChange(event.target.value)}
-                className="h-11 min-w-[10rem] rounded-sm border border-input bg-card px-4 pr-10 text-sm font-semibold text-foreground outline-none focus:border-ring appearance-none dark:border-input dark:bg-card dark:text-white"
-              >
+            <span className="sr-only">{statusFilterLabel}</span>
+            <Select value={statusFilter} onValueChange={onStatusFilterChange}>
+              <SelectTrigger className="min-w-[10rem]" aria-label={statusFilterLabel}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
                 {statusFilterOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <SelectItem key={option.value} value={option.value}>
                     {option.label}
-                  </option>
+                  </SelectItem>
                 ))}
-              </select>
-              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
-              </span>
-            </label>
+              </SelectContent>
+            </Select>
             <label className="relative w-1/3 min-w-[12rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -423,17 +426,18 @@ export function HubGrid<Item>({
           </span>
           <label className="flex items-center gap-2 text-sm text-foreground dark:text-primary">
             <span>{paginationPerPageLabel}</span>
-            <select
-              value={pageSize}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="h-9 rounded-sm border border-border bg-card px-2 text-sm font-semibold text-white outline-none focus:border-ring"
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
+              <SelectTrigger className="w-auto min-w-[4rem]" aria-label={paginationPerPageLabel}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {pageSizeOptions.map((option) => (
+                  <SelectItem key={option} value={String(option)}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
         </div>
       </footer>

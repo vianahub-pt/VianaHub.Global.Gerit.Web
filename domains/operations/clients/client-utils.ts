@@ -1,4 +1,12 @@
-import { ClientItem, ClientIndividual, ClientCompany } from "./client-models";
+import {
+  ClientItem,
+  ClientIndividual,
+  ClientCompany,
+  ClientFiscalDataItem,
+  ClientConsentItem,
+  ConsentTypeItem,
+  ClientHierarchyItem,
+} from "./client-models";
 
 export interface ClientsPagedResponse {
   items?: unknown;
@@ -7,6 +15,25 @@ export interface ClientsPagedResponse {
   pageNumber?: number;
   pageSize?: number;
   totalPages?: number;
+}
+
+export interface FiscalDataPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+export interface ConsentsPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+export interface ConsentTypesResponse {
+  items?: unknown;
+}
+
+export interface HierarchyPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
 }
 
 function normalizeIndividual(payload: unknown): ClientIndividual | undefined {

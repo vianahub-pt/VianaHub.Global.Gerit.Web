@@ -1265,9 +1265,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         // Add individual or company nested data
         if (isIndividualType(clientTypeNumber ?? undefined)) {
           const ind = clientFormState.individual;
+          const computedFullName = `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim();
           payload.individual = {
-            displayName: ind.displayName.trim() || `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
-            fullName: ind.fullName.trim() || null,
+            displayName: ind.displayName.trim() || computedFullName,
+            fullName: computedFullName || null,
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),
             phoneNumber: ind.phoneNumber.trim(),
@@ -3197,15 +3198,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Line 1: FullName — 3 colunas */}
-          <div className="sm:col-span-2 lg:col-span-3">
-            <FormField
-              label={t("clients.form.individual.fullName")}
-              value={ind.fullName}
-              onChange={(v) => updateIndividual("fullName", v)}
-            />
-          </div>
-          {/* Line 2: Nome completo — 3 colunas */}
+          {/* Line 1: Nome completo — 3 colunas */}
           <div className="sm:col-span-2 lg:col-span-3">
             <FormField
               label={t("clients.form.individual.displayName")}

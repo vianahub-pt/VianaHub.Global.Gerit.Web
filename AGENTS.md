@@ -242,6 +242,46 @@ Os agentes não devem pedir confirmação para atividades operacionais normais d
 
 # Regra Fundamental do Fluxo
 
+## ⛔ VIOLAÇÃO DE DIRETIVAS É PROIBIDA
+
+**TODAS as diretivas deste arquivo e dos agentes são OBRIGATÓRIAS e INEGOCIÁVEIS.**
+
+**NUNCA, EM NENHUMA CIRCUNSTÂNCIA, VIOLAR QUALQUER DIRETIVA.**
+
+### Regra de Comunicação entre Agentes
+
+O `kanban-coordinator` deve passar aos agentes especializados (PO, Developers, QA) **APENAS**:
+
+- **O que fazer** (ação objetiva e específica)
+- **Onde está** (link da issue/PR)
+- **O que entregar de volta** (resultado esperado)
+
+**NUNCA incluir nos handoffs:**
+
+- Contexto completo da issue
+- O que outros agentes já fizeram
+- Comandos que já foram executados
+- Validações técnicas já realizadas
+- Análises de complexidade ou riscos
+- Histórico de movimentação
+
+### Exemplo de handoff CORRETO
+
+```
+Implemente [descrição] na issue #125. Crie branch, implemente, valide, crie PR e notifique.
+```
+
+### Exemplo de handoff INCORRETO (NUNCA FAZER)
+
+```
+O Developer-pleno implementou X, executou lint, build...
+Agora valide os seguintes critérios...
+```
+
+**SEMPRE que uma diretiva for violada, o fluxo está QUEBRADO e o resultado é INVÁLIDO.**
+
+---
+
 ## O Kanban Coordinator NUNCA desenvolve
 
 O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push ou criar PR.

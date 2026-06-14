@@ -178,6 +178,7 @@
   "clients.form.individual.sectionTitle": "Individual Data",
   "clients.form.individual.firstName": "First name",
   "clients.form.individual.lastName": "Last name",
+  "clients.form.individual.fullName": "Full Name",
   "clients.form.individual.displayName": "Full name",
   "clients.form.individual.phoneNumber": "Phone",
   "clients.form.individual.cellPhoneNumber": "Mobile",

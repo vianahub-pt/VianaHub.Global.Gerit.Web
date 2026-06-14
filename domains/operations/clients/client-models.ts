@@ -5,6 +5,7 @@ export interface ClientIndividual {
   tenantId?: number;
   clientId?: number;
   displayName?: string;
+  fullName?: string;
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;

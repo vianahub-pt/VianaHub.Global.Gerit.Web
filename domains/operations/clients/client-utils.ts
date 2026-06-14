@@ -48,6 +48,7 @@ function normalizeIndividual(payload: unknown): ClientIndividual | undefined {
     tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : undefined,
     clientId: typeof candidate.clientId === "number" ? candidate.clientId : undefined,
     displayName: typeof candidate.displayName === "string" ? candidate.displayName : undefined,
+    fullName: typeof candidate.fullName === "string" ? candidate.fullName : undefined,
     firstName: typeof candidate.firstName === "string" ? candidate.firstName : undefined,
     lastName: typeof candidate.lastName === "string" ? candidate.lastName : undefined,
     phoneNumber: typeof candidate.phoneNumber === "string" ? candidate.phoneNumber : undefined,

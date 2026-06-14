@@ -101,7 +101,15 @@ export function ClientsCreatePage() {
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {/* Line 1: Nome completo — 3 colunas */}
+          {/* Line 1: FullName — 3 colunas */}
+          <div className="sm:col-span-2 lg:col-span-3">
+            <FormField
+              label={t("clients.form.individual.fullName")}
+              value={ind.fullName}
+              onChange={(v) => updateIndividual("fullName", v)}
+            />
+          </div>
+          {/* Line 2: Nome completo — 3 colunas */}
           <div className="sm:col-span-2 lg:col-span-3">
             <FormField
               label={t("clients.form.individual.displayName")}
@@ -421,6 +429,7 @@ export function ClientsCreatePage() {
             displayName:
               ind.displayName.trim() ||
               `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
+            fullName: ind.fullName.trim() || null,
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),
             phoneNumber: ind.phoneNumber.trim(),

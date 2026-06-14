@@ -14,6 +14,7 @@ import {
 
 export interface IndividualFormState {
   displayName: string;
+  fullName: string;
   firstName: string;
   lastName: string;
   phoneNumber: string;
@@ -29,6 +30,7 @@ export interface IndividualFormState {
 
 export const initialIndividualFormState: IndividualFormState = {
   displayName: "",
+  fullName: "",
   firstName: "",
   lastName: "",
   phoneNumber: "",

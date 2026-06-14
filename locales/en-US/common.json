@@ -317,6 +317,7 @@
   "clients.fiscalData.form.iban": "IBAN",
   "clients.fiscalData.form.fiscalEmail": "Fiscal Email",
   "clients.fiscalData.validation.required": "Tax number is required.",
+  "clients.fiscalData.validation.requiredAll": "Tax number, Fiscal country, VAT registered and Fiscal email are required.",
   "clients.fiscalData.empty": "No fiscal data registered.",
   "clients.fiscalData.table.taxNumber": "Tax Number",
   "clients.fiscalData.table.vatNumber": "VAT Number",

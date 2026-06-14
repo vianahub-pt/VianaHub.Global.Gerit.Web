@@ -53,6 +53,7 @@ import {
   type ClientHierarchyFormState,
   initialHierarchyFormState,
 } from "@/domains/operations/clients/client-models";
+import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
 /* ---------- Constants ---------- */
 
@@ -1751,10 +1752,15 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       event.preventDefault();
       if (!client) return;
       const taxNumber = fiscalDataFormState.taxNumber.trim();
-      if (!taxNumber) {
+      const fiscalCountry = fiscalDataFormState.fiscalCountry.trim();
+      const isVatRegistered = fiscalDataFormState.isVatRegistered;
+      const fiscalEmail = fiscalDataFormState.fiscalEmail.trim();
+
+      // Validate required fields
+      if (!taxNumber || !fiscalCountry || !isVatRegistered || !fiscalEmail) {
         toast({
           title: t("clients.toasts.validationTitle"),
-          description: t("clients.fiscalData.validation.required"),
+          description: t("clients.fiscalData.validation.requiredAll"),
           variant: "destructive",
         });
         return;
@@ -1764,10 +1770,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         const payload = {
           taxNumber,
           vatNumber: fiscalDataFormState.vatNumber.trim() || null,
-          fiscalCountry: fiscalDataFormState.fiscalCountry.trim() || null,
-          isVatRegistered: fiscalDataFormState.isVatRegistered,
+          fiscalCountry,
+          isVatRegistered,
           iban: fiscalDataFormState.iban.trim() || null,
-          fiscalEmail: fiscalDataFormState.fiscalEmail.trim() || null,
+          fiscalEmail,
         };
         const isEditing = editingFiscalData !== null;
         const endpoint = isEditing
@@ -3778,12 +3784,27 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 setFiscalDataFormState((prev) => ({ ...prev, vatNumber: v }))
               }
             />
-            <FormField
+            <SelectField
               label={t("clients.fiscalData.form.fiscalCountry")}
               value={fiscalDataFormState.fiscalCountry}
               onChange={(v) =>
                 setFiscalDataFormState((prev) => ({ ...prev, fiscalCountry: v }))
               }
+              options={EUROPEAN_COUNTRIES_PLUS_BR_US.map((c) => ({
+                value: c.code,
+                label: c.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
+              required
+            />
+            <ToggleField
+              label={t("clients.fiscalData.form.isVatRegistered")}
+              checked={fiscalDataFormState.isVatRegistered}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, isVatRegistered: v }))
+              }
+              onLabel={t("common.yes")}
+              offLabel={t("common.no")}
             />
             <FormField
               label={t("clients.fiscalData.form.iban")}
@@ -3799,6 +3820,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 setFiscalDataFormState((prev) => ({ ...prev, fiscalEmail: v }))
               }
               type="email"
+              required
             />
           </div>
           <div className="flex items-center gap-2">

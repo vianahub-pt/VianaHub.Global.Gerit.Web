@@ -216,7 +216,7 @@ const initialAddressFormState: AddressFormState = {
 const initialFiscalDataFormStateLocal: FiscalDataFormState = {
   taxNumber: "",
   vatNumber: "",
-  fiscalCountry: "",
+  fiscalCountry: "PT",
   isVatRegistered: false,
   iban: "",
   fiscalEmail: "",

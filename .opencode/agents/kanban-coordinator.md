@@ -194,6 +194,11 @@ if (-not $item) {
 
 # 4. Mover para o status desejado (1 chamada)
 gh project item-edit --project-id PVT_kwHODGRT384BZCnv --id $itemId --field-id PVTSSF_lAHODGRT384BZCnvzhUEIlE --single-select-option-id OPTION_ID
+
+# 5. Assign físico quando mover para In Progress (1 chamada adicional)
+if ($optionId -eq "47fc9ee4") {
+    gh issue edit NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --add-assignee @me
+}
 ```
 
 ---

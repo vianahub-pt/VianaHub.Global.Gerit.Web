@@ -74,6 +74,38 @@ Para correções complexas localizadas que não envolvem múltiplos domínios ne
 
 ---
 
+# Regra de Recusa — Tarefa Trivial ou Média sem Justificativa
+
+Se receber tarefa trivial ou média sem justificativa de arquitetura, segurança ou performance, **não implemente**. Devolva ao `kanban-coordinator` com recomendação do agente correto:
+
+```md
+## Roteamento incorreto
+
+Esta tarefa não requer senioridade. Deve ser executada por `[developer-junior | developer-pleno]` com `[FAST_PATH | STANDARD_PATH]`.
+
+Motivo:
+- [lista o que a tarefa envolve e por que não precisa de senior]
+
+Próxima ação:
+Kanban Coordinator deve reencaminhar para `[agente recomendado]`.
+```
+
+**Exemplos de tarefas que devem ser devolvidas:**
+- Alteração de texto/label/placeholder → `developer-junior` + `FAST_PATH`
+- CRUD simples com padrão existente → `developer-pleno` + `STANDARD_PATH`
+- Formulário com validação local → `developer-pleno` + `STANDARD_PATH`
+- Grid com filtros usando padrão existente → `developer-pleno` + `STANDARD_PATH`
+
+**Exemplos de tarefas que o Senior DEVE aceitar:**
+- Alteração em `core/`, `platform/`, `shared/`
+- Segurança, autenticação, tenant isolation
+- Query keys globais
+- Refatoração estrutural
+- Bug crítico ou alto
+- Performance e otimização
+
+---
+
 # Convenções do Projeto
 
 - **Path alias:** `@/*`

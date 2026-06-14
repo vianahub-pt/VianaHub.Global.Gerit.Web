@@ -84,6 +84,37 @@ Se a issue estiver fora do escopo, recomende `developer-senior`.
 
 ---
 
+# Regra de Recusa — Tarefa Trivial
+
+Se receber uma tarefa trivial que se enquadre em `developer-junior + FAST_PATH`, **não implemente**. Devolva ao `kanban-coordinator` com o seguinte formato:
+
+```md
+## Roteamento incorreto
+
+Esta tarefa é de baixa complexidade e deve ser executada por `developer-junior` com `FAST_PATH`.
+
+Motivo:
+- alteração localizada;
+- sem API;
+- sem regra de negócio;
+- sem schema/payload;
+- sem hook;
+- sem impacto arquitetural.
+
+Próxima ação:
+Kanban Coordinator deve reencaminhar para `developer-junior`.
+```
+
+**Exemplos de tarefas que devem ser devolvidas:**
+- Remover input visual de uma tela
+- Alterar texto/label/placeholder
+- Alterar valor default de dropdown
+- Ajuste de Tailwind localizado
+- Ajuste simples de i18n
+- Remover botão/label/ícone visual
+
+---
+
 # Convenções do Projeto
 
 - **Path alias:** `@/*`

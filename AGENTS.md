@@ -253,9 +253,18 @@ Não incluir nos handoffs: contexto completo da issue, histórico do que outros 
 
 ## Handoff Padrão
 
-```markdown
-Implemente [descrição objetiva] na issue #NUMERO. Modo: [FAST_PATH|STANDARD_PATH|FULL_PATH]. Crie branch a partir de develop, implemente, valide conforme modo, crie PR para develop, comente na issue com link do PR e notifique kanban-coordinator.
+O handoff deve ter **no máximo** este formato:
+
+```md
+Issue: #NUMERO
+Ação: [ação objetiva]
+Agente: [developer-junior | developer-pleno | developer-senior | ui-ux]
+Modo: [FAST_PATH | STANDARD_PATH | FULL_PATH]
+QA esperado: [QA_FAST | QA_STANDARD | QA_FULL]
+Entrega: branch, alteração mínima, commit, push, PR e notificação ao coordinator.
 ```
+
+**Proibido incluir:** contexto completo da issue, histórico de outros agentes, comandos executados, validações realizadas, análises longas, logs, checklist completo.
 
 ---
 
@@ -265,14 +274,25 @@ O `kanban-coordinator` classifica cada tarefa em um dos três modos antes de faz
 
 ## FAST_PATH
 
-Usar para tarefas triviais e localizadas:
+Usar para tarefas triviais e localizadas. **Sempre** `developer-junior`.
 
-- Texto, label, placeholder, ícone
-- Valor default em componente
-- Classe Tailwind simples
-- i18n simples (chave de tradução)
-- Ajuste visual localizado em componente existente
-- Mudança em um único componente sem API ou regra de negócio
+Exemplos obrigatórios de classificação como FAST_PATH:
+- Remover input visual de uma tela
+- Remover botão visual
+- Remover label
+- Remover texto
+- Alterar texto
+- Alterar placeholder
+- Alterar ícone
+- Alterar valor default de dropdown/select
+- Ajustar classe Tailwind localizada
+- Ajustar espaçamento/alinhamento localizado
+- Ajuste i18n simples (chave de tradução)
+- Ocultar/exibir campo sem alterar regra de negócio
+- Mudança em um único componente
+- Mudança em uma única tela
+- Sem alteração de API, schema, payload, validação funcional complexa, hook
+- Sem alteração de `core/`, `platform/` ou `shared` crítico
 
 **Validações:**
 
@@ -280,6 +300,8 @@ Usar para tarefas triviais e localizadas:
 - `npm run lint` somente se a alteração tocar arquivos TS/TSX relevantes
 - Typecheck somente se alterar tipos, imports/exports, hooks ou props
 - Build somente se alterar rota, config, shared crítico ou se houver erro de lint/typecheck
+
+**NÃO executar por padrão em FAST_PATH:** `npm run build`, `npx tsc --project tsconfig.typecheck.json --noEmit`. Esses comandos só devem rodar se houver alteração em rota, import/export, tipo compartilhado, props públicas, schema, hook, componente compartilhado crítico, config ou erro prévio de lint/typecheck.
 
 ## STANDARD_PATH
 
@@ -379,6 +401,10 @@ Para tarefas críticas, arquiteturais ou de segurança:
 
 # Roteamento por Complexidade
 
+## Regra Determinística
+
+Tarefas triviais (remover input, botão, label, texto, alterar placeholder, ícone, valor default, ajuste Tailwind localizado, i18n simples) **sempre** vão para `developer-junior` + `FAST_PATH` + `QA_FAST`. Exceto se exigir alteração de API, schema, payload, validação, hook, regra de negócio ou tipo compartilhado.
+
 | Critério | Developer | Modo padrão |
 |----------|-----------|-------------|
 | Simples, localizado, baixo risco | `developer-junior` | `FAST_PATH` |
@@ -389,9 +415,34 @@ Para tarefas críticas, arquiteturais ou de segurança:
 Em caso de dúvida:
 
 ```text
-Junior vs Pleno -> escolher Pleno
-Pleno vs Senior -> escolher Senior
+Tarefa parece trivial? → developer-junior + FAST_PATH
+Junior vs Pleno? → Verificar checklist de justificativa. Se nenhuma opção marcar, manter junior.
+Pleno vs Senior? → Senior
 ```
+
+## Justificativa Obrigatória para Escalonamento
+
+Se o coordinator escolher `developer-pleno`, `developer-senior` ou `ui-ux` para tarefa aparentemente trivial, deve registrar na issue:
+
+```md
+## Justificativa de escalonamento
+
+A tarefa parecia trivial, mas foi roteada para `[agente]` porque envolve:
+
+- [ ] alteração de API
+- [ ] alteração de payload
+- [ ] alteração de schema/validação
+- [ ] alteração de hook
+- [ ] alteração de tipo compartilhado
+- [ ] alteração em `core/`
+- [ ] alteração em `platform/`
+- [ ] alteração em `shared` crítico
+- [ ] regra de negócio
+- [ ] risco funcional médio/alto
+- [ ] outro motivo: ...
+```
+
+Se nenhuma opção justificar → rotear para `developer-junior`.
 
 ---
 

@@ -38,15 +38,28 @@ O handoff do coordinator indicará o modo:
 
 ## FAST_PATH (padrão)
 
-Para tarefas triviais: ajuste de texto, i18n, visual localizado, label, placeholder, ícone.
+Para tarefas triviais: ajuste de texto, i18n, visual localizado, label, placeholder, ícone, remover input/botão/label, alterar valor default, ajuste Tailwind localizado.
 
 **Validações obrigatórias:**
 - `git diff --check` (sempre)
-- `npm run lint` (se aplicável)
+- `npm run lint` (se tocar arquivos TS/TSX relevantes)
 
-**Validações OPCIONAIS (apenas se o coordinator solicitar):**
+**Validações NÃO obrigatórias (apenas se explicitly solicitado pelo coordinator ou se houver alteração de rota/import/export/tipo compartilhado):**
 - `npm run build`
 - `npx tsc --project tsconfig.typecheck.json --noEmit`
+
+### Timebox FAST_PATH
+
+Para `FAST_PATH`, seguir limite operacional:
+
+1. Localizar arquivo provável com `grep`/`glob`.
+2. Se em até **3 minutos** não localizar o arquivo, **parar** e reportar bloqueio objetivo.
+3. Não fazer investigação ampla do projeto.
+4. Não fazer análise arquitetural.
+5. Não executar build completo, salvo justificativa explícita.
+6. Alterar o **mínimo** possível.
+7. **Máximo esperado:** 1 a 3 arquivos alterados.
+8. Se precisar alterar mais de 3 arquivos, **parar** e pedir reclassificação para `STANDARD_PATH`.
 
 ## STANDARD_PATH
 

@@ -127,7 +127,7 @@ O `kanban-coordinator` classifica cada tarefa em um dos três modos antes de faz
 
 | Modo | Critérios | Validações |
 |------|-----------|------------|
-| `FAST_PATH` | Tarefa trivial, alteração mínima, baixo risco | `git diff --check` + lint (se aplicável) |
+| `FAST_PATH` | Tarefa trivial, alteração mínima, baixo risco. **Sempre** `developer-junior`. | `git diff --check` + lint (se aplicável). **NÃO** build/typecheck por padrão. |
 | `STANDARD_PATH` | Tarefa funcional intermediária, padrão existente | `git diff --check` + lint + typecheck |
 | `FULL_PATH` | Tarefa complexa, crítica, arquitetural | `git diff --check` + lint + build + typecheck |
 
@@ -201,6 +201,10 @@ Valida implementações conforme modo `QA_FAST`, `QA_STANDARD` ou `QA_FULL`. Nã
 
 # Roteamento por Complexidade
 
+## Regra Determinística
+
+Tarefas triviais (remover input, botão, label, texto, alterar placeholder, ícone, valor default, ajuste Tailwind localizado, i18n simples) **sempre** vão para `developer-junior` + `FAST_PATH` + `QA_FAST`. Exceto se exigir alteração de API, schema, payload, validação, hook, regra de negócio ou tipo compartilhado.
+
 | Critério | Developer | Modo padrão |
 |----------|-----------|-------------|
 | Simples, localizado, baixo risco | `developer-junior` | `FAST_PATH` |
@@ -208,7 +212,37 @@ Valida implementações conforme modo `QA_FAST`, `QA_STANDARD` ou `QA_FULL`. Nã
 | Complexo, crítico, arquitetural | `developer-senior` | `FULL_PATH` |
 | UI/UX visual, layout, tema | `ui-ux` | Conforme impacto |
 
-Em caso de dúvida: Junior vs Pleno → Pleno | Pleno vs Senior → Senior
+Em caso de dúvida:
+
+```text
+Tarefa parece trivial? → developer-junior + FAST_PATH
+Junior vs Pleno? → Verificar checklist de justificativa. Se nenhuma opção marcar, manter junior.
+Pleno vs Senior? → Senior
+```
+
+## Justificativa Obrigatória para Escalonamento
+
+Se o coordinator escolher `developer-pleno`, `developer-senior` ou `ui-ux` para tarefa aparentemente trivial, deve registrar na issue:
+
+```md
+## Justificativa de escalonamento
+
+A tarefa parecia trivial, mas foi roteada para `[agente]` porque envolve:
+
+- [ ] alteração de API
+- [ ] alteração de payload
+- [ ] alteração de schema/validação
+- [ ] alteração de hook
+- [ ] alteração de tipo compartilhado
+- [ ] alteração em `core/`
+- [ ] alteração em `platform/`
+- [ ] alteração em `shared` crítico
+- [ ] regra de negócio
+- [ ] risco funcional médio/alto
+- [ ] outro motivo: ...
+```
+
+Se nenhuma opção justificar → rotear para `developer-junior`.
 
 ---
 

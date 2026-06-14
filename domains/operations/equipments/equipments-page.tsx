@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
@@ -176,7 +177,7 @@ export function EquipmentsPage() {
   const { toast } = useToast();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<EquipmentStatusFilter>("active");
+    useState<EquipmentStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");
@@ -204,17 +205,17 @@ export function EquipmentsPage() {
       {
         key: "Name",
         label: t("equipments.table.name"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "SerialNumber",
         label: t("equipments.table.serialNumber"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Type",
         label: t("equipments.table.type"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
     ],
     [t],
@@ -323,6 +324,7 @@ export function EquipmentsPage() {
         },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as EquipmentsPagedResponse;
 
@@ -394,6 +396,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -442,6 +445,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -491,6 +495,7 @@ export function EquipmentsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -545,8 +550,8 @@ export function EquipmentsPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           equipment.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+            ? "text-foreground dark:text-foreground"
+            : "text-foreground dark:text-foreground",
         )}
       >
         {equipment.isActive
@@ -566,10 +571,10 @@ export function EquipmentsPage() {
             event.stopPropagation();
             handleEquipmentSelection(equipment);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={t("equipments.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -577,14 +582,14 @@ export function EquipmentsPage() {
             event.stopPropagation();
             void handleToggleStatus(equipment);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={
             equipment.isActive
               ? t("equipments.actions.deactivate")
               : t("equipments.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -592,10 +597,10 @@ export function EquipmentsPage() {
             event.stopPropagation();
             void handleDeleteEquipment(equipment);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive"
           title={t("equipments.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
       </div>
     ),
@@ -605,9 +610,9 @@ export function EquipmentsPage() {
   const gridToolbar = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-[#d1d9e5] bg-white px-4 text-sm font-medium text-[#1f2f3f] transition-colors hover:border-[#b4c2d9] hover:bg-[#f0f3fb] dark:border-[#405360] dark:bg-[#263844] dark:text-[#c9d8df] dark:hover:bg-[#2c404c]">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
           {bulkUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#08aee5]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : null}
           {t("equipments.bulk.upload.label")}
           <input
@@ -625,7 +630,7 @@ export function EquipmentsPage() {
         <button
           type="button"
           onClick={showCreateForm}
-          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#08aee5] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6]"
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
           {t("equipments.actions.add")}
@@ -679,6 +684,7 @@ export function EquipmentsPage() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       const responsePayload = (await response
         .json()
         .catch(() => null)) as unknown;
@@ -741,14 +747,14 @@ export function EquipmentsPage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#253542]">
-          <div className="mb-5 overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0d1c29] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-5 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
+          <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 bg-muted px-6 py-5 dark:border-border dark:bg-muted">
               <div>
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[#0f172a] dark:text-white">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-foreground dark:text-foreground">
                   {t("equipments.title")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {t("equipments.subtitle")}
                 </p>
               </div>
@@ -807,15 +813,15 @@ export function EquipmentsPage() {
 
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-[#d9dee2] bg-white p-5 dark:border-[#18303c] dark:bg-[#1f2f3e]">
+              <section className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-[#0f172a] dark:text-[#d6e6ee]">
+                    <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                       {selectedEquipment
                         ? t("equipments.form.editTitle")
                         : t("equipments.form.newTitle")}
                     </h2>
-                    <p className="text-sm text-[#4f5c6a] dark:text-[#9eb1bc]">
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.subtitle")}
                     </p>
                   </div>
@@ -826,10 +832,10 @@ export function EquipmentsPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.name")}
                     </span>
-                    <input
+                    <Input
                       value={formState.name}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -837,15 +843,14 @@ export function EquipmentsPage() {
                           name: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#405360] dark:bg-[#263844] dark:text-[#d6e6ee]"
                       placeholder={t("equipments.form.name")}
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.serialNumber")}
                     </span>
-                    <input
+                    <Input
                       value={formState.serialNumber}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -853,15 +858,14 @@ export function EquipmentsPage() {
                           serialNumber: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#405360] dark:bg-[#263844] dark:text-[#d6e6ee]"
                       placeholder={t("equipments.form.serialNumber")}
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("equipments.form.type")}
                     </span>
-                    <input
+                    <Input
                       value={formState.equipmentType}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -869,7 +873,6 @@ export function EquipmentsPage() {
                           equipmentType: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#405360] dark:bg-[#263844] dark:text-[#d6e6ee]"
                       placeholder={t("equipments.form.type")}
                     />
                   </label>
@@ -878,14 +881,14 @@ export function EquipmentsPage() {
                       type="button"
                       onClick={hideDetail}
                       disabled={submitting}
-                      className="h-11 rounded-sm border border-[#d9dee2] bg-white px-5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#0cbbf6] hover:text-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#38505d] dark:bg-[#1f2f3e] dark:text-[#c4d6de] dark:hover:text-white"
+                      className="h-11 rounded-sm border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
                     >
                       {t("equipments.actions.cancel")}
                     </button>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="h-11 rounded-sm bg-[#08aee5] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-11 rounded-sm bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("equipments.actions.save")}
                     </button>

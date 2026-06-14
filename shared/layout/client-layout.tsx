@@ -83,7 +83,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
 
   return (
     <>
-      {!isImmersiveRoute && (
+      {!isImmersiveRoute && !isLoginRoute && (
         <>
           {/* Indicador de progresso de leitura acessível */}
           <div
@@ -108,7 +108,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         className={
           isImmersiveRoute
             ? `h-[100dvh] overflow-hidden focus:outline-none${
-                isLoginRoute ? " bg-[#041017]" : ""
+                isLoginRoute ? " bg-background" : ""
               }`
             : "flex-1 focus:outline-none"
         }
@@ -116,7 +116,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         {children}
       </main>
 
-      {!isImmersiveRoute && (
+      {!isImmersiveRoute && !isLoginRoute && (
         <>
           {/* Rodapé */}
           <Footer />

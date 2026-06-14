@@ -1,5 +1,8 @@
 "use client";
 
+// @deprecated Use HubMenu (shared/layout/hub-menu.tsx) + useWorkspaceMenuConfig (domains/workspace/workspace-menu-config.ts) instead.
+// TenantSidebar will be removed in a future version.
+
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -133,7 +136,7 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
     <nav className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto py-3 px-1">
       {sections.map((section, sectionIndex) => (
         <div key={section.key} className={clsx(sectionIndex > 0 && "mt-6")}>
-          <p className="gerit-sidebar-label px-2 pb-2 text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-[#56717e] dark:text-[#86a4b0]">
+          <p className="gerit-sidebar-label px-2 pb-2 text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-muted-foreground">
             {section.title}
           </p>
 
@@ -153,21 +156,21 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
                   className={clsx(
                     "group relative flex h-10 items-center gap-2 rounded-md px-2 text-sm font-medium transition-colors",
                     isActive
-                      ? "bg-[#f4f7f9] text-[#11191f] dark:bg-[#0f2029] dark:text-white"
-                      : "text-[#5f7079] hover:bg-[#f7fafb] hover:text-[#11191f] dark:text-[#9ab2bc] dark:hover:bg-[#0e1d25] dark:hover:text-white",
+                      ? "bg-secondary text-foreground dark:bg-secondary dark:text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground dark:text-muted-foreground dark:hover:bg-secondary/50 dark:hover:text-foreground",
                   )}
                   aria-current={isActive ? "page" : undefined}
                   title={collapsed ? item.label : undefined}
                 >
                   {isActive ? (
-                    <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-[#11b7ff]" />
+                    <span className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-primary" />
                   ) : null}
                   <Icon
                     className={clsx(
                       "h-4 w-4 shrink-0",
                       isActive
-                        ? "text-[#06a8a8] dark:text-[#11b7ff]"
-                        : "text-[#7b8f99] dark:text-[#90a5af]",
+                        ? "text-primary dark:text-primary"
+                        : "text-muted-foreground dark:text-muted-foreground",
                     )}
                     aria-hidden="true"
                   />

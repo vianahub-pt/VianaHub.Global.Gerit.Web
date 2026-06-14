@@ -6,6 +6,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
@@ -157,7 +158,7 @@ export function RolesPage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<RoleStatusFilter>("active");
+  const [statusFilter, setStatusFilter] = useState<RoleStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");
@@ -182,12 +183,12 @@ export function RolesPage() {
       {
         key: "Name",
         label: t("roles.table.name"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Email",
         label: t("roles.table.description"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
     ],
     [t],
@@ -286,6 +287,7 @@ export function RolesPage() {
         },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as RolesPagedResponse;
 
@@ -355,6 +357,7 @@ export function RolesPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -398,6 +401,7 @@ export function RolesPage() {
           method: "DELETE",
         });
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -445,6 +449,7 @@ export function RolesPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -495,8 +500,8 @@ export function RolesPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           role.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+            ? "text-foreground dark:text-foreground"
+            : "text-foreground dark:text-foreground",
         )}
       >
         {role.isActive ? t("roles.status.active") : t("roles.status.inactive")}
@@ -514,10 +519,10 @@ export function RolesPage() {
             event.stopPropagation();
             handleRoleSelection(role);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#000000] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={t("roles.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -525,14 +530,14 @@ export function RolesPage() {
             event.stopPropagation();
             void handleToggleStatus(role);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#000000] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={
             role.isActive
               ? t("roles.actions.deactivate")
               : t("roles.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -540,10 +545,10 @@ export function RolesPage() {
             event.stopPropagation();
             void handleDeleteRole(role);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive"
           title={t("roles.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
       </div>
     ),
@@ -553,9 +558,9 @@ export function RolesPage() {
   const gridToolbar = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-[#d9dee2] bg-white px-4 text-sm font-medium text-[#1f2f3f] transition-colors hover:border-[#b4c2d9] hover:bg-[#f0f3fb] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#c9d8df] dark:hover:bg-[#2c404c]">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
           {bulkUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#08aee5]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : null}
           {t("roles.bulk.upload.label")}
           <input
@@ -573,7 +578,7 @@ export function RolesPage() {
         <button
           type="button"
           onClick={showCreateForm}
-          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#08aee5] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6]"
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
           {t("roles.actions.add")}
@@ -625,6 +630,7 @@ export function RolesPage() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       const responsePayload = (await response
         .json()
         .catch(() => null)) as unknown;
@@ -686,14 +692,14 @@ export function RolesPage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#1f2f3e]">
-          <div className="mb-5 overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0d1c29] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-5 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
+          <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 bg-muted px-6 py-5 dark:border-border dark:bg-muted">
               <div>
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[#0f172a] dark:text-white">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-foreground dark:text-foreground">
                   {t("roles.title")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#000000] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-foreground dark:text-muted-foreground">
                   {t("roles.subtitle")}
                 </p>
               </div>
@@ -751,15 +757,15 @@ export function RolesPage() {
           />
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-[#d9dee2] bg-white p-5 dark:border-[#000000] dark:bg-[#1f2f3e]">
+              <section className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-[#0f172a] dark:text-[#d6e6ee]">
+                    <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                       {selectedRole
                         ? t("roles.form.editTitle")
                         : t("roles.form.newTitle")}
                     </h2>
-                    <p className="text-sm text-[#4f5c6a] dark:text-[#9eb1bc]">
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                       {t("roles.form.subtitle")}
                     </p>
                   </div>
@@ -770,10 +776,10 @@ export function RolesPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("roles.form.name")}
                     </span>
-                    <input
+                    <Input
                       value={formState.name}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -781,12 +787,11 @@ export function RolesPage() {
                           name: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#d6e6ee]"
                       placeholder={t("roles.form.name")}
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("roles.form.description")}
                     </span>
                     <textarea
@@ -798,7 +803,7 @@ export function RolesPage() {
                         }))
                       }
                       rows={3}
-                      className="h-24 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 py-2 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#d6e6ee]"
+                      className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("roles.form.description")}
                     />
                   </label>
@@ -807,14 +812,14 @@ export function RolesPage() {
                       type="button"
                       onClick={hideDetail}
                       disabled={submitting}
-                      className="h-11 rounded-sm border border-[#d9dee2] bg-white px-5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#0cbbf6] hover:text-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#c4d6de] dark:hover:text-white"
+                      className="h-11 rounded-sm border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
                     >
                       {t("roles.actions.cancel")}
                     </button>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="h-11 rounded-sm bg-[#08aee5] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-11 rounded-sm bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("roles.actions.save")}
                     </button>

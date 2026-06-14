@@ -1,6 +1,14 @@
 "use client";
 
 import clsx from "clsx";
+import { Input } from "@/shared/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/shared/ui/select";
 
 /* ---------- Individual form state ---------- */
 
@@ -168,7 +176,7 @@ export function ToggleField({
 }: ToggleFieldProps) {
   return (
     <div className={clsx("flex flex-col gap-2", className)}>
-      <span className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+      <span className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {label}
       </span>
       <div className="flex w-full">
@@ -180,10 +188,10 @@ export function ToggleField({
             onChange={(event) => onChange(event.target.checked)}
             className="peer sr-only"
           />
-          <span className="flex h-7 w-12 items-center rounded-full bg-[#d7e0e5] px-1 transition-colors peer-checked:bg-[#08aee5] dark:bg-[#284451] dark:peer-checked:bg-[#11b7ff]">
-            <span className="h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
+          <span className="flex h-7 w-12 items-center rounded-full bg-input px-1 transition-colors peer-checked:bg-primary dark:bg-input dark:peer-checked:bg-primary">
+            <span className="h-5 w-5 rounded-full bg-card transition-transform peer-checked:translate-x-5" />
           </span>
-          <span className="ml-2 flex items-center text-sm text-[#1f2c3e] dark:text-[#d6e6ee]">
+          <span className="ml-2 flex items-center text-sm text-foreground dark:text-foreground">
             {checked ? onLabel : offLabel}
           </span>
         </label>
@@ -203,6 +211,8 @@ interface FormFieldProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+  error?: string;
+  errorId?: string;
 }
 
 export function FormField({
@@ -214,21 +224,39 @@ export function FormField({
   disabled,
   required,
   className,
+  error,
+  errorId,
 }: FormFieldProps) {
+  const inputId = errorId || undefined;
   return (
     <div className={clsx("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+      <label
+        htmlFor={inputId}
+        className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground"
+      >
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
-      <input
+      <Input
+        id={inputId}
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] disabled:opacity-50 dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error && errorId ? `${errorId}-error` : undefined}
+        className={clsx(
+          error
+            ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-red-500/55"
+            : "",
+        )}
       />
+      {error && errorId && (
+        <p id={`${errorId}-error`} className="text-xs text-red-500" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -258,27 +286,22 @@ export function SelectField({
 }: SelectFieldProps) {
   return (
     <div className={clsx("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+      <label className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}
       </label>
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        disabled={disabled}
-        className="rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] disabled:opacity-50 dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:focus:border-[#08aee5]"
-      >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue placeholder={placeholder} />
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
     </div>
   );
 }

@@ -111,7 +111,7 @@ export function UserProfileMenu({
       <button
         type="button"
         onClick={handleToggleMenu}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[#06a8a8] text-sm font-bold text-[#e8fffe] shadow-[0_0_0_1px_rgba(4,17,24,0.1)] transition-transform hover:scale-[1.03]"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-[0_0_0_1px_rgba(4,17,24,0.1)] transition-transform hover:scale-[1.03]"
         aria-expanded={isOpen}
         aria-label={openMenuLabel}
       >
@@ -119,21 +119,21 @@ export function UserProfileMenu({
       </button>
 
       {isOpen ? (
-        <div className="gerit-animate-enter absolute right-0 top-12 z-30 w-[19rem] overflow-hidden rounded-[1.75rem] border border-[#d1d8dc] bg-[#f6f7f8] shadow-[0_28px_54px_rgba(0,0,0,0.12)] dark:border-[#17313a] dark:bg-[#07161d] dark:shadow-[0_30px_60px_rgba(0,0,0,0.45)]">
+        <div className="gerit-animate-enter absolute right-0 top-12 z-30 w-[19rem] overflow-hidden rounded-[1.75rem] border border-border bg-card shadow-[0_28px_54px_rgba(0,0,0,0.12)] dark:border-border dark:bg-card dark:shadow-[0_30px_60px_rgba(0,0,0,0.45)]">
           <div className="flex justify-end px-4 pt-4">
-            <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#06a8a8] text-xs font-bold text-[#e8fffe]">
+            <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-primary text-xs font-bold text-primary-foreground">
               {initials}
             </div>
           </div>
 
-          <div className="border-b border-[#cfd7db] px-6 pb-6 pt-3 text-center dark:border-[#17313a]">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-[#06a8a8] text-[1.9rem] font-semibold text-[#e8fffe]">
+          <div className="border-b border-border px-6 pb-6 pt-3 text-center dark:border-border">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-[1.9rem] font-semibold text-primary-foreground">
               {initials}
             </div>
-            <p className="mt-4 text-[1.65rem] font-semibold leading-none text-[#3b4349] dark:text-[#dce8ee]">
+            <p className="mt-4 text-[1.65rem] font-semibold leading-none text-foreground dark:text-foreground">
               {displayName}
             </p>
-            <p className="mt-3 text-sm text-[#98a4aa] dark:text-[#91a8b2]">
+            <p className="mt-3 text-sm text-muted-foreground dark:text-muted-foreground">
               {displayEmail}
             </p>
           </div>
@@ -142,10 +142,10 @@ export function UserProfileMenu({
             <button
               type="button"
               onClick={handleProfileClick}
-              className="flex w-full items-center gap-3 px-2 py-4 text-left text-[1.08rem] text-[#5d696f] transition-colors hover:text-[#11191f] dark:text-[#d7e3e8] dark:hover:text-white"
+              className="flex w-full items-center gap-3 px-2 py-4 text-left text-[1.08rem] text-muted-foreground transition-colors hover:text-foreground dark:text-muted-foreground dark:hover:text-foreground"
             >
               <UserCircle2
-                className="h-5 w-5 text-[#b7c0c5] dark:text-[#c7d7de]"
+                className="h-5 w-5 text-muted-foreground dark:text-muted-foreground"
                 aria-hidden="true"
               />
               <span>{profileLabel}</span>
@@ -154,10 +154,10 @@ export function UserProfileMenu({
             <button
               type="button"
               onClick={handlePreferencesClick}
-              className="flex w-full items-center gap-3 border-t border-[#cfd7db] px-2 py-4 text-left text-[1.08rem] text-[#5d696f] transition-colors hover:text-[#11191f] dark:border-[#17313a] dark:text-[#d7e3e8] dark:hover:text-white"
+              className="flex w-full items-center gap-3 border-t border-border px-2 py-4 text-left text-[1.08rem] text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
             >
               <Settings
-                className="h-5 w-5 text-[#b7c0c5] dark:text-[#c7d7de]"
+                className="h-5 w-5 text-muted-foreground dark:text-muted-foreground"
                 aria-hidden="true"
               />
               <span>{preferencesLabel}</span>
@@ -166,10 +166,10 @@ export function UserProfileMenu({
             <button
               type="button"
               onClick={handleSignOutClick}
-              className="flex w-full items-center gap-3 border-t border-[#cfd7db] px-2 py-4 text-left text-[1.08rem] text-[#5d696f] transition-colors hover:text-[#11191f] dark:border-[#17313a] dark:text-[#d7e3e8] dark:hover:text-white"
+              className="flex w-full items-center gap-3 border-t border-border px-2 py-4 text-left text-[1.08rem] text-muted-foreground transition-colors hover:text-foreground dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
             >
               <LogOut
-                className="h-5 w-5 text-[#b7c0c5] dark:text-[#c7d7de]"
+                className="h-5 w-5 text-muted-foreground dark:text-muted-foreground"
                 aria-hidden="true"
               />
               <span>{signOutLabel}</span>

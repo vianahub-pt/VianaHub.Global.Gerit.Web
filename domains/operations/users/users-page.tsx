@@ -2,16 +2,18 @@
 
 import clsx from "clsx";
 import { SquarePen, Trash2, UserRoundPlus, Power, Loader2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
+import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
   HubGrid,
   type HubGridColumn,
   type RowDensity,
 } from "@/shared/hub-grid";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   useIdentityPreferences,
   type DateFormatPreference,
@@ -253,7 +255,7 @@ export function UsersPage() {
     locale: userLocale,
   } = preferences.state;
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("active");
+  const [statusFilter, setStatusFilter] = useState<UserStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");
@@ -270,6 +272,8 @@ export function UsersPage() {
   const [formState, setFormState] =
     useState<UserFormState>(initialUserFormState);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteConfirmUserRef = useRef<UserItem | null>(null);
 
   const detailVisible = userDetailMode !== "hidden";
 
@@ -278,22 +282,22 @@ export function UsersPage() {
       {
         key: "Name",
         label: t("users.table.name"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Email",
         label: t("users.table.email"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Phone",
         label: t("users.table.phone"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "LastAccessAt",
         label: t("users.table.lastAccessAt"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
     ],
     [t],
@@ -394,6 +398,7 @@ export function UsersPage() {
         },
       );
 
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       const candidate = payload as UsersPagedResponse;
 
@@ -463,6 +468,7 @@ export function UsersPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -492,20 +498,25 @@ export function UsersPage() {
   );
 
   const handleDeleteUser = useCallback(
-    async (user: UserItem) => {
-      const confirmed = window.confirm(
-        t("users.confirm.delete", { name: user.name }),
-      );
+    (user: UserItem) => {
+      deleteConfirmUserRef.current = user;
+      setDeleteConfirmOpen(true);
+    },
+    [],
+  );
 
-      if (!confirmed) {
-        return;
-      }
+  const handleDeleteUserConfirm = useCallback(async () => {
+    const user = deleteConfirmUserRef.current;
+    deleteConfirmUserRef.current = null;
+    setDeleteConfirmOpen(false);
+    if (!user) return;
 
-      try {
+    try {
         const response = await fetchWithAuth(`/api/gerit/v1/users/${user.id}`, {
           method: "DELETE",
         });
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -553,6 +564,7 @@ export function UsersPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
 
         if (!response.ok) {
@@ -613,8 +625,8 @@ export function UsersPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           user.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
         )}
       >
         {user.isActive ? t("users.status.active") : t("users.status.inactive")}
@@ -632,10 +644,10 @@ export function UsersPage() {
             event.stopPropagation();
             handleUserSelection(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#000000] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -643,14 +655,14 @@ export function UsersPage() {
             event.stopPropagation();
             void handleToggleStatus(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#0cbbf6] dark:border-[#000000] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             user.isActive
               ? t("users.actions.deactivate")
               : t("users.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -658,10 +670,10 @@ export function UsersPage() {
             event.stopPropagation();
             void handleDeleteUser(user);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#000000] dark:text-[#8EE0FB] transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
       </div>
     ),
@@ -671,9 +683,9 @@ export function UsersPage() {
   const gridToolbar = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-[#d9dee2] bg-white px-4 text-sm font-medium text-[#1f2f3f] transition-colors hover:border-[#b4c2d9] hover:bg-[#f0f3fb] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#c9d8df] dark:hover:bg-[#2c404c]">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
           {bulkUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#08aee5]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : null}
           {t("users.bulk.upload.label")}
           <input
@@ -691,7 +703,7 @@ export function UsersPage() {
         <button
           type="button"
           onClick={showCreateForm}
-          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#08aee5] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6]"
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
           {t("users.actions.add")}
@@ -717,7 +729,7 @@ export function UsersPage() {
     if (!name) {
       toast({
         title: t("users.toasts.validationTitle"),
-        description: t("users.validation.required"),
+        description: `${t("users.validation.required")} ${t("users.validation.suggestion")}`,
         variant: "destructive",
       });
       return;
@@ -745,6 +757,7 @@ export function UsersPage() {
         body: JSON.stringify(payload),
       });
 
+      if (!response) return;
       const responsePayload = (await response
         .json()
         .catch(() => null)) as unknown;
@@ -808,14 +821,14 @@ export function UsersPage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#1f2f3e]">
-          <div className="mb-5 overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0d1c29] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-5 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
+          <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 bg-muted px-6 py-5 dark:border-border dark:bg-muted">
               <div>
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[#0f172a] dark:text-white">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-foreground dark:text-foreground">
                   {t("users.title")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#000000] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-foreground dark:text-muted-foreground">
                   {t("users.subtitle")}
                 </p>
               </div>
@@ -873,15 +886,15 @@ export function UsersPage() {
           />
           {detailVisible ? (
             <div className="mt-6 flex flex-col gap-4">
-              <section className="rounded-sm border border-[#d9dee2] bg-white p-5 dark:border-[#000000] dark:bg-[#1f2f3e]">
+              <section className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h2 className="text-lg font-semibold text-[#0f172a] dark:text-[#d6e6ee]">
+                    <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
                       {selectedUser
                         ? t("users.form.editTitle")
                         : t("users.form.newTitle")}
                     </h2>
-                    <p className="text-sm text-[#4f5c6a] dark:text-[#9eb1bc]">
+                    <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.subtitle")}
                     </p>
                   </div>
@@ -892,10 +905,10 @@ export function UsersPage() {
                   onSubmit={handleSubmit}
                 >
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.name")}
                     </span>
-                    <input
+                    <Input
                       value={formState.name}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -903,15 +916,15 @@ export function UsersPage() {
                           name: event.target.value,
                         }))
                       }
-                      className="h-11 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#d6e6ee]"
                       placeholder={t("users.form.name")}
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.08em] text-[#8da7b4] dark:text-[#7d9aa8]">
+                    <span className="mb-2 block text-xs font-semibold text-muted-foreground dark:text-muted-foreground">
                       {t("users.form.email")}
                     </span>
-                    <textarea
+                    <Input
+                      type="email"
                       value={formState.email}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -919,8 +932,6 @@ export function UsersPage() {
                           email: event.target.value,
                         }))
                       }
-                      rows={3}
-                      className="h-24 w-full rounded-sm border border-[#c9d2e0] bg-white px-3 py-2 text-sm text-[#1f2f3f] outline-none placeholder:text-[#6b7280] focus:border-[#11b7ff] dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#d6e6ee]"
                       placeholder={t("users.form.email")}
                     />
                   </label>
@@ -929,14 +940,14 @@ export function UsersPage() {
                       type="button"
                       onClick={hideDetail}
                       disabled={submitting}
-                      className="h-11 rounded-sm border border-[#d9dee2] bg-white px-5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#0cbbf6] hover:text-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#000000] dark:bg-[#1f2f3e] dark:text-[#c4d6de] dark:hover:text-white"
+                      className="h-11 rounded-sm border border-border bg-card px-5 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:text-foreground"
                     >
                       {t("users.actions.cancel")}
                     </button>
                     <button
                       type="submit"
                       disabled={submitting}
-                      className="h-11 rounded-sm bg-[#08aee5] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6] disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-11 rounded-sm bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("users.actions.save")}
                     </button>
@@ -947,6 +958,19 @@ export function UsersPage() {
           ) : null}
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t("users.toasts.validationTitle")}
+        description={
+          deleteConfirmUserRef.current
+            ? t("users.confirm.delete", { name: deleteConfirmUserRef.current.name })
+            : ""
+        }
+        confirmLabel={t("users.actions.delete")}
+        cancelLabel={t("users.actions.cancel")}
+        onConfirm={() => void handleDeleteUserConfirm()}
+      />
     </WorkspaceShell>
   );
 }

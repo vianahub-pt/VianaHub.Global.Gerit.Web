@@ -1,18 +1,19 @@
 "use client";
 
-import clsx from "clsx";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { ChevronLeft, ChevronRight, MoonStar, SunMedium } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { DashboardShellProvider, useDashboardShell } from "@/shared/layout";
-import { TenantSidebar } from "@/shared/layout/tenant-sidebar";
+import { HubNav } from "@/shared/layout/hub-nav";
+import { HubMenu } from "@/shared/layout/hub-menu";
+import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
 function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -21,6 +22,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const { state, toggleSidebar } = useDashboardShell();
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const menuSections = useWorkspaceMenuConfig();
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
 
   const isDark = mounted ? resolvedTheme === "dark" : false;
   const tenantName = session?.tenantName?.trim() ?? "";
@@ -52,26 +57,44 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     }
   }, [isAuthenticated, isHydrating, router]);
 
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileMenuOpen(false);
+        hamburgerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [mobileMenuOpen]);
+
   if (isHydrating || !isAuthenticated) {
-    return <div className="h-screen bg-[#041118]" aria-hidden="true" />;
+    return <div className="h-screen bg-background" aria-hidden="true" />;
   }
 
   return (
     <div
-      className="gerit-shell h-screen overflow-hidden bg-[#f3f5f7] text-[#11191f] dark:bg-[#041118] dark:text-slate-100"
+      className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
       data-collapsed={state.sidebarCollapsed}
     >
-      <header className="relative z-20 flex h-14 items-center justify-between border-b border-[#d9dee2] bg-[#f7f8fa] px-4 sm:px-6 dark:border-[#17313a] dark:bg-[#041118]">
-        <div className="flex min-w-0 items-center">
-          <div
-            className={clsx(
-              "flex shrink-0 items-center px-2",
-              state.sidebarCollapsed ? "w-[4.25rem]" : "w-[10.25rem]",
-            )}
-          >
+      <HubNav
+        left={
+          <>
+            <button
+              ref={hamburgerRef}
+              type="button"
+              className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Abrir menu"
+              aria-expanded={mobileMenuOpen}
+              aria-controls="mobile-menu"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
             <Link
               href="/"
-              className="flex h-10 w-full items-center justify-center rounded-full transition-colors hover:bg-[#edf3f6] dark:hover:bg-[#0d1f28]"
+              className="flex items-center justify-center rounded-lg transition-colors hover:bg-secondary px-2 py-1"
               aria-label={copy.openDashboard}
             >
               <GeritLogo
@@ -80,60 +103,96 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
                 alt={copy.brand}
                 width={142}
                 height={36}
-                className="h-9 w-auto"
+                className="h-8 w-auto"
                 priority
               />
             </Link>
-          </div>
+          </>
+        }
+        logo={tenantName ? (
+          <>
+            <span className="mx-2 text-muted-foreground" aria-hidden="true">|</span>
+            <p className="truncate text-sm font-semibold text-foreground">
+              {tenantName}
+            </p>
+          </>
+        ) : undefined}
+        right={
+          <>
+            <button
+              type="button"
+              onClick={() => setTheme(isDark ? "light" : "dark")}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
+              aria-label={
+                isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
+              }
+            >
+              {mounted && isDark ? (
+                <SunMedium className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <MoonStar className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+            <UserProfileMenu
+              openMenuLabel={copy.openUserMenu}
+              fallbackName={copy.fallbackName}
+              fallbackEmail={copy.fallbackEmail}
+              profileLabel={copy.profileLabel}
+              profileDescription={copy.profileDescription}
+              preferencesLabel={copy.preferencesLabel}
+              signOutLabel={copy.signOutLabel}
+            />
+          </>
+        }
+      />
 
-          {tenantName ? (
-            <>
-              <span className="mx-2 h-7 w-px shrink-0 bg-[#d7dfe3] dark:bg-[#21424d]" />
-              <p className="truncate text-sm font-medium text-[#4a5860] dark:text-[#b9cbd3]">
-                {tenantName}
-              </p>
-            </>
-          ) : null}
-        </div>
-
-        <div className="relative ml-4 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setTheme(isDark ? "light" : "dark");
-            }}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-[#ced5da] bg-[#f8fafb] text-[#73818a] transition-colors hover:text-[#11191f] dark:border-[#23414b] dark:bg-[#06161d] dark:text-[#a0b2ba] dark:hover:text-white"
-            aria-label={
-              isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
-            }
-          >
-            {mounted && isDark ? (
-              <SunMedium className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <MoonStar className="h-4 w-4" aria-hidden="true" />
-            )}
-          </button>
-
-          <UserProfileMenu
-            openMenuLabel={copy.openUserMenu}
-            fallbackName={copy.fallbackName}
-            fallbackEmail={copy.fallbackEmail}
-            profileLabel={copy.profileLabel}
-            profileDescription={copy.profileDescription}
-            preferencesLabel={copy.preferencesLabel}
-            signOutLabel={copy.signOutLabel}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div
+            className="fixed inset-0 bg-black/50"
+            onClick={() => setMobileMenuOpen(false)}
           />
+          <aside
+            id="mobile-menu"
+            ref={mobileMenuRef}
+            role="dialog"
+            aria-modal="true"
+            className="fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-xl animate-slide-in-left"
+          >
+            <div className="flex h-14 items-center justify-between border-b px-4">
+              <GeritLogo variant="horizontal" width={120} height={30} />
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  hamburgerRef.current?.focus();
+                }}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
+                aria-label="Fechar menu"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <HubMenu sections={menuSections} collapsed={false} onToggleCollapse={() => {}} />
+          </aside>
         </div>
-      </header>
+      )}
 
-      <div className="flex h-[calc(100vh-3.5rem)] min-h-0">
-        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-[#d9dee2] bg-[#eef1f4] dark:border-[#17313a] dark:bg-[#07161d] lg:flex">
-          <TenantSidebar collapsed={state.sidebarCollapsed} />
+      <div
+        className="flex h-[calc(100vh-3.5rem)] min-h-0"
+        aria-hidden={mobileMenuOpen ? true : undefined}
+      >
+        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
+          <HubMenu
+            sections={menuSections}
+            collapsed={state.sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+          />
 
           <button
             type="button"
             onClick={toggleSidebar}
-            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-[#d9dee2] bg-[#eef1f4] text-[#acb5bb] transition-colors hover:text-[#526168] dark:border-[#17313a] dark:bg-[#07161d] dark:text-[#8096a0] dark:hover:text-white"
+            className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
             aria-label={copy.toggleSidebar}
             aria-expanded={!state.sidebarCollapsed}
           >
@@ -145,7 +204,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </button>
         </aside>
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-[#f5f6f8] dark:bg-[#0a171f]">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background dark:bg-background">
           {children}
         </main>
       </div>

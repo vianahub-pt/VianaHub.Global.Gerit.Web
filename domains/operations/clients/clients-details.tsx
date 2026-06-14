@@ -3,6 +3,8 @@
 import clsx from "clsx";
 import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { Textarea } from "@/shared/ui/textarea";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -358,6 +360,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [contactFormState, setContactFormState] = useState<ContactFormState>(initialContactFormState);
   const [editingContact, setEditingContact] = useState<ContactItem | null>(null);
   const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactDeleteConfirmOpen, setContactDeleteConfirmOpen] = useState(false);
+  const contactDeleteRef = useRef<ContactItem | null>(null);
   const [contactsBulkUploading, setContactsBulkUploading] = useState(false);
 
   /* ---------- Addresses state ---------- */
@@ -367,6 +371,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [addressFormState, setAddressFormState] = useState<AddressFormState>(initialAddressFormState);
   const [editingAddress, setEditingAddress] = useState<AddressItem | null>(null);
   const [addressSubmitting, setAddressSubmitting] = useState(false);
+  const [addressDeleteConfirmOpen, setAddressDeleteConfirmOpen] = useState(false);
+  const addressDeleteRef = useRef<AddressItem | null>(null);
   const [addressesBulkUploading, setAddressesBulkUploading] = useState(false);
 
   /* ---------- Tab & lazy loading state ---------- */
@@ -451,6 +457,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setLoadingClient(true);
     try {
       const response = await fetchWithAuth(`/api/gerit/v1/clients/${clientId}`, { method: "GET" });
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.errors.load")));
@@ -551,6 +558,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         `/api/gerit/v1/clients/${client.id}/contacts/paged?${query.toString()}`,
         { method: "GET" },
       );
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.contacts.errors.load")));
@@ -592,6 +600,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         `/api/gerit/v1/clients/${client.id}/addresses/paged?${query.toString()}`,
         { method: "GET" },
       );
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(payload, t("clients.addresses.errors.load")));
@@ -764,6 +773,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(normalizeErrorMessage(responsePayload, t("clients.errors.save")));
@@ -851,6 +861,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         ? `/api/gerit/v1/clients/${client.id}/deactivate`
         : `/api/gerit/v1/clients/${client.id}/activate`;
       const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+      if (!response) return;
       const responsePayload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
         throw new Error(normalizeErrorMessage(responsePayload, t("clients.errors.status")));
@@ -908,6 +919,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -957,6 +969,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           ? `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -988,17 +1001,24 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   );
 
   const handleContactDelete = useCallback(
-    async (contact: ContactItem) => {
-      const confirmed = window.confirm(
-        t("clients.contacts.confirm.delete", { name: contact.name }),
-      );
-      if (!confirmed) return;
-      if (!client?.id) return;
-      try {
+    (contact: ContactItem) => {
+      contactDeleteRef.current = contact;
+      setContactDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleContactDeleteConfirm = useCallback(async () => {
+    const contact = contactDeleteRef.current;
+    contactDeleteRef.current = null;
+    setContactDeleteConfirmOpen(false);
+    if (!contact || !client?.id) return;
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}`,
           { method: "DELETE" },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1064,6 +1084,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1115,6 +1136,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           ? `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/addresses/${address.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1145,18 +1167,24 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   );
 
   const handleAddressDelete = useCallback(
-    async (address: AddressItem) => {
-      const label = address.street ?? t("clients.addresses.table.street");
-      const confirmed = window.confirm(
-        t("clients.addresses.confirm.delete", { street: label }),
-      );
-      if (!confirmed) return;
-      if (!client?.id) return;
-      try {
+    (address: AddressItem) => {
+      addressDeleteRef.current = address;
+      setAddressDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleAddressDeleteConfirm = useCallback(async () => {
+    const address = addressDeleteRef.current;
+    addressDeleteRef.current = null;
+    setAddressDeleteConfirmOpen(false);
+    if (!address || !client?.id) return;
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}/addresses/${address.id}`,
           { method: "DELETE" },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1197,6 +1225,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/contacts/bulk-upload`,
           { method: "POST", body: formData },
         );
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1241,6 +1270,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           `/api/gerit/v1/clients/${client.id}/addresses/bulk-upload`,
           { method: "POST", body: formData },
         );
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -1393,7 +1423,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-muted-foreground dark:text-muted-foreground",
         )}
       >
         {contact.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -1408,30 +1438,30 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleContactEdit(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#1f2f3f] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleContactToggleStatus(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             contact.isActive
               ? t("clients.actions.deactivate")
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleContactDelete(contact)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
       </div>
     ),
@@ -1540,7 +1570,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       <span
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-[#3E515B] dark:text-[#84a0c0]",
+          "text-muted-foreground dark:text-muted-foreground",
         )}
       >
         {address.isActive ? t("clients.status.active") : t("clients.status.inactive")}
@@ -1555,30 +1585,30 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => handleAddressEdit(address)}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#1f2f3f] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleAddressToggleStatus(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
           title={
             address.isActive
               ? t("clients.actions.deactivate")
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
         <button
           type="button"
           onClick={() => void handleAddressDelete(address)}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
         </button>
       </div>
     ),
@@ -1639,8 +1669,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1754,10 +1784,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         </div>
         {/* Line 7: Observações — abaixo do grid */}
         <div className="mt-4">
-          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+          <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
-          <textarea
+          <Textarea
             value={clientFormState.note}
             onChange={(event) =>
               setClientFormState((prev) => ({
@@ -1766,7 +1796,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
           />
         </div>
       </div>
@@ -1778,8 +1807,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -1875,10 +1904,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           />
           {/* Line 7: Observações (full width) */}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
-            <textarea
+            <Textarea
               value={clientFormState.note}
               onChange={(event) =>
                 setClientFormState((prev) => ({
@@ -1887,7 +1916,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
             />
           </div>
         </div>
@@ -1922,7 +1950,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="button"
           onClick={() => router.push("/clients/")}
-          className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+          className="inline-flex items-center gap-2 rounded-sm border border-border bg-background px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
         >
           <ArrowLeft className="h-4 w-4" />
           {t("clients.actions.back")}
@@ -1930,7 +1958,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         <button
           type="submit"
           disabled={submittingClient}
-          className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+          className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
         >
           {submittingClient && <Loader2 className="h-4 w-4 animate-spin" />}
           {t("clients.actions.save")}
@@ -1944,7 +1972,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderContactsTab = () => {
     if (!loadedTabs.has("contactos")) {
       return (
-        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
         </div>
       );
@@ -1955,7 +1983,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Contact form */}
         <form
           onSubmit={(e) => void handleContactSubmit(e)}
-          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField
@@ -1987,7 +2015,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             <button
               type="submit"
               disabled={contactSubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
             >
               {contactSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editingContact ? t("clients.actions.save") : t("clients.actions.add")}
@@ -1996,13 +2024,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               <button
                 type="button"
                 onClick={resetContactForm}
-                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
               >
                 {t("clients.actions.cancel")}
               </button>
             )}
             {/* Bulk upload */}
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
               {contactsBulkUploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
@@ -2069,7 +2097,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const renderAddressesTab = () => {
     if (!loadedTabs.has("enderecos")) {
       return (
-        <div className="flex items-center justify-center py-12 text-sm text-[#94a5b4]">
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
         </div>
       );
@@ -2080,7 +2108,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         {/* Address form */}
         <form
           onSubmit={(e) => void handleAddressSubmit(e)}
-          className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-4 dark:border-[#1c2c3a] dark:bg-[#101827]"
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField
@@ -2125,7 +2153,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             <button
               type="submit"
               disabled={addressSubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
             >
               {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
               {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
@@ -2134,13 +2162,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               <button
                 type="button"
                 onClick={resetAddressForm}
-                className="rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
               >
                 {t("clients.actions.cancel")}
               </button>
             )}
             {/* Bulk upload */}
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-4 py-2 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]">
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
               {addressesBulkUploading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
@@ -2209,21 +2237,36 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#243143]">
+        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-muted px-4 py-4 sm:px-6 dark:bg-muted">
           {/* ---------- Header ---------- */}
-          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-background px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-muted hover:text-primary dark:hover:bg-muted dark:hover:text-primary"
                 title={t("clients.actions.back")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
+                <nav aria-label="Breadcrumb" className="mb-1">
+                  <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <li>
+                      <button type="button" onClick={() => router.push("/clients/")} className="hover:text-primary transition-colors">
+                        {t("clients.title")}
+                      </button>
+                    </li>
+                    <li aria-hidden="true">/</li>
+                    <li className="text-foreground font-medium" aria-current="page">
+                      {isEditing
+                        ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
+                        : t("clients.form.newTitle")}
+                    </li>
+                  </ol>
+                </nav>
                 <div className="flex items-center gap-3">
-                  <h1 className="text-2xl font-semibold text-[#0f172a] dark:text-white sm:text-3xl">
+                  <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                     {isEditing
                       ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
                       : t("clients.form.newTitle")}
@@ -2241,7 +2284,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {client ? client.clientTypeDescription ?? "" : t("clients.detail.helper")}
                 </p>
               </div>
@@ -2268,8 +2311,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {/* ---------- Loading state ---------- */}
           {loadingClient && (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-[#08aee5]" />
-              <span className="ml-3 text-sm text-[#7aa4c0] dark:text-[#84a0c0]">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <span className="ml-3 text-sm text-muted-foreground dark:text-muted-foreground">
                 {t("clients.loading")}
               </span>
             </div>
@@ -2301,6 +2344,32 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={contactDeleteConfirmOpen}
+        onOpenChange={setContactDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          contactDeleteRef.current
+            ? t("clients.contacts.confirm.delete", { name: contactDeleteRef.current.name })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleContactDeleteConfirm()}
+      />
+      <ConfirmDialog
+        open={addressDeleteConfirmOpen}
+        onOpenChange={setAddressDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          addressDeleteRef.current
+            ? t("clients.addresses.confirm.delete", { street: addressDeleteRef.current.street ?? t("clients.addresses.table.street") })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleAddressDeleteConfirm()}
+      />
     </WorkspaceShell>
   );
 }

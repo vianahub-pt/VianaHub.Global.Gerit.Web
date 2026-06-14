@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { cn } from "@/shared/ui/utils";
 
 type GeritLogoVariant = "horizontal" | "wordmark";
 type GeritLogoTheme = "light" | "dark";
@@ -19,14 +20,20 @@ const logoSources: Record<GeritLogoVariant, Record<GeritLogoTheme, string>> = {
     dark: "/logo/gerit-horizontal-dark.svg",
   },
   wordmark: {
-    light: "/logo/gerit-wordmark-light.svg",
-    dark: "/logo/gerit-wordmark-dark.svg",
+    light: "/logo/gerit-horizontal-light.svg",
+    dark: "/logo/gerit-horizontal-dark.svg",
   },
 };
 
 const logoSizes: Record<GeritLogoVariant, { width: number; height: number }> = {
   horizontal: { width: 640, height: 160 },
   wordmark: { width: 520, height: 120 },
+};
+
+/** object-position para centralizar o conteúdo visual do SVG dentro do container */
+const logoObjectPosition: Record<GeritLogoVariant, string> = {
+  horizontal: "69% center",
+  wordmark: "50% center",
 };
 
 export function GeritLogo({
@@ -47,7 +54,8 @@ export function GeritLogo({
       width={width ?? intrinsicSize.width}
       height={height ?? intrinsicSize.height}
       priority={priority}
-      className={className}
+      className={cn("block", className)}
+      style={{ objectPosition: logoObjectPosition[variant] }}
     />
   );
 }

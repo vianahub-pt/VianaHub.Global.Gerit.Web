@@ -9,7 +9,7 @@ import {
   Trash2,
   UserRoundPlus,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -21,6 +21,7 @@ import {
   type HubGridColumn,
   type RowDensity,
 } from "@/shared/hub-grid";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ClientItem } from "@/domains/operations/clients/client-models";
 import {
   ClientsPagedResponse,
@@ -41,7 +42,7 @@ export function ClientsPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] =
-    useState<ClientStatusFilter>("active");
+    useState<ClientStatusFilter>("all");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSizeOption>(10);
   const [rowDensity, setRowDensity] = useState<RowDensity>("medium");
@@ -50,6 +51,8 @@ export function ClientsPage() {
   const [clients, setClients] = useState<ClientItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [clientsBulkUploading, setClientsBulkUploading] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const deleteConfirmClientRef = useRef<ClientItem | null>(null);
   const [sortBy, setSortBy] = useState<SortColumn>("Name");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
@@ -84,6 +87,8 @@ export function ClientsPage() {
           method: "GET",
         },
       );
+
+      if (!response) return;
 
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) {
@@ -194,6 +199,7 @@ export function ClientsPage() {
           ? `/api/gerit/v1/clients/${client.id}/deactivate`
           : `/api/gerit/v1/clients/${client.id}/activate`;
         const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -227,21 +233,27 @@ export function ClientsPage() {
   );
 
   const handleDeleteClient = useCallback(
-    async (client: ClientItem) => {
-      const confirmed = window.confirm(
-        t("clients.confirm.delete", { name: client.name }),
-      );
-      if (!confirmed) {
-        return;
-      }
+    (client: ClientItem) => {
+      deleteConfirmClientRef.current = client;
+      setDeleteConfirmOpen(true);
+    },
+    [],
+  );
 
-      try {
+  const handleDeleteConfirm = useCallback(async () => {
+    const client = deleteConfirmClientRef.current;
+    deleteConfirmClientRef.current = null;
+    setDeleteConfirmOpen(false);
+    if (!client) return;
+
+    try {
         const response = await fetchWithAuth(
           `/api/gerit/v1/clients/${client.id}`,
           {
             method: "DELETE",
           },
         );
+        if (!response) return;
         const responsePayload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -291,6 +303,7 @@ export function ClientsPage() {
           },
         );
 
+        if (!response) return;
         const payload = (await response.json().catch(() => null)) as unknown;
         if (!response.ok) {
           throw new Error(
@@ -335,22 +348,22 @@ export function ClientsPage() {
         key: "ClientType",
         label: t("clients.table.clientType"),
         sortable: true,
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Name",
         label: t("clients.table.name"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Email",
         label: t("clients.table.email"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
       {
         key: "Phone",
         label: t("clients.table.phone"),
-        cellClassName: "text-[#3E515B] dark:text-[#84a0c0]",
+        cellClassName: "text-foreground dark:text-foreground",
       },
     ],
     [t],
@@ -371,9 +384,9 @@ export function ClientsPage() {
   const gridToolbar = useMemo(
     () => (
       <div className="flex flex-wrap items-center gap-2">
-        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-[#d1d9e5] bg-white px-4 text-sm font-medium text-[#1f2f3f] transition-colors hover:border-[#b4c2d9] hover:bg-[#f0f3fb] dark:border-[#405360] dark:bg-[#263844] dark:text-[#c9d8df] dark:hover:bg-[#2c404c]">
+        <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
           {clientsBulkUploading ? (
-            <Loader2 className="h-4 w-4 animate-spin text-[#08aee5]" />
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
           ) : null}
           {t("clients.bulk.upload.label")}
           <input
@@ -391,7 +404,7 @@ export function ClientsPage() {
         <button
           type="button"
           onClick={() => openClientDetails()}
-          className="inline-flex h-10 items-center gap-2 rounded-sm bg-[#08aee5] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#0cbbf6]"
+          className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <UserRoundPlus className="h-4 w-4" aria-hidden="true" />
           {t("clients.actions.add")}
@@ -436,8 +449,8 @@ export function ClientsPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           client.isActive
-            ? "text-[#3E515B] dark:text-[#84a0c0]"
-            : "text-[#3E515B] dark:text-[#84a0c0]",
+            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
         )}
       >
         {client.isActive
@@ -457,10 +470,10 @@ export function ClientsPage() {
             event.stopPropagation();
             openClientDetails(client.id);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-[#1f2f3f] transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.edit")}
         >
-          <SquarePen className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
         <button
           type="button"
@@ -468,7 +481,7 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleToggleStatus(client);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#0cbbf6] dark:border-[#38505d] dark:text-[#9eb1bc] dark:hover:text-white"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             client.isActive
               ? t("clients.actions.deactivate")
@@ -486,10 +499,10 @@ export function ClientsPage() {
             event.stopPropagation();
             void handleDeleteClient(client);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-[#ffd7e1]"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-[#3E515B] dark:text-[#84a0c0]" />
+          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
         </button>
       </div>
     ),
@@ -499,14 +512,14 @@ export function ClientsPage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#253542]">
-          <div className="mb-5 overflow-hidden rounded-sm border border-[#dfe6ed]/80 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#142435] dark:bg-[#0d1c29] dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
-            <div className="flex items-center justify-between gap-4 border-b border-[#dfe6ed]/70 bg-[#f4f6fb] px-6 py-5 dark:border-[#162235] dark:bg-[#0d1c29]">
+        <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
+          <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
+            <div className="flex items-center justify-between gap-4 border-b border-border/70 bg-muted px-6 py-5 dark:border-border dark:bg-muted">
               <div>
-                <h1 className="text-3xl font-semibold tracking-[0.03em] text-[#0f172a] dark:text-white">
+                <h1 className="text-3xl font-semibold tracking-[0.03em] text-foreground dark:text-foreground">
                   {t("clients.title")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {t("clients.subtitle")}
                 </p>
               </div>
@@ -563,6 +576,19 @@ export function ClientsPage() {
           />
         </div>
       </div>
+      <ConfirmDialog
+        open={deleteConfirmOpen}
+        onOpenChange={setDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          deleteConfirmClientRef.current
+            ? t("clients.confirm.delete", { name: deleteConfirmClientRef.current.name })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleDeleteConfirm()}
+      />
     </WorkspaceShell>
   );
 }

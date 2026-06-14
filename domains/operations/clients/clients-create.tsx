@@ -8,7 +8,11 @@ import { useTranslation } from "@/platform/i18n";
 import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
-import { normalizeClient, normalizeClientError } from "@/domains/operations/clients/client-utils";
+import {
+  normalizeClient,
+  normalizeClientError,
+} from "@/domains/operations/clients/client-utils";
+import { Textarea } from "@/shared/ui/textarea";
 import {
   FormField,
   SelectField,
@@ -35,22 +39,21 @@ export function ClientsCreatePage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const [clientFormState, setClientFormState] = useState<ClientFormState>(initialClientFormState);
+  const [clientFormState, setClientFormState] = useState<ClientFormState>(
+    initialClientFormState,
+  );
   const [submitting, setSubmitting] = useState(false);
 
   /* ---------- Client type change handler ---------- */
 
-  const handleClientTypeChange = useCallback(
-    (newClientType: string) => {
-      setClientFormState((prev) => ({
-        ...prev,
-        clientType: newClientType,
-        individual: { ...initialIndividualFormState },
-        company: { ...initialCompanyFormState },
-      }));
-    },
-    [],
-  );
+  const handleClientTypeChange = useCallback((newClientType: string) => {
+    setClientFormState((prev) => ({
+      ...prev,
+      clientType: newClientType,
+      individual: { ...initialIndividualFormState },
+      company: { ...initialCompanyFormState },
+    }));
+  }, []);
 
   /* ---------- Individual form field updaters ---------- */
 
@@ -83,7 +86,9 @@ export function ClientsCreatePage() {
       ? Number(clientFormState.clientType)
       : null;
 
-  const showIndividualFields = isIndividualType(resolvedClientType ?? undefined);
+  const showIndividualFields = isIndividualType(
+    resolvedClientType ?? undefined,
+  );
   const showCompanyFields = isCompanyType(resolvedClientType ?? undefined);
 
   /* ---------- Render: Individual form fields ---------- */
@@ -91,8 +96,8 @@ export function ClientsCreatePage() {
   const renderIndividualFields = () => {
     const ind = clientFormState.individual;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.individual.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -206,10 +211,10 @@ export function ClientsCreatePage() {
         </div>
         {/* Line 7: Observações — abaixo do grid */}
         <div className="mt-4">
-          <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+          <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
             {t("clients.form.observation")}
           </label>
-          <textarea
+          <Textarea
             value={clientFormState.note}
             onChange={(event) =>
               setClientFormState((prev) => ({
@@ -218,7 +223,6 @@ export function ClientsCreatePage() {
               }))
             }
             rows={3}
-            className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
           />
         </div>
       </div>
@@ -230,8 +234,8 @@ export function ClientsCreatePage() {
   const renderCompanyFields = () => {
     const comp = clientFormState.company;
     return (
-      <div className="rounded-sm border border-[#cbd5e1] bg-[#f9fbff] p-5 dark:border-[#1c2c3a] dark:bg-[#101827]">
-        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-[#94a5b4] dark:text-[#8da7b4]">
+      <div className="rounded-sm border border-border bg-surface p-5 dark:border-border dark:bg-surface">
+        <p className="mb-4 text-sm font-semibold uppercase tracking-[0.2em] text-muted-foreground dark:text-muted-foreground">
           {t("clients.form.company.sectionTitle")}
         </p>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -327,10 +331,10 @@ export function ClientsCreatePage() {
           />
           {/* Line 7: Observações (full width) */}
           <div className="sm:col-span-2 lg:col-span-3">
-            <label className="mb-1.5 block text-sm font-semibold text-[#94a5b4] dark:text-[#8da7b4]">
+            <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
               {t("clients.form.observation")}
             </label>
-            <textarea
+            <Textarea
               value={clientFormState.note}
               onChange={(event) =>
                 setClientFormState((prev) => ({
@@ -339,7 +343,6 @@ export function ClientsCreatePage() {
                 }))
               }
               rows={3}
-              className="w-full rounded-sm border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#1f2c3e] placeholder:text-[#94a5b4] focus:border-[#08aee5] focus:outline-none focus:ring-1 focus:ring-[#08aee5] dark:border-[#1c2c3a] dark:bg-[#101827] dark:text-[#d6e6ee] dark:placeholder:text-[#5a7080] dark:focus:border-[#08aee5]"
             />
           </div>
         </div>
@@ -369,7 +372,7 @@ export function ClientsCreatePage() {
         if (!ind.firstName.trim() || !ind.lastName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.individualRequired"),
+            description: `${t("clients.validation.individualRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;
@@ -379,7 +382,7 @@ export function ClientsCreatePage() {
         if (!comp.legalName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.companyRequired"),
+            description: `${t("clients.validation.companyRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;
@@ -390,7 +393,7 @@ export function ClientsCreatePage() {
         if (!ind.firstName.trim() || !ind.lastName.trim()) {
           toast({
             title: t("clients.toasts.validationTitle"),
-            description: t("clients.validation.individualRequired"),
+            description: `${t("clients.validation.individualRequired")} ${t("clients.validation.suggestion")}`,
             variant: "destructive",
           });
           return;
@@ -415,7 +418,9 @@ export function ClientsCreatePage() {
         if (isIndividualType(clientTypeNumber ?? undefined)) {
           const ind = clientFormState.individual;
           payload.individual = {
-            displayName: ind.displayName.trim() || `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
+            displayName:
+              ind.displayName.trim() ||
+              `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),
             phoneNumber: ind.phoneNumber.trim(),
@@ -425,7 +430,8 @@ export function ClientsCreatePage() {
             birthDate: ind.birthDate.length > 0 ? ind.birthDate : null,
             gender: ind.gender.length > 0 ? ind.gender : null,
             documentType: ind.documentType.length > 0 ? ind.documentType : null,
-            documentNumber: ind.documentNumber.length > 0 ? ind.documentNumber : null,
+            documentNumber:
+              ind.documentNumber.length > 0 ? ind.documentNumber : null,
             nationality: ind.nationality.length > 0 ? ind.nationality : null,
           };
         } else if (isCompanyType(clientTypeNumber ?? undefined)) {
@@ -438,12 +444,20 @@ export function ClientsCreatePage() {
             isWhatsapp: comp.isWhatsapp,
             email: comp.email.trim() || null,
             site: comp.site.trim() || null,
-            companyRegistration: comp.companyRegistration.length > 0 ? comp.companyRegistration : null,
+            companyRegistration:
+              comp.companyRegistration.length > 0
+                ? comp.companyRegistration
+                : null,
             cae: comp.cae.length > 0 ? comp.cae : null,
-            numberOfEmployee: comp.numberOfEmployee.length > 0 && !Number.isNaN(Number(comp.numberOfEmployee))
-              ? Number(comp.numberOfEmployee)
-              : null,
-            legalRepresentative: comp.legalRepresentative.length > 0 ? comp.legalRepresentative : null,
+            numberOfEmployee:
+              comp.numberOfEmployee.length > 0 &&
+              !Number.isNaN(Number(comp.numberOfEmployee))
+                ? Number(comp.numberOfEmployee)
+                : null,
+            legalRepresentative:
+              comp.legalRepresentative.length > 0
+                ? comp.legalRepresentative
+                : null,
           };
         }
 
@@ -452,24 +466,54 @@ export function ClientsCreatePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response) return;
+        const responsePayload = (await response
+          .json()
+          .catch(() => null)) as unknown;
+        const statusCode = response.status;
         if (!response.ok) {
-          const normalized = normalizeClientError(responsePayload, t("clients.errors.save"));
+          const normalized = normalizeClientError(
+            responsePayload,
+            t("clients.errors.save"),
+          );
           const err = new Error(normalized.message);
           if (normalized.errorId) {
             (err as any).errorId = normalized.errorId;
           }
           throw err;
         }
+        let createdId: number | null = null;
         const normalized = normalizeClient(responsePayload);
         if (normalized) {
+          createdId = normalized.id;
+        } else {
+          // Fallback: extrai o id diretamente do payload bruto da API
+          // (o POST pode retornar formato diferente do GET)
+          const raw = responsePayload as Record<string, unknown> | null;
+          if (raw && typeof raw.id === "number") {
+            createdId = raw.id;
+          }
+        }
+
+        const isCreated = statusCode === 201;
+
+        // If API returned 201 (created) we should show success toast even when
+        // the API doesn't return the created resource id. If we do have an id,
+        // redirect to details; otherwise redirect to list after showing toast.
+        if (isCreated || createdId !== null) {
           toast({
             title: t("clients.toasts.successTitle"),
             description: t("clients.toasts.created"),
+            duration: 5000,
           });
+
           setTimeout(() => {
-            void router.replace(`/clients-details/${normalized.id}/`);
-          }, 1500);
+            if (createdId !== null) {
+              void router.replace(`/clients-details/${createdId}/`);
+            } else {
+              void router.replace(`/clients/`);
+            }
+          }, 3000);
         }
       } catch (error) {
         logError("clients.create", "Falha ao salvar cliente", error);
@@ -508,23 +552,36 @@ export function ClientsCreatePage() {
   return (
     <WorkspaceShell>
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-[#f5f6f8] px-4 py-4 sm:px-6 dark:bg-[#243143]">
+        <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           {/* ---------- Header ---------- */}
-          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-[#dfe6ed]/80 bg-white px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f] sm:flex-row sm:items-center sm:justify-between">
+          <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-4">
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-[#94a5b4] transition-colors hover:bg-[#f0f4f8] hover:text-[#08aee5] dark:hover:bg-[#1a2a36] dark:hover:text-[#08aee5]"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-primary dark:hover:bg-secondary dark:hover:text-primary"
                 title={t("clients.actions.back")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <h1 className="text-2xl font-semibold text-[#0f172a] dark:text-white sm:text-3xl">
+                <nav aria-label="Breadcrumb" className="mb-1">
+                  <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <li>
+                      <button type="button" onClick={() => router.push("/clients/")} className="hover:text-primary transition-colors">
+                        {t("clients.title")}
+                      </button>
+                    </li>
+                    <li aria-hidden="true">/</li>
+                    <li className="text-foreground font-medium" aria-current="page">
+                      {t("clients.form.newTitle")}
+                    </li>
+                  </ol>
+                </nav>
+                <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                   {t("clients.form.newTitle")}
                 </h1>
-                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-[#7aa4c0] dark:text-[#84a0c0]">
+                <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">
                   {t("clients.detail.helper")}
                 </p>
               </div>
@@ -534,7 +591,7 @@ export function ClientsCreatePage() {
           {/* ---------- Form ---------- */}
           <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
             {/* Client type selector */}
-            <div className="rounded-sm border border-[#dfe6ed]/80 bg-white p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-[#132131] dark:bg-[#0d161f]">
+            <div className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <SelectField
                   label={t("clients.form.clientType")}
@@ -558,7 +615,7 @@ export function ClientsCreatePage() {
               <button
                 type="button"
                 onClick={() => router.push("/clients/")}
-                className="inline-flex items-center gap-2 rounded-sm border border-[#c9d2e0] bg-white px-6 py-2.5 text-sm font-semibold text-[#1f2f3f] transition-colors hover:border-[#08aee5] hover:text-[#08aee5] dark:border-[#203040] dark:bg-[#0c1721] dark:text-[#8da7b4] dark:hover:border-[#08aee5] dark:hover:text-[#08aee5]"
+                className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary dark:border-input dark:bg-card dark:text-muted-foreground dark:hover:border-ring dark:hover:text-primary"
               >
                 <ArrowLeft className="h-4 w-4" />
                 {t("clients.actions.back")}
@@ -566,7 +623,7 @@ export function ClientsCreatePage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-sm bg-[#08aee5] px-6 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0695c5] disabled:opacity-50 dark:bg-[#11b7ff] dark:hover:bg-[#08aee5]"
+                className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
               >
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {t("clients.actions.save")}

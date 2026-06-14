@@ -4,7 +4,7 @@ export interface ClientIndividual {
   id?: number;
   tenantId?: number;
   clientId?: number;
-  displayName?: string;
+  fullName?: string;
   firstName?: string;
   lastName?: string;
   phoneNumber?: string;

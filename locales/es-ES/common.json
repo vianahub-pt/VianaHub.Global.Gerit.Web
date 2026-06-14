@@ -178,7 +178,7 @@
   "clients.form.individual.sectionTitle": "Datos de Persona Física",
   "clients.form.individual.firstName": "Nombre",
   "clients.form.individual.lastName": "Apellidos",
-  "clients.form.individual.displayName": "Nombre completo",
+  "clients.form.individual.fullName": "Nombre completo",
   "clients.form.individual.phoneNumber": "Teléfono",
   "clients.form.individual.cellPhoneNumber": "Móvil",
   "clients.form.individual.isWhatsapp": "WhatsApp",

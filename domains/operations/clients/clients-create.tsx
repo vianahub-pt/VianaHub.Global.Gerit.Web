@@ -104,9 +104,9 @@ export function ClientsCreatePage() {
           {/* Line 1: Nome completo — 3 colunas */}
           <div className="sm:col-span-2 lg:col-span-3">
             <FormField
-              label={t("clients.form.individual.displayName")}
-              value={ind.displayName}
-              onChange={(v) => updateIndividual("displayName", v)}
+              label={t("clients.form.individual.fullName")}
+              value={ind.fullName}
+              onChange={(v) => updateIndividual("fullName", v)}
             />
           </div>
           {/* Line 2: Nome próprio | Apelido | Origem */}
@@ -418,8 +418,8 @@ export function ClientsCreatePage() {
         if (isIndividualType(clientTypeNumber ?? undefined)) {
           const ind = clientFormState.individual;
           payload.individual = {
-            displayName:
-              ind.displayName.trim() ||
+            fullName:
+              ind.fullName.trim() ||
               `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
             firstName: ind.firstName.trim(),
             lastName: ind.lastName.trim(),

@@ -70,8 +70,6 @@ Para tarefas de média complexidade (CRUDs, formulários, grids, integrações e
 - Validação funcional/visual no código
 - Verificação de regressão
 
-**Relatório:** Obrigatório em `docs/reviews/`.
-
 ---
 
 ## QA_FULL
@@ -85,8 +83,6 @@ Para tarefas críticas, arquiteturais, de segurança ou performance.
 - Verificação de acessibilidade básica
 - Verificação de responsividade
 - Verificação de segurança e dados sensíveis
-
-**Relatório:** Completo em `docs/reviews/`.
 
 ---
 
@@ -157,10 +153,6 @@ PR pronto para merge.
 ### Resultado
 Implementação aprovada. Nenhum bug bloqueante.
 
-### Relatório
-`docs/reviews/NOME_RELATORIO.md`
-```
-
 ## Quando reprovado
 
 ```md
@@ -178,10 +170,6 @@ Implementação aprovada. Nenhum bug bloqueante.
 
 ### Motivo
 [explicar]
-
-### Relatório
-`docs/reviews/NOME_RELATORIO.md`
-```
 
 ---
 

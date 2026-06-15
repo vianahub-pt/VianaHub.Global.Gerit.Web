@@ -367,7 +367,6 @@ Para tarefas de média complexidade:
 - Revisar diff do PR
 - Validar critérios de aceite
 - Rodar lint/typecheck quando necessário
-- Relatório simples em `docs/reviews/`
 
 ## QA_FULL
 
@@ -378,7 +377,6 @@ Para tarefas críticas, arquiteturais ou de segurança:
 - `npx tsc --project tsconfig.typecheck.json --noEmit`
 - Testes existentes
 - Validação funcional/manual quando aplicável
-- Relatório completo em `docs/reviews/`
 
 ---
 
@@ -504,20 +502,6 @@ Se o mesmo bug for reportado 2 vezes na mesma issue, escalar para o usuário e `
 # Estrutura de Agentes
 
 Os arquivos em `.opencode/agents/`, `.opencode/instructions/kanban-flow.md`, `AGENTS.md` e `.opencode/opencode.json` não devem ser alterados por agentes durante execução de tarefas. Alterações nesses arquivos só ocorrem por solicitação explícita do usuário.
-
----
-
-# Docs Structure
-
-```text
-docs/
-├── stories/          # User stories (STORY-XXX-title.md)
-│   ├── epics/        # Epic definitions (EPIC-XXX-title.md)
-│   └── bugs/         # Bug reports (BUG-XXX-title.md)
-├── templates/        # Story, bug, test report templates
-├── reviews/          # Relatórios de QA
-└── README.md
-```
 
 ---
 

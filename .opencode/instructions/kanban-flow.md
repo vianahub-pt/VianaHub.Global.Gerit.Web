@@ -261,10 +261,9 @@ Se nenhuma opção justificar → rotear para `developer-junior`.
 Se o QA reprovar:
 
 1. QA comenta a issue com detalhes
-2. QA gera relatório em `docs/reviews/` (QA_STANDARD/FULL)
-3. QA recomenda Developer adequado
-4. QA notifica `kanban-coordinator`
-5. Coordinator move card para `In Progress` e encaminha correção
+2. QA recomenda Developer adequado
+3. QA notifica `kanban-coordinator`
+4. Coordinator move card para `In Progress` e encaminha correção
 
 ---
 

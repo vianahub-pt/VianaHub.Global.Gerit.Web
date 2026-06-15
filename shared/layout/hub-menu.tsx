@@ -48,6 +48,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
   return (
     <TooltipProvider>
       <aside
+        data-testid="hub-menu-root"
         className={cn(
           "relative flex flex-col border-r bg-card transition-all duration-300",
           collapsed ? "w-16" : "w-56",

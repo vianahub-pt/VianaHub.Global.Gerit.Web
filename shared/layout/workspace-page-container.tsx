@@ -8,7 +8,7 @@ export function WorkspacePageContainer({
   className?: string;
 }) {
   return (
-    <div className={clsx("flex min-h-0 flex-1 flex-col overflow-hidden", className)}>
+    <div data-testid="workspace-page-container-root" className={clsx("flex min-h-0 flex-1 flex-col overflow-hidden", className)}>
       {children}
     </div>
   );

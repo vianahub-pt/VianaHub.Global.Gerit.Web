@@ -165,6 +165,7 @@ interface ToggleFieldProps {
   className?: string;
   onLabel: string;
   offLabel: string;
+  name?: string;
 }
 
 export function ToggleField({
@@ -175,9 +176,10 @@ export function ToggleField({
   className,
   onLabel,
   offLabel,
+  name,
 }: ToggleFieldProps) {
   return (
-    <div className={clsx("flex flex-col gap-2", className)}>
+    <div data-testid={name ? `clients-form-toggle-${name}` : undefined} className={clsx("flex flex-col gap-2", className)}>
       <span className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {label}
       </span>
@@ -215,6 +217,7 @@ interface FormFieldProps {
   className?: string;
   error?: string;
   errorId?: string;
+  name?: string;
 }
 
 export function FormField({
@@ -228,10 +231,11 @@ export function FormField({
   className,
   error,
   errorId,
+  name,
 }: FormFieldProps) {
   const inputId = errorId || undefined;
   return (
-    <div className={clsx("flex flex-col gap-1.5", className)}>
+    <div data-testid={name ? `clients-form-field-${name}` : undefined} className={clsx("flex flex-col gap-1.5", className)}>
       <label
         htmlFor={inputId}
         className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground"
@@ -274,6 +278,7 @@ interface SelectFieldProps {
   disabled?: boolean;
   required?: boolean;
   className?: string;
+  name?: string;
 }
 
 export function SelectField({
@@ -285,9 +290,10 @@ export function SelectField({
   disabled,
   required,
   className,
+  name,
 }: SelectFieldProps) {
   return (
-    <div className={clsx("flex flex-col gap-1.5", className)}>
+    <div data-testid={name ? `clients-form-select-${name}` : undefined} className={clsx("flex flex-col gap-1.5", className)}>
       <label className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {label}
         {required && <span className="ml-0.5 text-red-500">*</span>}

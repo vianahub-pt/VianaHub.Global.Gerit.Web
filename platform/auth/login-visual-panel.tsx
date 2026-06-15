@@ -14,6 +14,7 @@ export function LoginVisualPanel() {
 
   return (
     <aside
+      data-testid="login-visual-panel-root"
       className="relative hidden h-[100dvh] overflow-hidden lg:block"
       aria-hidden="true"
     >

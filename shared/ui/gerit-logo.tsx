@@ -49,6 +49,7 @@ export function GeritLogo({
 
   return (
     <Image
+      data-testid="gerit-logo-root"
       src={logoSources[variant][theme]}
       alt={alt}
       width={width ?? intrinsicSize.width}

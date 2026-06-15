@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
 import { useAuth } from "@/platform/auth";
@@ -26,6 +26,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const menuSections = useWorkspaceMenuConfig();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const generatedId = useId();
 
   const isDark = mounted ? resolvedTheme === "dark" : false;
   const tenantName = session?.tenantName?.trim() ?? "";
@@ -75,6 +76,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
 
   return (
     <div
+      id={`workspace-shell-${generatedId}`}
+      data-testid="workspace-shell-root"
       className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
       data-collapsed={state.sidebarCollapsed}
     >
@@ -83,7 +86,9 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           <>
             <button
               ref={hamburgerRef}
+              id={`hamburger-menu-${generatedId}`}
               type="button"
+              data-testid="hamburger-menu"
               className="lg:hidden inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:text-foreground"
               onClick={() => setMobileMenuOpen(true)}
               aria-label="Abrir menu"
@@ -120,7 +125,9 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         right={
           <>
             <button
+              id={`theme-toggle-${generatedId}`}
               type="button"
+              data-testid="theme-toggle"
               onClick={() => setTheme(isDark ? "light" : "dark")}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
               aria-label={
@@ -155,6 +162,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           <aside
             id="mobile-menu"
             ref={mobileMenuRef}
+            data-testid="mobile-menu"
             role="dialog"
             aria-modal="true"
             className="fixed inset-y-0 left-0 z-50 w-64 bg-card shadow-xl animate-slide-in-left"
@@ -162,7 +170,9 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             <div className="flex h-14 items-center justify-between border-b px-4">
               <GeritLogo variant="horizontal" width={120} height={30} />
               <button
+                id={`close-mobile-menu-${generatedId}`}
                 type="button"
+                data-testid="close-mobile-menu"
                 onClick={() => {
                   setMobileMenuOpen(false);
                   hamburgerRef.current?.focus();
@@ -182,7 +192,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         className="flex h-[calc(100vh-3.5rem)] min-h-0"
         aria-hidden={mobileMenuOpen ? true : undefined}
       >
-        <aside className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
+        <aside id={`desktop-sidebar-${generatedId}`} data-testid="desktop-sidebar" className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
           <HubMenu
             sections={menuSections}
             collapsed={state.sidebarCollapsed}
@@ -190,7 +200,9 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           />
 
           <button
+            id={`toggle-sidebar-${generatedId}`}
             type="button"
+            data-testid="toggle-sidebar"
             onClick={toggleSidebar}
             className="absolute right-[-1.05rem] top-1/2 z-10 flex h-12 w-6 -translate-y-1/2 items-center justify-center rounded-r-md border border-l-0 border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
             aria-label={copy.toggleSidebar}

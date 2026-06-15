@@ -192,7 +192,7 @@ export function UserPreferencesPage() {
 
   return (
     <WorkspaceShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div data-testid="user-preferences-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="border-b border-border bg-muted px-4 py-4 dark:border-border dark:bg-muted sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>

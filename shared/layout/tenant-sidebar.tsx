@@ -133,7 +133,7 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
   );
 
   return (
-    <nav className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto py-3 px-1">
+    <nav data-testid="tenant-sidebar-root" className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-y-auto py-3 px-1">
       {sections.map((section, sectionIndex) => (
         <div key={section.key} className={clsx(sectionIndex > 0 && "mt-6")}>
           <p className="gerit-sidebar-label px-2 pb-2 text-[0.74rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground dark:text-muted-foreground">

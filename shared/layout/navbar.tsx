@@ -3,5 +3,9 @@
 import { HubNav } from "@/shared/layout/hub-nav";
 
 export function Navbar() {
-  return <HubNav variant="sticky" />;
+  return (
+    <div data-testid="navbar-root">
+      <HubNav variant="sticky" />
+    </div>
+  );
 }

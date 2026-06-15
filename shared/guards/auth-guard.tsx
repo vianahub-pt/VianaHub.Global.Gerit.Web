@@ -18,6 +18,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     return null;
   }
 
-  return <>{children}</>;
+  return <div data-testid="auth-guard-root">{children}</div>;
 }
 

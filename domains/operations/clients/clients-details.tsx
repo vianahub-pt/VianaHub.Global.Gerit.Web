@@ -4144,7 +4144,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   return (
     <WorkspaceShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div data-testid="client-details-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-muted px-4 py-4 sm:px-6 dark:bg-muted">
           {/* ---------- Header ---------- */}
           <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-background px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">

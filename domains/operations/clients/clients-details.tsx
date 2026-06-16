@@ -244,10 +244,14 @@ function normalizeContact(payload: unknown): ContactItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.contactId === "number"
-        ? candidate.contactId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.contactId === "number"
+          ? candidate.contactId
+          : typeof candidate.contactId === "string"
+            ? Number(candidate.contactId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const name =
     typeof candidate.name === "string"
@@ -269,13 +273,23 @@ function normalizeContact(payload: unknown): ContactItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
   const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean" ? candidate.isPrimary : false;
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
 
   return {
     id: rawId,
@@ -310,10 +324,14 @@ function normalizeAddress(payload: unknown): AddressItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.addressId === "number"
-        ? candidate.addressId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.addressId === "number"
+          ? candidate.addressId
+          : typeof candidate.addressId === "string"
+            ? Number(candidate.addressId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const street =
     typeof candidate.street === "string"
@@ -356,13 +374,23 @@ function normalizeAddress(payload: unknown): AddressItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
   const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean" ? candidate.isPrimary : false;
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
 
   return {
     id: rawId,
@@ -399,30 +427,44 @@ function normalizeFiscalData(payload: unknown): ClientFiscalDataItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.fiscalDataId === "number"
-        ? candidate.fiscalDataId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.fiscalDataId === "number"
+          ? candidate.fiscalDataId
+          : typeof candidate.fiscalDataId === "string"
+            ? Number(candidate.fiscalDataId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const taxNumber = typeof candidate.taxNumber === "string" ? candidate.taxNumber : null;
   const vatNumber = typeof candidate.vatNumber === "string" ? candidate.vatNumber : null;
   const fiscalCountry = typeof candidate.fiscalCountry === "string" ? candidate.fiscalCountry : null;
   const isVatRegistered =
-    typeof candidate.isVatRegistered === "boolean" ? candidate.isVatRegistered : false;
+    typeof candidate.isVatRegistered === "boolean"
+      ? candidate.isVatRegistered
+      : typeof candidate.isVatRegistered === "string"
+        ? candidate.isVatRegistered.toLowerCase() === "true"
+        : false;
   const iban = typeof candidate.iban === "string" ? candidate.iban : null;
   const fiscalEmail = typeof candidate.fiscalEmail === "string" ? candidate.fiscalEmail : null;
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
 
   return {
     id: rawId,
-    clientId: typeof candidate.clientId === "number" ? candidate.clientId : 0,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
     taxNumber,
     vatNumber,
     fiscalCountry,
@@ -456,12 +498,16 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.consentId === "number"
-        ? candidate.consentId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.consentId === "number"
+          ? candidate.consentId
+          : typeof candidate.consentId === "string"
+            ? Number(candidate.consentId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
-  const consentTypeId = typeof candidate.consentTypeId === "number" ? candidate.consentTypeId : 0;
+  const consentTypeId = typeof candidate.consentTypeId === "number" ? candidate.consentTypeId : typeof candidate.consentTypeId === "string" ? Number(candidate.consentTypeId) : 0;
   const consentTypeName =
     typeof candidate.consentTypeName === "string"
       ? candidate.consentTypeName
@@ -469,7 +515,11 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
         ? candidate.consentType
         : null;
   const granted =
-    typeof candidate.granted === "boolean" ? candidate.granted : false;
+    typeof candidate.granted === "boolean"
+      ? candidate.granted
+      : typeof candidate.granted === "string"
+        ? candidate.granted.toLowerCase() === "true"
+        : false;
   const grantedDate =
     typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
   const revokedDate =
@@ -483,15 +533,21 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
 
   return {
     id: rawId,
-    clientId: typeof candidate.clientId === "number" ? candidate.clientId : 0,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
     consentTypeId,
     consentTypeName,
     granted,
@@ -527,17 +583,21 @@ function normalizeHierarchy(payload: unknown): ClientHierarchyItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.hierarchyId === "number"
-        ? candidate.hierarchyId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.hierarchyId === "number"
+          ? candidate.hierarchyId
+          : typeof candidate.hierarchyId === "string"
+            ? Number(candidate.hierarchyId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
-  const parentClientId = typeof candidate.parentClientId === "number" ? candidate.parentClientId : 0;
+  const parentClientId = typeof candidate.parentClientId === "number" ? candidate.parentClientId : typeof candidate.parentClientId === "string" ? Number(candidate.parentClientId) : 0;
   const parentClientName =
     typeof candidate.parentClientName === "string"
       ? candidate.parentClientName
       : null;
-  const childClientId = typeof candidate.childClientId === "number" ? candidate.childClientId : 0;
+  const childClientId = typeof candidate.childClientId === "number" ? candidate.childClientId : typeof candidate.childClientId === "string" ? Number(candidate.childClientId) : 0;
   const childClientName =
     typeof candidate.childClientName === "string"
       ? candidate.childClientName
@@ -547,11 +607,17 @@ function normalizeHierarchy(payload: unknown): ClientHierarchyItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
 
   return {
     id: rawId,

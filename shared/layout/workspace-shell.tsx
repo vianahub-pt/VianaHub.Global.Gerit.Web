@@ -13,6 +13,7 @@ import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { DashboardShellProvider, useDashboardShell } from "@/shared/layout";
 import { HubNav } from "@/shared/layout/hub-nav";
 import { HubMenu } from "@/shared/layout/hub-menu";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
 function WorkspaceShellFrame({ children }: { children: ReactNode }) {
@@ -75,13 +76,14 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div
-      id={`workspace-shell-${generatedId}`}
-      data-testid="workspace-shell-root"
-      className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
-      data-collapsed={state.sidebarCollapsed}
-    >
-      <HubNav
+    <SidebarProvider open={!state.sidebarCollapsed} onOpenChange={(open) => { if (open !== !state.sidebarCollapsed) toggleSidebar(); }}>
+      <div
+        id={`workspace-shell-${generatedId}`}
+        data-testid="workspace-shell-root"
+        className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
+        data-collapsed={state.sidebarCollapsed}
+      >
+        <HubNav
         left={
           <>
             <button
@@ -183,7 +185,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <HubMenu sections={menuSections} collapsed={false} onToggleCollapse={() => {}} />
+            <HubMenu sections={menuSections} />
           </aside>
         </div>
       )}
@@ -193,11 +195,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         aria-hidden={mobileMenuOpen ? true : undefined}
       >
         <aside id={`desktop-sidebar-${generatedId}`} data-testid="desktop-sidebar" className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
-          <HubMenu
-            sections={menuSections}
-            collapsed={state.sidebarCollapsed}
-            onToggleCollapse={toggleSidebar}
-          />
+          <HubMenu sections={menuSections} />
 
           <button
             id={`toggle-sidebar-${generatedId}`}
@@ -220,7 +218,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 }
 

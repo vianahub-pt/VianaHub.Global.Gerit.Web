@@ -231,14 +231,12 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         </aside>
 
         {state.sidebarCollapsed && sidebarHovered && (
-          <Sidebar side="left" variant="floating" collapsible="none">
-            <SidebarContent className="w-64">
-              <HubMenu
-                sections={menuSections}
-                collapsed={false}
-                onToggleCollapse={toggleSidebar}
-              />
-            </SidebarContent>
+          <Sidebar side="left" variant="floating" collapsible="none" className="w-max">
+            <HubMenu
+              sections={menuSections}
+              collapsed={false}
+              onToggleCollapse={toggleSidebar}
+            />
           </Sidebar>
         )}
 

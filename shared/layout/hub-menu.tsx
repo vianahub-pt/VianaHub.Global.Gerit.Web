@@ -35,6 +35,7 @@ export type HubMenuSection = {
   key: string;
   title: string;
   items: HubMenuItem[];
+  icon?: React.ComponentType<{ className?: string }>;
   collapsible?: boolean;
   defaultExpanded?: boolean;
 };
@@ -105,6 +106,15 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
                 onClick={isCollapsible ? () => toggleSection(section.key) : undefined}
               >
                 <span className="flex items-center gap-2 min-w-0">
+                  {section.icon && (
+                    <section.icon
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-muted-foreground",
+                        collapsed && "opacity-0 w-0"
+                      )}
+                      aria-hidden="true"
+                    />
+                  )}
                   {section.title}
                   {isCollapsible && (
                     <ChevronDown

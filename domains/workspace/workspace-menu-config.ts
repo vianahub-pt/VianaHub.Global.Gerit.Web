@@ -36,6 +36,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "operacao",
         title: t("workspace.sidebar.operacao"),
+        icon: LayoutDashboard,
         collapsible: true,
         defaultExpanded: true,
         items: [
@@ -69,6 +70,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "clientes",
         title: t("workspace.sidebar.clientes"),
+        icon: Users,
         collapsible: true,
         defaultExpanded: false,
         items: [
@@ -101,6 +103,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "equipasRecursos",
         title: t("workspace.sidebar.equipasRecursos"),
+        icon: Building2,
         collapsible: true,
         defaultExpanded: false,
         items: [
@@ -145,6 +148,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "parametrizacao",
         title: t("workspace.sidebar.parametrizacao"),
+        icon: Settings,
         collapsible: true,
         defaultExpanded: false,
         items: [
@@ -195,6 +199,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "administracao",
         title: t("workspace.sidebar.administracao"),
+        icon: Shield,
         collapsible: true,
         defaultExpanded: false,
         items: [
@@ -239,6 +244,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "saasBilling",
         title: t("workspace.sidebar.saasBilling"),
+        icon: CreditCard,
         collapsible: true,
         defaultExpanded: false,
         items: [
@@ -265,6 +271,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "tecnico",
         title: t("workspace.sidebar.tecnico"),
+        icon: Activity,
         collapsible: true,
         defaultExpanded: false,
         items: [

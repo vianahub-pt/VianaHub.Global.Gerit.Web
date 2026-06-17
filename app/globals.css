@@ -136,11 +136,11 @@
 }
 
 .gerit-shell[data-collapsed="true"] .gerit-sidebar {
-  width: 4.25rem;
+  width: 4rem;
 }
 
 .gerit-shell[data-collapsed="false"] .gerit-sidebar {
-  width: 11.25rem;
+  width: 20rem;
 }
 
 .gerit-shell[data-collapsed="true"] .gerit-sidebar-label {

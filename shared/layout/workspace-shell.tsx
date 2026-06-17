@@ -76,7 +76,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={!state.sidebarCollapsed} onOpenChange={(open) => { if (open !== !state.sidebarCollapsed) toggleSidebar(); }}>
       <div
         id={`workspace-shell-${generatedId}`}
         data-testid="workspace-shell-root"

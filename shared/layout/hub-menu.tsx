@@ -16,7 +16,6 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarGroupAction,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -99,39 +98,25 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
                 className={cn(
                   "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
                   "mb-2",
-                  collapsed && "opacity-0 pointer-events-none h-0 mb-0"
+                  collapsed && "opacity-0 pointer-events-none h-0 mb-0",
+                  isCollapsible && "flex items-center justify-between cursor-pointer",
+                  isCollapsible && "hover:text-foreground"
                 )}
-                asChild={isCollapsible}
+                onClick={isCollapsible ? () => toggleSection(section.key) : undefined}
               >
-                {isCollapsible ? (
-                  <SidebarGroupAction
-                    className={cn(
-                      "h-7 w-7 p-0",
-                      expanded && "rotate-180"
-                    )}
-                    onClick={() => toggleSection(section.key)}
-                    aria-label={expanded ? t("workspace.menu.collapseSection") : t("workspace.menu.expandSection")}
-                    aria-expanded={expanded}
-                  >
-                    <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                  </SidebarGroupAction>
-                ) : (
-                  section.title
-                )}
-              </SidebarGroupLabel>
-              {isCollapsible && (
-                <SidebarGroupAction
-                  className={cn(
-                    "h-7 w-7 p-0",
-                    expanded && "rotate-180"
+                <span className="flex items-center gap-2 min-w-0">
+                  {section.title}
+                  {isCollapsible && (
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground",
+                        expanded && "rotate-180"
+                      )}
+                      aria-hidden="true"
+                    />
                   )}
-                  onClick={() => toggleSection(section.key)}
-                  aria-label={expanded ? t("workspace.menu.collapseSection") : t("workspace.menu.expandSection")}
-                  aria-expanded={expanded}
-                >
-                  <ChevronDown className="h-4 w-4 transition-transform duration-200" />
-                </SidebarGroupAction>
-              )}
+                </span>
+              </SidebarGroupLabel>
               <SidebarGroupContent className={cn("transition-all duration-200 ease-in-out", !expanded && "h-0 overflow-hidden opacity-0 pb-0")}>
                 <SidebarMenu>
                   {section.items.map((item) => {

@@ -185,7 +185,11 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
                 <X className="h-5 w-5" />
               </button>
             </div>
-            <HubMenu sections={menuSections} />
+            <HubMenu
+              sections={menuSections}
+              collapsed={false}
+              onToggleCollapse={toggleSidebar}
+            />
           </aside>
         </div>
       )}
@@ -195,7 +199,11 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         aria-hidden={mobileMenuOpen ? true : undefined}
       >
         <aside id={`desktop-sidebar-${generatedId}`} data-testid="desktop-sidebar" className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex">
-          <HubMenu sections={menuSections} />
+          <HubMenu
+            sections={menuSections}
+            collapsed={state.sidebarCollapsed}
+            onToggleCollapse={toggleSidebar}
+          />
 
           <button
             id={`toggle-sidebar-${generatedId}`}

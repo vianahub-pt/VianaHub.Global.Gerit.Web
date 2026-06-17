@@ -1,10 +1,9 @@
 "use client";
 
-import { type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslation } from "@/platform/i18n";
 import { cn } from "@/shared/ui/utils";
-
 import { ChevronLeft } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
@@ -13,6 +12,16 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/shared/ui/tooltip";
+import {
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarSeparator,
+  useSidebar,
+} from "@/components/ui/sidebar";
 
 export type HubMenuItem = {
   key: string;
@@ -36,6 +45,8 @@ export type HubMenuProps = {
 
 export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps) {
   const pathname = usePathname();
+  const { t } = useTranslation();
+  const { state } = useSidebar();
 
   const isActive = (item: HubMenuItem) => {
     if (item.matchExact) return pathname === item.href;
@@ -45,90 +56,65 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
     return cleanPathname.startsWith(cleanHref);
   };
 
+  // Use the collapsed prop from parent for UI state, but useSidebar state for tooltip behavior
+  const sidebarCollapsed = state === "collapsed";
+
   return (
     <TooltipProvider>
-      <aside
-        data-testid="hub-menu-root"
-        className={cn(
-          "relative flex flex-col border-r bg-card transition-all duration-300",
-          collapsed ? "w-16" : "w-56",
-        )}
-      >
-        <nav className="flex-1 overflow-y-auto px-2 py-4">
-          {sections.map((section) => (
-            <div key={section.key} className="mb-4">
-              {!collapsed && (
-                <p className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  {section.title}
-                </p>
-              )}
-              <ul className="space-y-1">
-                {section.items.map((item) => {
-                  const Icon = item.icon;
-                  const active = isActive(item);
-                  return (
-                    <li key={item.key}>
-                      {collapsed ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Link
-                              href={item.href}
-                              aria-label={item.label}
-                              className={cn(
-                                "flex h-9 w-full items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-secondary",
-                                active && "bg-secondary text-primary",
-                              )}
-                            >
-                              <Icon className="h-4 w-4 shrink-0" />
-                            </Link>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">
-                            <p>{item.label}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <Link
-                          href={item.href}
+      <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">
+        {sections.map((section) => (
+          <div key={section.key} className="mb-4">
+            {!collapsed && (
+              <SidebarGroupLabel
+                className={cn(
+                  "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+                  "mb-2"
+                )}
+              >
+                {section.title}
+              </SidebarGroupLabel>
+            )}
+            <SidebarMenu>
+              {section.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item);
+                return (
+                  <SidebarMenuItem key={item.key}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={active}
+                      tooltip={item.label}
+                      size="default"
+                    >
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex h-9 items-center gap-3 rounded-md px-2 text-sm font-medium transition-colors hover:bg-secondary",
+                          active && "bg-secondary",
+                          collapsed && "justify-center"
+                        )}
+                        aria-label={collapsed ? item.label : undefined}
+                      >
+                        <Icon
                           className={cn(
-                            "flex h-9 items-center gap-3 rounded-md px-2 text-sm font-medium transition-colors hover:bg-secondary",
-                            active && "bg-secondary",
+                            "h-4 w-4 shrink-0",
+                            active && "text-primary",
                           )}
-                        >
-                          <Icon
-                            className={cn(
-                              "h-4 w-4 shrink-0",
-                              active && "text-primary",
-                            )}
-                          />
-                          <span>{item.label}</span>
-                          {active && (
-                            <span className="ml-auto h-4 w-0.5 rounded-full bg-primary" />
-                          )}
-                        </Link>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </nav>
-        <div className="flex justify-end border-t p-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={onToggleCollapse}
-          >
-            <ChevronLeft
-              className={cn(
-                "h-4 w-4 transition-transform",
-                collapsed && "rotate-180",
-              )}
-            />
-          </Button>
-        </div>
-      </aside>
+                        />
+                        {!collapsed && <span>{item.label}</span>}
+                        {active && !collapsed && (
+                          <span className="ml-auto h-4 w-0.5 rounded-full bg-primary" />
+                        )}
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+            <SidebarSeparator className="my-2" />
+          </div>
+        ))}
+      </nav>
     </TooltipProvider>
   );
 }

@@ -36,6 +36,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "operacao",
         title: t("workspace.sidebar.operacao"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "dashboard",
@@ -67,6 +69,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "clientes",
         title: t("workspace.sidebar.clientes"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "clientes",
@@ -97,6 +101,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "equipasRecursos",
         title: t("workspace.sidebar.equipasRecursos"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "equipas",
@@ -139,6 +145,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "parametrizacao",
         title: t("workspace.sidebar.parametrizacao"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "tiposMorada",
@@ -187,6 +195,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "administracao",
         title: t("workspace.sidebar.administracao"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "utilizadores",
@@ -229,6 +239,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "saasBilling",
         title: t("workspace.sidebar.saasBilling"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "tenants",
@@ -253,6 +265,8 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
       {
         key: "tecnico",
         title: t("workspace.sidebar.tecnico"),
+        collapsible: true,
+        defaultExpanded: true,
         items: [
           {
             key: "jobs",

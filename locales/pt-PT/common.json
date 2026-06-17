@@ -52,6 +52,8 @@
   "workspace.fallbackEmail": "vianahub.pt@gmail.com",
   "workspace.openDashboard": "Abrir dashboard",
   "workspace.toggleSidebar": "Alternar barra lateral",
+  "workspace.menu.expandSection": "Expandir secção",
+  "workspace.menu.collapseSection": "Colapsar secção",
   "workspace.sidebar.inicio": "Início",
   "workspace.sidebar.dashboard": "Dashboard",
   "workspace.sidebar.fila": "Fila",

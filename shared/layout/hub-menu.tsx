@@ -93,7 +93,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
           const isCollapsible = section.collapsible === true;
 
           return (
-            <SidebarGroup key={section.key} className="mb-2">
+            <SidebarGroup key={section.key} className={cn("mb-2", !expanded && isCollapsible && "mb-1")}>
               <SidebarGroupLabel
                 className={cn(
                   "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
@@ -117,7 +117,11 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
                   )}
                 </span>
               </SidebarGroupLabel>
-              <SidebarGroupContent className={cn("transition-all duration-200 ease-in-out", !expanded && "h-0 overflow-hidden opacity-0 pb-0")}>
+              <SidebarGroupContent className={cn(
+                "transition-all duration-200 ease-in-out",
+                !expanded && "h-0 overflow-hidden opacity-0 pb-0",
+                expanded && "bg-accent/30 rounded-md px-2 py-1 -mx-2"
+              )}>
                 <SidebarMenu>
                   {section.items.map((item) => {
                     const Icon = item.icon;
@@ -145,7 +149,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
                                 active && "text-primary",
                               )}
                             />
-                            {!collapsed && <span>{item.label}</span>}
+                            {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
                             {active && !collapsed && (
                               <span className="ml-auto h-4 w-0.5 rounded-full bg-primary" />
                             )}

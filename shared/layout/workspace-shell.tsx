@@ -13,6 +13,7 @@ import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { DashboardShellProvider, useDashboardShell } from "@/shared/layout";
 import { HubNav } from "@/shared/layout/hub-nav";
 import { HubMenu } from "@/shared/layout/hub-menu";
+import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
 function WorkspaceShellFrame({ children }: { children: ReactNode }) {
@@ -75,13 +76,14 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div
-      id={`workspace-shell-${generatedId}`}
-      data-testid="workspace-shell-root"
-      className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
-      data-collapsed={state.sidebarCollapsed}
-    >
-      <HubNav
+    <SidebarProvider>
+      <div
+        id={`workspace-shell-${generatedId}`}
+        data-testid="workspace-shell-root"
+        className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
+        data-collapsed={state.sidebarCollapsed}
+      >
+        <HubNav
         left={
           <>
             <button
@@ -216,7 +218,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-    </div>
+      </div>
+    </SidebarProvider>
   );
 }
 

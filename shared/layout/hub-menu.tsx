@@ -50,7 +50,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps)
       <aside
         className={cn(
           "relative flex flex-col border-r bg-card transition-all duration-300",
-          collapsed ? "w-16" : "w-56",
+          collapsed ? "w-16" : "w-48",
         )}
       >
         <nav className="flex-1 overflow-y-auto px-2 py-4">

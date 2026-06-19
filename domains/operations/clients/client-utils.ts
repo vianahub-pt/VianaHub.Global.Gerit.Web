@@ -47,7 +47,6 @@ function normalizeIndividual(payload: unknown): ClientIndividual | undefined {
     id: typeof candidate.id === "number" ? candidate.id : undefined,
     tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : undefined,
     clientId: typeof candidate.clientId === "number" ? candidate.clientId : undefined,
-    displayName: typeof candidate.displayName === "string" ? candidate.displayName : undefined,
     fullName: typeof candidate.fullName === "string" ? candidate.fullName : undefined,
     firstName: typeof candidate.firstName === "string" ? candidate.firstName : undefined,
     lastName: typeof candidate.lastName === "string" ? candidate.lastName : undefined,
@@ -104,12 +103,12 @@ export function normalizeClient(payload: unknown): ClientItem | null {
   // Coerce id to number if it's a string
   const id = typeof rawId === "number" ? rawId : typeof rawId === "string" ? Number(rawId) : NaN;
 
-  // name: root-level "name" or from individual.displayName or from company.legalName/tradeName (GET /{id} shape)
+  // name: root-level "name" or from individual.fullName or from company.legalName/tradeName (GET /{id} shape)
   const name =
     typeof candidate.name === "string"
       ? candidate.name
-      : typeof individualRaw?.displayName === "string"
-        ? individualRaw.displayName
+      : typeof individualRaw?.fullName === "string"
+        ? individualRaw.fullName
         : typeof companyRaw?.legalName === "string"
           ? companyRaw.legalName
           : typeof companyRaw?.tradeName === "string"

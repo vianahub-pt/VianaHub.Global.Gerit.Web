@@ -88,53 +88,6 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
     return expandedSections[sectionKey] ?? section.defaultExpanded ?? true;
   };
 
-  const handleSectionMouseEnter = (sectionKey: string) => {
-    onSectionHover?.(sectionKey);
-  };
-
-  const handleSectionMouseLeave = () => {
-    onSectionHover?.(null);
-  };
-
-  // When collapsed, render only section icons vertically
-  if (collapsed) {
-    return (
-      <TooltipProvider>
-        <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">
-          <div className="flex flex-col gap-1">
-            {sections.map((section) => {
-              const isHovered = hoveredSection === section.key;
-              const Icon = section.icon;
-
-              return (
-                <div
-                  key={section.key}
-                  className={cn(
-                    "relative flex items-center justify-center h-9 w-9 rounded-md transition-colors",
-                    "hover:bg-secondary",
-                    isHovered && "bg-secondary"
-                  )}
-                  onMouseEnter={() => handleSectionMouseEnter(section.key)}
-                  onMouseLeave={handleSectionMouseLeave}
-                >
-                  {Icon && (
-                    <Icon
-                      className={cn(
-                        "h-5 w-5 shrink-0 text-muted-foreground",
-                        isHovered && "text-foreground"
-                      )}
-                      aria-hidden="true"
-                    />
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </nav>
-      </TooltipProvider>
-    );
-  }
-
   return (
     <TooltipProvider>
       <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">

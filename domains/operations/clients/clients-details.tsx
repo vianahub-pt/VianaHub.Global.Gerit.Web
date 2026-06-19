@@ -910,23 +910,22 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         }
         setClient(normalized);
 
-        // Build individual form state from API response
-        const ind = normalized.individual;
-        const indState: IndividualFormState = {
-          displayName: ind?.displayName ?? "",
-          fullName: ind?.fullName ?? "",
-          firstName: ind?.firstName ?? "",
-          lastName: ind?.lastName ?? "",
-          phoneNumber: ind?.phoneNumber ?? "",
-          cellPhoneNumber: ind?.cellPhoneNumber ?? "",
-          isWhatsapp: ind?.isWhatsapp ?? false,
-          email: ind?.email ?? "",
-          birthDate: ind?.birthDate ? ind.birthDate.substring(0, 10) : "",
-          gender: ind?.gender ?? "",
-          documentType: ind?.documentType ?? "",
-          documentNumber: ind?.documentNumber ?? "",
-          nationality: ind?.nationality ?? "",
-        };
+         // Build individual form state from API response
+         const ind = normalized.individual;
+         const indState: IndividualFormState = {
+           fullName: ind?.fullName ?? "",
+           firstName: ind?.firstName ?? "",
+           lastName: ind?.lastName ?? "",
+           phoneNumber: ind?.phoneNumber ?? "",
+           cellPhoneNumber: ind?.cellPhoneNumber ?? "",
+           isWhatsapp: ind?.isWhatsapp ?? false,
+           email: ind?.email ?? "",
+           birthDate: ind?.birthDate ? ind.birthDate.substring(0, 10) : "",
+           gender: ind?.gender ?? "",
+           documentType: ind?.documentType ?? "",
+           documentNumber: ind?.documentNumber ?? "",
+           nationality: ind?.nationality ?? "",
+         };
 
         // Build company form state from API response
         const comp = normalized.company;
@@ -1328,25 +1327,23 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           note: noteValue.length > 0 ? noteValue : null,
         };
 
-        // Add individual or company nested data
-        if (isIndividualType(clientTypeNumber ?? undefined)) {
-          const ind = clientFormState.individual;
-          const computedFullName = `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim();
-          payload.individual = {
-            displayName: ind.displayName.trim() || computedFullName,
-            fullName: computedFullName || null,
-            firstName: ind.firstName.trim(),
-            lastName: ind.lastName.trim(),
-            phoneNumber: ind.phoneNumber.trim(),
-            cellPhoneNumber: ind.cellPhoneNumber.trim(),
-            isWhatsapp: ind.isWhatsapp,
-            email: ind.email.trim() || null,
-            birthDate: ind.birthDate.length > 0 ? ind.birthDate : null,
-            gender: ind.gender.length > 0 ? ind.gender : null,
-            documentType: ind.documentType.length > 0 ? ind.documentType : null,
-            documentNumber: ind.documentNumber.length > 0 ? ind.documentNumber : null,
-            nationality: ind.nationality.length > 0 ? ind.nationality : null,
-          };
+         // Add individual or company nested data
+         if (isIndividualType(clientTypeNumber ?? undefined)) {
+           const ind = clientFormState.individual;
+           payload.individual = {
+             fullName: ind.fullName.trim() || `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim(),
+             firstName: ind.firstName.trim(),
+             lastName: ind.lastName.trim(),
+             phoneNumber: ind.phoneNumber.trim(),
+             cellPhoneNumber: ind.cellPhoneNumber.trim(),
+             isWhatsapp: ind.isWhatsapp,
+             email: ind.email.trim() || null,
+             birthDate: ind.birthDate.length > 0 ? ind.birthDate : null,
+             gender: ind.gender.length > 0 ? ind.gender : null,
+             documentType: ind.documentType.length > 0 ? ind.documentType : null,
+             documentNumber: ind.documentNumber.length > 0 ? ind.documentNumber : null,
+             nationality: ind.nationality.length > 0 ? ind.nationality : null,
+           };
         } else if (isCompanyType(clientTypeNumber ?? undefined)) {
           const comp = clientFormState.company;
           payload.company = {
@@ -1384,45 +1381,44 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         if (normalized) {
           setClient(normalized);
 
-          const ind = normalized.individual;
-          const comp = normalized.company;
-          setClientFormState({
-            clientType: resolveClientTypeValue(normalized),
-            originType: resolveOriginTypeValue(normalized),
-            isActive: normalized.isActive,
-            note: normalized.note ?? "",
-            individual: {
-              displayName: ind?.displayName ?? "",
-              fullName: ind?.fullName ?? "",
-              firstName: ind?.firstName ?? "",
-              lastName: ind?.lastName ?? "",
-              phoneNumber: ind?.phoneNumber ?? "",
-              cellPhoneNumber: ind?.cellPhoneNumber ?? "",
-              isWhatsapp: ind?.isWhatsapp ?? false,
-              email: ind?.email ?? "",
-              birthDate: ind?.birthDate ? ind.birthDate.substring(0, 10) : "",
-              gender: ind?.gender ?? "",
-              documentType: ind?.documentType ?? "",
-              documentNumber: ind?.documentNumber ?? "",
-              nationality: ind?.nationality ?? "",
-            },
-            company: {
-              legalName: comp?.legalName ?? "",
-              tradeName: comp?.tradeName ?? "",
-              phoneNumber: comp?.phoneNumber ?? "",
-              cellPhoneNumber: comp?.cellPhoneNumber ?? "",
-              isWhatsapp: comp?.isWhatsapp ?? false,
-              email: comp?.email ?? "",
-              site: comp?.site ?? "",
-              companyRegistration: comp?.companyRegistration ?? "",
-              cae: comp?.cae ?? "",
-              numberOfEmployee:
-                typeof comp?.numberOfEmployee === "number"
-                  ? String(comp.numberOfEmployee)
-                  : "",
-              legalRepresentative: comp?.legalRepresentative ?? "",
-            },
-          });
+           const ind = normalized.individual;
+           const comp = normalized.company;
+           setClientFormState({
+             clientType: resolveClientTypeValue(normalized),
+             originType: resolveOriginTypeValue(normalized),
+             isActive: normalized.isActive,
+             note: normalized.note ?? "",
+             individual: {
+               fullName: ind?.fullName ?? "",
+               firstName: ind?.firstName ?? "",
+               lastName: ind?.lastName ?? "",
+               phoneNumber: ind?.phoneNumber ?? "",
+               cellPhoneNumber: ind?.cellPhoneNumber ?? "",
+               isWhatsapp: ind?.isWhatsapp ?? false,
+               email: ind?.email ?? "",
+               birthDate: ind?.birthDate ? ind.birthDate.substring(0, 10) : "",
+               gender: ind?.gender ?? "",
+               documentType: ind?.documentType ?? "",
+               documentNumber: ind?.documentNumber ?? "",
+               nationality: ind?.nationality ?? "",
+             },
+             company: {
+               legalName: comp?.legalName ?? "",
+               tradeName: comp?.tradeName ?? "",
+               phoneNumber: comp?.phoneNumber ?? "",
+               cellPhoneNumber: comp?.cellPhoneNumber ?? "",
+               isWhatsapp: comp?.isWhatsapp ?? false,
+               email: comp?.email ?? "",
+               site: comp?.site ?? "",
+               companyRegistration: comp?.companyRegistration ?? "",
+               cae: comp?.cae ?? "",
+               numberOfEmployee:
+                 typeof comp?.numberOfEmployee === "number"
+                   ? String(comp.numberOfEmployee)
+                   : "",
+               legalRepresentative: comp?.legalRepresentative ?? "",
+             },
+           });
           if (!isEditing) {
             void router.replace(`/clients-details/${normalized.id}/`);
           }
@@ -3267,9 +3263,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {/* Line 1: Nome completo — 3 colunas */}
           <div className="sm:col-span-2 lg:col-span-3">
             <FormField
-              label={t("clients.form.individual.displayName")}
-              value={ind.displayName}
-              onChange={(v) => updateIndividual("displayName", v)}
+              label={t("clients.form.individual.fullName")}
+              value={ind.fullName}
+              onChange={(v) => updateIndividual("fullName", v)}
             />
           </div>
           {/* Line 2: Nome próprio | Apelido | Origem */}
@@ -4234,7 +4230,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                     <li aria-hidden="true">/</li>
                     <li className="text-foreground font-medium" aria-current="page">
                       {isEditing
-                        ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
+                        ? client?.individual?.fullName ?? client?.name ?? t("clients.form.editTitle")
                         : t("clients.form.newTitle")}
                     </li>
                   </ol>
@@ -4242,7 +4238,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                     {isEditing
-                      ? client?.individual?.displayName ?? client?.name ?? t("clients.form.editTitle")
+                      ? client?.individual?.fullName ?? client?.name ?? t("clients.form.editTitle")
                       : t("clients.form.newTitle")}
                   </h1>
                   {client && (

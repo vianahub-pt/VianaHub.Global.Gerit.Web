@@ -636,7 +636,7 @@ function GeritDashboardHomeContent() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div data-testid="gerit-dashboard-home-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-border bg-muted px-4 py-3 dark:border-border dark:bg-muted sm:px-6 md:flex-row md:items-center md:justify-between md:py-2">
         <div className="flex items-center overflow-x-auto">
           <button

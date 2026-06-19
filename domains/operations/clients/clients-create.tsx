@@ -417,6 +417,7 @@ export function ClientsCreatePage() {
         // Add individual or company nested data
         if (isIndividualType(clientTypeNumber ?? undefined)) {
           const ind = clientFormState.individual;
+          const computedFullName = `${ind.firstName.trim()} ${ind.lastName.trim()}`.trim();
           payload.individual = {
             fullName:
               ind.fullName.trim() ||
@@ -551,7 +552,7 @@ export function ClientsCreatePage() {
 
   return (
     <WorkspaceShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div data-testid="clients-create-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           {/* ---------- Header ---------- */}
           <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">

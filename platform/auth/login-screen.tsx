@@ -183,7 +183,7 @@ export function LoginScreen() {
   );
 
   return (
-    <div className="relative h-[100dvh] overflow-hidden bg-background text-white">
+    <div data-testid="login-screen-root" className="relative h-[100dvh] overflow-hidden bg-background text-white">
       <div className="relative grid h-[100dvh] lg:grid-cols-2">
         <LoginVisualPanel />
 

@@ -44,9 +44,11 @@ export type HubMenuProps = {
   sections: HubMenuSection[];
   collapsed: boolean;
   onToggleCollapse: () => void;
+  hoveredSection?: string;
+  onSectionHover?: (sectionKey: string | null) => void;
 };
 
-export function HubMenu({ sections, collapsed, onToggleCollapse }: HubMenuProps) {
+export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover }: HubMenuProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { state } = useSidebar();

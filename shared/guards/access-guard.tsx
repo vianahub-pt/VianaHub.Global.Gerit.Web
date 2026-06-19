@@ -18,9 +18,9 @@ export function AccessGuard({
   const { can } = useAccessControl();
 
   if (!can(resource, action)) {
-    return <>{fallback}</>;
+    return <div data-testid="access-guard-root">{fallback}</div>;
   }
 
-  return <>{children}</>;
+  return <div data-testid="access-guard-root">{children}</div>;
 }
 

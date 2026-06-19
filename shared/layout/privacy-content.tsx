@@ -1,5 +1,5 @@
 ﻿"use client";
 
 export function PrivacyContent() {
-  return <section className="container py-12" />;
+  return <section data-testid="privacy-content-root" className="container py-12" />;
 }

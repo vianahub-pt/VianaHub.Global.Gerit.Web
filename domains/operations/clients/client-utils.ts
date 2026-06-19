@@ -1,4 +1,12 @@
-import { ClientItem, ClientIndividual, ClientCompany } from "./client-models";
+import {
+  ClientItem,
+  ClientIndividual,
+  ClientCompany,
+  ClientFiscalDataItem,
+  ClientConsentItem,
+  ConsentTypeItem,
+  ClientHierarchyItem,
+} from "./client-models";
 
 export interface ClientsPagedResponse {
   items?: unknown;
@@ -7,6 +15,25 @@ export interface ClientsPagedResponse {
   pageNumber?: number;
   pageSize?: number;
   totalPages?: number;
+}
+
+export interface FiscalDataPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+export interface ConsentsPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+export interface ConsentTypesResponse {
+  items?: unknown;
+}
+
+export interface HierarchyPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
 }
 
 function normalizeIndividual(payload: unknown): ClientIndividual | undefined {
@@ -68,10 +95,13 @@ export function normalizeClient(payload: unknown): ClientItem | null {
   }
 
   const candidate = payload as Record<string, unknown>;
-  const id = candidate.id;
+  const rawId = candidate.id;
   const individualRaw = candidate.individual as Record<string, unknown> | undefined;
   const companyRaw = candidate.company as Record<string, unknown> | undefined;
-  const isActive = candidate.isActive;
+  const rawIsActive = candidate.isActive;
+
+  // Coerce id to number if it's a string
+  const id = typeof rawId === "number" ? rawId : typeof rawId === "string" ? Number(rawId) : NaN;
 
   // name: root-level "name" or from individual.fullName or from company.legalName/tradeName (GET /{id} shape)
   const name =
@@ -83,7 +113,7 @@ export function normalizeClient(payload: unknown): ClientItem | null {
           ? companyRaw.legalName
           : typeof companyRaw?.tradeName === "string"
             ? companyRaw.tradeName
-            : undefined;
+            : `Cliente #${Number.isFinite(id) ? id : "desconhecido"}`;
 
   // email: root-level "email" or from individual.email or from company.email (GET /{id} shape)
   const email =
@@ -157,12 +187,30 @@ export function normalizeClient(payload: unknown): ClientItem | null {
           ? candidate.clientTypeId
           : null;
 
-  if (
-    typeof id !== "number" ||
-    typeof name !== "string" ||
-    typeof phone !== "string" ||
-    typeof isActive !== "boolean"
-  ) {
+  // Coerce isActive to boolean (handle string "true"/"false", number 1/0, etc.)
+  const isActive =
+    typeof rawIsActive === "boolean"
+      ? rawIsActive
+      : typeof rawIsActive === "string"
+        ? rawIsActive.toLowerCase() === "true"
+        : typeof rawIsActive === "number"
+          ? rawIsActive !== 0
+          : true; // default to true if missing
+
+  // Validate required fields with coercion
+  if (!Number.isFinite(id) || typeof name !== "string" || typeof phone !== "string") {
+    // Log for debugging - remove in production if needed
+    if (typeof console !== "undefined") {
+      console.warn("[normalizeClient] Validation failed", {
+        id,
+        name: typeof name,
+        phone: typeof phone,
+        isActive: typeof isActive,
+        rawId,
+        rawIsActive,
+        candidateKeys: Object.keys(candidate),
+      });
+    }
     return null;
   }
 

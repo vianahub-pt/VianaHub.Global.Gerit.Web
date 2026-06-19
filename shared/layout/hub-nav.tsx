@@ -24,6 +24,7 @@ export function HubNav({
 }: HubNavProps) {
   return (
     <header
+      data-testid="hub-nav-root"
       className={cn(
         "flex h-14 items-center justify-between border-b bg-card px-4",
         variant === "sticky" && "sticky top-0 z-50 backdrop-blur",

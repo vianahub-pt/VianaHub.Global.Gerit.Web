@@ -107,7 +107,7 @@ export function UserProfileMenu({
   }, [signOutAndRedirect]);
 
   return (
-    <div className="relative" ref={menuRef}>
+    <div data-testid="user-profile-menu-root" className="relative" ref={menuRef}>
       <button
         type="button"
         onClick={handleToggleMenu}

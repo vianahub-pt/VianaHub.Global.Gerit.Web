@@ -41,18 +41,40 @@ import {
   initialCompanyFormState,
   initialClientFormState,
 } from "@/domains/operations/clients/clients-form-components";
+import {
+  type ClientFiscalDataItem,
+  type ClientFiscalDataFormState,
+  initialFiscalDataFormState,
+  type ClientConsentItem,
+  type ConsentTypeItem,
+  type ClientConsentFormState,
+  initialConsentFormState,
+  type ClientHierarchyItem,
+  type ClientHierarchyFormState,
+  initialHierarchyFormState,
+} from "@/domains/operations/clients/client-models";
+import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
 /* ---------- Constants ---------- */
 
 const CONTACT_PAGE_SIZE = 25;
 const ADDRESS_PAGE_SIZE = 25;
+const FISCAL_DATA_PAGE_SIZE = 25;
+const CONSENT_PAGE_SIZE = 25;
+const HIERARCHY_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
+type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
+type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
+type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
 
 /* ---------- Pagination helper ---------- */
 
@@ -95,6 +117,23 @@ function getAddressSortValue(item: AddressItem, column: AddressSortColumn) {
       return (item.country ?? "").toLowerCase();
     default:
       return (item.street ?? "").toLowerCase();
+  }
+}
+
+function getFiscalDataSortValue(item: ClientFiscalDataItem, column: FiscalDataSortColumn) {
+  switch (column) {
+    case "VatNumber":
+      return (item.vatNumber ?? "").toLowerCase();
+    case "FiscalCountry":
+      return (item.fiscalCountry ?? "").toLowerCase();
+    case "IsVatRegistered":
+      return item.isVatRegistered ? "1" : "0";
+    case "Iban":
+      return (item.iban ?? "").toLowerCase();
+    case "FiscalEmail":
+      return (item.fiscalEmail ?? "").toLowerCase();
+    default:
+      return (item.taxNumber ?? "").toLowerCase();
   }
 }
 
@@ -144,7 +183,21 @@ interface AddressFormState {
   country: string;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos";
+interface FiscalDataFormState {
+  taxNumber: string;
+  vatNumber: string;
+  fiscalCountry: string;
+  isVatRegistered: boolean;
+  iban: string;
+  fiscalEmail: string;
+}
+
+interface FiscalDataPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -158,6 +211,15 @@ const initialAddressFormState: AddressFormState = {
   state: "",
   postalCode: "",
   country: "",
+};
+
+const initialFiscalDataFormStateLocal: FiscalDataFormState = {
+  taxNumber: "",
+  vatNumber: "",
+  fiscalCountry: "PT",
+  isVatRegistered: false,
+  iban: "",
+  fiscalEmail: "",
 };
 
 /* ---------- Resolve helper functions ---------- */
@@ -182,10 +244,14 @@ function normalizeContact(payload: unknown): ContactItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.contactId === "number"
-        ? candidate.contactId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.contactId === "number"
+          ? candidate.contactId
+          : typeof candidate.contactId === "string"
+            ? Number(candidate.contactId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const name =
     typeof candidate.name === "string"
@@ -207,13 +273,23 @@ function normalizeContact(payload: unknown): ContactItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
   const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean" ? candidate.isPrimary : false;
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
 
   return {
     id: rawId,
@@ -248,10 +324,14 @@ function normalizeAddress(payload: unknown): AddressItem | null {
   const rawId =
     typeof candidate.id === "number"
       ? candidate.id
-      : typeof candidate.addressId === "number"
-        ? candidate.addressId
-        : null;
-  if (rawId === null) return null;
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.addressId === "number"
+          ? candidate.addressId
+          : typeof candidate.addressId === "string"
+            ? Number(candidate.addressId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const street =
     typeof candidate.street === "string"
@@ -294,13 +374,23 @@ function normalizeAddress(payload: unknown): AddressItem | null {
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : typeof candidate.enabled === "boolean"
-          ? candidate.enabled
-          : true;
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
   const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean" ? candidate.isPrimary : false;
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
 
   return {
     id: rawId,
@@ -327,6 +417,251 @@ function parsePagedAddresses(payload: unknown) {
     totalItems:
       typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
   };
+}
+
+/* ---------- Fiscal Data normalize/parse ---------- */
+
+function normalizeFiscalData(payload: unknown): ClientFiscalDataItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.fiscalDataId === "number"
+          ? candidate.fiscalDataId
+          : typeof candidate.fiscalDataId === "string"
+            ? Number(candidate.fiscalDataId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const taxNumber = typeof candidate.taxNumber === "string" ? candidate.taxNumber : null;
+  const vatNumber = typeof candidate.vatNumber === "string" ? candidate.vatNumber : null;
+  const fiscalCountry = typeof candidate.fiscalCountry === "string" ? candidate.fiscalCountry : null;
+  const isVatRegistered =
+    typeof candidate.isVatRegistered === "boolean"
+      ? candidate.isVatRegistered
+      : typeof candidate.isVatRegistered === "string"
+        ? candidate.isVatRegistered.toLowerCase() === "true"
+        : false;
+  const iban = typeof candidate.iban === "string" ? candidate.iban : null;
+  const fiscalEmail = typeof candidate.fiscalEmail === "string" ? candidate.fiscalEmail : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+
+  return {
+    id: rawId,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
+    taxNumber,
+    vatNumber,
+    fiscalCountry,
+    isVatRegistered,
+    iban,
+    fiscalEmail,
+    isActive: Boolean(isActiveValue),
+  };
+}
+
+function parsePagedFiscalData(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ClientFiscalDataItem[], totalItems: 0 };
+  const candidate = payload as FiscalDataPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeFiscalData)
+    .filter((item): item is ClientFiscalDataItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+/* ---------- Consent normalize/parse ---------- */
+
+function normalizeConsent(payload: unknown): ClientConsentItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.consentId === "number"
+          ? candidate.consentId
+          : typeof candidate.consentId === "string"
+            ? Number(candidate.consentId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const consentTypeId = typeof candidate.consentTypeId === "number" ? candidate.consentTypeId : typeof candidate.consentTypeId === "string" ? Number(candidate.consentTypeId) : 0;
+  const consentTypeName =
+    typeof candidate.consentTypeName === "string"
+      ? candidate.consentTypeName
+      : typeof candidate.consentType === "string"
+        ? candidate.consentType
+        : null;
+  const granted =
+    typeof candidate.granted === "boolean"
+      ? candidate.granted
+      : typeof candidate.granted === "string"
+        ? candidate.granted.toLowerCase() === "true"
+        : false;
+  const grantedDate =
+    typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
+  const revokedDate =
+    typeof candidate.revokedDate === "string" ? candidate.revokedDate : null;
+  const origin =
+    typeof candidate.origin === "string" ? candidate.origin : null;
+  const ipAddress =
+    typeof candidate.ipAddress === "string" ? candidate.ipAddress : null;
+  const userAgent =
+    typeof candidate.userAgent === "string" ? candidate.userAgent : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+
+  return {
+    id: rawId,
+    clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
+    consentTypeId,
+    consentTypeName,
+    granted,
+    grantedDate,
+    revokedDate,
+    origin,
+    ipAddress,
+    userAgent,
+    isActive: Boolean(isActiveValue),
+  };
+}
+
+function parsePagedConsents(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ClientConsentItem[], totalItems: 0 };
+  const candidate = payload as { items?: unknown; totalItems?: unknown };
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeConsent)
+    .filter((item): item is ClientConsentItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+/* ---------- Hierarchy normalize/parse ---------- */
+
+function normalizeHierarchy(payload: unknown): ClientHierarchyItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.hierarchyId === "number"
+          ? candidate.hierarchyId
+          : typeof candidate.hierarchyId === "string"
+            ? Number(candidate.hierarchyId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const parentClientId = typeof candidate.parentClientId === "number" ? candidate.parentClientId : typeof candidate.parentClientId === "string" ? Number(candidate.parentClientId) : 0;
+  const parentClientName =
+    typeof candidate.parentClientName === "string"
+      ? candidate.parentClientName
+      : null;
+  const childClientId = typeof candidate.childClientId === "number" ? candidate.childClientId : typeof candidate.childClientId === "string" ? Number(candidate.childClientId) : 0;
+  const childClientName =
+    typeof candidate.childClientName === "string"
+      ? candidate.childClientName
+      : null;
+  const relationshipType =
+    typeof candidate.relationshipType === "string" ? candidate.relationshipType : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+
+  return {
+    id: rawId,
+    parentClientId,
+    parentClientName,
+    childClientId,
+    childClientName,
+    relationshipType,
+    isActive: Boolean(isActiveValue),
+  };
+}
+
+function parsePagedHierarchy(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ClientHierarchyItem[], totalItems: 0 };
+  const candidate = payload as { items?: unknown; totalItems?: unknown };
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeHierarchy)
+    .filter((item): item is ClientHierarchyItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+/* ---------- Consent Types normalize ---------- */
+
+function normalizeConsentTypes(payload: unknown): ConsentTypeItem[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((candidate) => ({
+      id: typeof candidate.id === "number" ? candidate.id : 0,
+      name: typeof candidate.name === "string" ? candidate.name : "",
+      description: typeof candidate.description === "string" ? candidate.description : null,
+      isActive:
+        typeof candidate.isActive === "boolean"
+          ? candidate.isActive
+          : typeof candidate.active === "boolean"
+            ? candidate.active
+            : true,
+    }));
 }
 
 /* ==========================
@@ -375,6 +710,40 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const addressDeleteRef = useRef<AddressItem | null>(null);
   const [addressesBulkUploading, setAddressesBulkUploading] = useState(false);
 
+  /* ---------- Fiscal Data state ---------- */
+
+  const [fiscalData, setFiscalData] = useState<ClientFiscalDataItem[]>([]);
+  const [fiscalDataLoading, setFiscalDataLoading] = useState(false);
+  const [fiscalDataFormState, setFiscalDataFormState] = useState<FiscalDataFormState>(initialFiscalDataFormStateLocal);
+  const [editingFiscalData, setEditingFiscalData] = useState<ClientFiscalDataItem | null>(null);
+  const [fiscalDataSubmitting, setFiscalDataSubmitting] = useState(false);
+  const [fiscalDataDeleteConfirmOpen, setFiscalDataDeleteConfirmOpen] = useState(false);
+  const fiscalDataDeleteRef = useRef<ClientFiscalDataItem | null>(null);
+  const [fiscalDataBulkUploading, setFiscalDataBulkUploading] = useState(false);
+
+  /* ---------- Consents state ---------- */
+
+  const [consents, setConsents] = useState<ClientConsentItem[]>([]);
+  const [consentsLoading, setConsentsLoading] = useState(false);
+  const [consentFormState, setConsentFormState] = useState<ClientConsentFormState>(initialConsentFormState);
+  const [editingConsent, setEditingConsent] = useState<ClientConsentItem | null>(null);
+  const [consentSubmitting, setConsentSubmitting] = useState(false);
+  const [consentDeleteConfirmOpen, setConsentDeleteConfirmOpen] = useState(false);
+  const consentDeleteRef = useRef<ClientConsentItem | null>(null);
+  const [consentBulkUploading, setConsentBulkUploading] = useState(false);
+  const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+
+  /* ---------- Hierarchy state ---------- */
+
+  const [hierarchyItems, setHierarchyItems] = useState<ClientHierarchyItem[]>([]);
+  const [hierarchyLoading, setHierarchyLoading] = useState(false);
+  const [hierarchyFormState, setHierarchyFormState] = useState<ClientHierarchyFormState>(initialHierarchyFormState);
+  const [editingHierarchy, setEditingHierarchy] = useState<ClientHierarchyItem | null>(null);
+  const [hierarchySubmitting, setHierarchySubmitting] = useState(false);
+  const [hierarchyDeleteConfirmOpen, setHierarchyDeleteConfirmOpen] = useState(false);
+  const hierarchyDeleteRef = useRef<ClientHierarchyItem | null>(null);
+  const [hierarchyBulkUploading, setHierarchyBulkUploading] = useState(false);
+
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
@@ -408,6 +777,36 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [addressSortBy, setAddressSortBy] = useState<AddressSortColumn>("Street");
   const [addressSortDirection, setAddressSortDirection] = useState<"asc" | "desc">("asc");
 
+  /* ---------- Fiscal Data grid state ---------- */
+
+  const [fiscalDataGridDensity, setFiscalDataGridDensity] = useState<RowDensity>("medium");
+  const [fiscalDataSearch, setFiscalDataSearch] = useState("");
+  const [fiscalDataStatusFilter, setFiscalDataStatusFilter] = useState("all");
+  const [fiscalDataPage, setFiscalDataPage] = useState(1);
+  const [fiscalDataPageSize, setFiscalDataPageSize] = useState<number>(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [fiscalDataSortBy, setFiscalDataSortBy] = useState<FiscalDataSortColumn>("TaxNumber");
+  const [fiscalDataSortDirection, setFiscalDataSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Consents grid state ---------- */
+
+  const [consentGridDensity, setConsentGridDensity] = useState<RowDensity>("medium");
+  const [consentSearch, setConsentSearch] = useState("");
+  const [consentStatusFilter, setConsentStatusFilter] = useState("all");
+  const [consentPage, setConsentPage] = useState(1);
+  const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("ConsentType");
+  const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Hierarchy grid state ---------- */
+
+  const [hierarchyGridDensity, setHierarchyGridDensity] = useState<RowDensity>("medium");
+  const [hierarchySearch, setHierarchySearch] = useState("");
+  const [hierarchyStatusFilter, setHierarchyStatusFilter] = useState("all");
+  const [hierarchyPage, setHierarchyPage] = useState(1);
+  const [hierarchyPageSize, setHierarchyPageSize] = useState<number>(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [hierarchySortBy, setHierarchySortBy] = useState<HierarchySortColumn>("ParentClient");
+  const [hierarchySortDirection, setHierarchySortDirection] = useState<"asc" | "desc">("asc");
+
   /* ---------- Reset helpers ---------- */
 
   const resetContactForm = useCallback(() => {
@@ -420,6 +819,21 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setAddressFormState(initialAddressFormState);
   }, []);
 
+  const resetFiscalDataForm = useCallback(() => {
+    setEditingFiscalData(null);
+    setFiscalDataFormState(initialFiscalDataFormStateLocal);
+  }, []);
+
+  const resetConsentForm = useCallback(() => {
+    setEditingConsent(null);
+    setConsentFormState(initialConsentFormState);
+  }, []);
+
+  const resetHierarchyForm = useCallback(() => {
+    setEditingHierarchy(null);
+    setHierarchyFormState(initialHierarchyFormState);
+  }, []);
+
   const resetClientForm = useCallback(() => {
     setClientFormState(initialClientFormState);
   }, []);
@@ -429,25 +843,52 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     resetClientForm();
     resetContactForm();
     resetAddressForm();
+    resetFiscalDataForm();
+    resetConsentForm();
+    resetHierarchyForm();
     setContacts([]);
     setAddresses([]);
+    setFiscalData([]);
+    setConsents([]);
+    setHierarchyItems([]);
     setActiveTab("informacoes");
     setLoadedTabs(new Set(["informacoes"]));
     setContactGridDensity("medium");
     setAddressGridDensity("medium");
+    setFiscalDataGridDensity("medium");
+    setConsentGridDensity("medium");
+    setHierarchyGridDensity("medium");
     setContactSearch("");
     setAddressSearch("");
+    setFiscalDataSearch("");
+    setConsentSearch("");
+    setHierarchySearch("");
     setContactStatusFilter("all");
     setAddressStatusFilter("all");
+    setFiscalDataStatusFilter("all");
+    setConsentStatusFilter("all");
+    setHierarchyStatusFilter("all");
     setContactPage(1);
     setAddressPage(1);
+    setFiscalDataPage(1);
+    setConsentPage(1);
+    setHierarchyPage(1);
     setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
     setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
+    setFiscalDataPageSize(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
+    setConsentPageSize(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
+    setHierarchyPageSize(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactSortBy("Name");
     setContactSortDirection("asc");
     setAddressSortBy("Street");
     setAddressSortDirection("asc");
-  }, [resetAddressForm, resetClientForm, resetContactForm]);
+    setFiscalDataSortBy("TaxNumber");
+    setFiscalDataSortDirection("asc");
+    setConsentSortBy("ConsentType");
+    setConsentSortDirection("asc");
+    setHierarchySortBy("ParentClient");
+    setHierarchySortDirection("asc");
+  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm]);
 
   /* ---------- Load client ---------- */
 
@@ -623,6 +1064,142 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [client, fetchWithAuth, t, toast]);
 
+  /* ---------- Load fiscal data ---------- */
+
+  const loadClientFiscalData = useCallback(async () => {
+    if (!client?.id) {
+      setFiscalData([]);
+      return;
+    }
+    setFiscalDataLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(FISCAL_DATA_PAGE_SIZE),
+      SortBy: "TaxNumber",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${client.id}/fiscal-data/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.fiscalData.errors.load")));
+      }
+      const parsed = parsePagedFiscalData(payload);
+      setFiscalData(parsed.items);
+    } catch (error) {
+      logError("clients.details.loadFiscalData", "Falha ao carregar dados fiscais", error, {
+        clientId: client?.id,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.fiscalData.errors.load"),
+        variant: "destructive",
+      });
+      setFiscalData([]);
+    } finally {
+      setFiscalDataLoading(false);
+    }
+  }, [client, fetchWithAuth, t, toast]);
+
+  /* ---------- Load consents ---------- */
+
+  const loadClientConsents = useCallback(async () => {
+    if (!client?.id) {
+      setConsents([]);
+      return;
+    }
+    setConsentsLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(CONSENT_PAGE_SIZE),
+      SortBy: "ConsentType",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${client.id}/consents/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.consents.errors.load")));
+      }
+      const parsed = parsePagedConsents(payload);
+      setConsents(parsed.items);
+    } catch (error) {
+      logError("clients.details.loadConsents", "Falha ao carregar consentimentos", error, {
+        clientId: client?.id,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.consents.errors.load"),
+        variant: "destructive",
+      });
+      setConsents([]);
+    } finally {
+      setConsentsLoading(false);
+    }
+  }, [client, fetchWithAuth, t, toast]);
+
+  /* ---------- Load consent types ---------- */
+
+  const loadConsentTypes = useCallback(async () => {
+    if (consentTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/clients/consent-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeConsentTypes(payload);
+      setConsentTypes(parsed);
+    } catch {
+      // Silent fail — consent types are optional
+    }
+  }, [consentTypes.length, fetchWithAuth]);
+
+  /* ---------- Load hierarchy ---------- */
+
+  const loadClientHierarchy = useCallback(async () => {
+    if (!client?.id) {
+      setHierarchyItems([]);
+      return;
+    }
+    setHierarchyLoading(true);
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/hierarchies/by-parent/${client.id}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.hierarchy.errors.load")));
+      }
+      const parsed = parsePagedHierarchy(payload);
+      setHierarchyItems(parsed.items);
+    } catch (error) {
+      logError("clients.details.loadHierarchy", "Falha ao carregar hierarquia", error, {
+        clientId: client?.id,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.hierarchy.errors.load"),
+        variant: "destructive",
+      });
+      setHierarchyItems([]);
+    } finally {
+      setHierarchyLoading(false);
+    }
+  }, [client, fetchWithAuth, t, toast]);
+
   /* ---------- Effects ---------- */
 
   useEffect(() => {
@@ -649,6 +1226,28 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       void loadClientAddresses();
     }
   }, [loadedTabs, client?.id, addresses.length, addressesLoading, loadClientAddresses]);
+
+  // Lazy load fiscal data when tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("fiscalData") && client?.id && fiscalData.length === 0 && !fiscalDataLoading) {
+      void loadClientFiscalData();
+    }
+  }, [loadedTabs, client?.id, fiscalData.length, fiscalDataLoading, loadClientFiscalData]);
+
+  // Lazy load consents when tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("consents") && client?.id && consents.length === 0 && !consentsLoading) {
+      void loadClientConsents();
+      void loadConsentTypes();
+    }
+  }, [loadedTabs, client?.id, consents.length, consentsLoading, loadClientConsents, loadConsentTypes]);
+
+  // Lazy load hierarchy when tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("hierarchy") && client?.id && hierarchyItems.length === 0 && !hierarchyLoading) {
+      void loadClientHierarchy();
+    }
+  }, [loadedTabs, client?.id, hierarchyItems.length, hierarchyLoading, loadClientHierarchy]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -1212,6 +1811,500 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     [client, fetchWithAuth, loadClientAddresses, t, toast],
   );
 
+  /* ---------- Fiscal Data submit ---------- */
+
+  const handleFiscalDataSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!client) return;
+      const taxNumber = fiscalDataFormState.taxNumber.trim();
+      const fiscalCountry = fiscalDataFormState.fiscalCountry.trim();
+      const isVatRegistered = fiscalDataFormState.isVatRegistered;
+      const fiscalEmail = fiscalDataFormState.fiscalEmail.trim();
+
+      // Validate required fields
+      if (!taxNumber || !fiscalCountry || !isVatRegistered || !fiscalEmail) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.fiscalData.validation.requiredAll"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setFiscalDataSubmitting(true);
+      try {
+        const payload = {
+          taxNumber,
+          vatNumber: fiscalDataFormState.vatNumber.trim() || null,
+          fiscalCountry,
+          isVatRegistered,
+          iban: fiscalDataFormState.iban.trim() || null,
+          fiscalEmail,
+        };
+        const isEditing = editingFiscalData !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${client.id}/fiscal-data/${editingFiscalData?.id}`
+          : `/api/gerit/v1/clients/${client.id}/fiscal-data`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.fiscalData.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.fiscalData.toasts.updated")
+            : t("clients.fiscalData.toasts.created"),
+        });
+        resetFiscalDataForm();
+        await loadClientFiscalData();
+      } catch (error) {
+        logError("clients.details.fiscalDataSubmit", "Falha ao salvar dados fiscais", error, {
+          clientId: client?.id,
+          taxNumber: fiscalDataFormState.taxNumber,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.fiscalData.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setFiscalDataSubmitting(false);
+      }
+    },
+    [client, fiscalDataFormState, editingFiscalData, fetchWithAuth, loadClientFiscalData, resetFiscalDataForm, t, toast],
+  );
+
+  const handleFiscalDataEdit = useCallback((data: ClientFiscalDataItem) => {
+    setEditingFiscalData(data);
+    setFiscalDataFormState({
+      taxNumber: data.taxNumber ?? "",
+      vatNumber: data.vatNumber ?? "",
+      fiscalCountry: data.fiscalCountry ?? "",
+      isVatRegistered: data.isVatRegistered,
+      iban: data.iban ?? "",
+      fiscalEmail: data.fiscalEmail ?? "",
+    });
+  }, []);
+
+  const handleFiscalDataToggleStatus = useCallback(
+    async (data: ClientFiscalDataItem) => {
+      if (!client?.id) return;
+      try {
+        const endpoint = data.isActive
+          ? `/api/gerit/v1/clients/${client.id}/fiscal-data/${data.id}/deactivate`
+          : `/api/gerit/v1/clients/${client.id}/fiscal-data/${data.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.fiscalData.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: data.isActive
+            ? t("clients.fiscalData.toasts.deactivated")
+            : t("clients.fiscalData.toasts.activated"),
+        });
+        await loadClientFiscalData();
+      } catch (error) {
+        logError("clients.details.fiscalDataToggleStatus", "Falha ao alterar estado dos dados fiscais", error, {
+          clientId: client?.id,
+          fiscalDataId: data.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.fiscalData.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientFiscalData, t, toast],
+  );
+
+  const handleFiscalDataDelete = useCallback(
+    (data: ClientFiscalDataItem) => {
+      fiscalDataDeleteRef.current = data;
+      setFiscalDataDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleFiscalDataDeleteConfirm = useCallback(async () => {
+    const data = fiscalDataDeleteRef.current;
+    fiscalDataDeleteRef.current = null;
+    setFiscalDataDeleteConfirmOpen(false);
+    if (!data || !client?.id) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${client.id}/fiscal-data/${data.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.fiscalData.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.fiscalData.toasts.deleted"),
+        });
+        await loadClientFiscalData();
+      } catch (error) {
+        logError("clients.details.fiscalDataDelete", "Falha ao eliminar dados fiscais", error, {
+          clientId: client?.id,
+          fiscalDataId: data.id,
+          taxNumber: data.taxNumber,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.fiscalData.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientFiscalData, t, toast],
+  );
+
+  /* ---------- Consents submit ---------- */
+
+  const handleConsentSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!client) return;
+      const consentTypeId = consentFormState.consentTypeId.trim();
+      if (!consentTypeId) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.consents.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setConsentSubmitting(true);
+      try {
+        const payload = {
+          consentTypeId: Number(consentTypeId),
+          granted: consentFormState.granted,
+          grantedDate: consentFormState.grantedDate || null,
+          revokedDate: consentFormState.revokedDate || null,
+          origin: consentFormState.origin.trim() || null,
+          ipAddress: consentFormState.ipAddress.trim() || null,
+          userAgent: consentFormState.userAgent.trim() || null,
+        };
+        const isEditing = editingConsent !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${client.id}/consents/${editingConsent?.id}`
+          : `/api/gerit/v1/clients/${client.id}/consents`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.consents.toasts.updated")
+            : t("clients.consents.toasts.created"),
+        });
+        resetConsentForm();
+        await loadClientConsents();
+      } catch (error) {
+        logError("clients.details.consentSubmit", "Falha ao salvar consentimento", error, {
+          clientId: client?.id,
+          consentTypeId: consentFormState.consentTypeId,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setConsentSubmitting(false);
+      }
+    },
+    [client, consentFormState, editingConsent, fetchWithAuth, loadClientConsents, resetConsentForm, t, toast],
+  );
+
+  const handleConsentEdit = useCallback((data: ClientConsentItem) => {
+    setEditingConsent(data);
+    setConsentFormState({
+      consentTypeId: String(data.consentTypeId),
+      granted: data.granted,
+      grantedDate: data.grantedDate ?? "",
+      revokedDate: data.revokedDate ?? "",
+      origin: data.origin ?? "",
+      ipAddress: data.ipAddress ?? "",
+      userAgent: data.userAgent ?? "",
+    });
+  }, []);
+
+  const handleConsentToggleStatus = useCallback(
+    async (data: ClientConsentItem) => {
+      if (!client?.id) return;
+      try {
+        const endpoint = data.isActive
+          ? `/api/gerit/v1/clients/${client.id}/consents/${data.id}/deactivate`
+          : `/api/gerit/v1/clients/${client.id}/consents/${data.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: data.isActive
+            ? t("clients.consents.toasts.deactivated")
+            : t("clients.consents.toasts.activated"),
+        });
+        await loadClientConsents();
+      } catch (error) {
+        logError("clients.details.consentToggleStatus", "Falha ao alterar estado do consentimento", error, {
+          clientId: client?.id,
+          consentId: data.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientConsents, t, toast],
+  );
+
+  const handleConsentDelete = useCallback(
+    (data: ClientConsentItem) => {
+      consentDeleteRef.current = data;
+      setConsentDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleConsentDeleteConfirm = useCallback(async () => {
+    const data = consentDeleteRef.current;
+    consentDeleteRef.current = null;
+    setConsentDeleteConfirmOpen(false);
+    if (!data || !client?.id) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${client.id}/consents/${data.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.consents.toasts.deleted"),
+        });
+        await loadClientConsents();
+      } catch (error) {
+        logError("clients.details.consentDelete", "Falha ao eliminar consentimento", error, {
+          clientId: client?.id,
+          consentId: data.id,
+          consentTypeName: data.consentTypeName,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientConsents, t, toast],
+  );
+
+  /* ---------- Hierarchy submit ---------- */
+
+  const handleHierarchySubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!client) return;
+      const parentClientId = hierarchyFormState.parentClientId.trim();
+      const childClientId = hierarchyFormState.childClientId.trim();
+      if (!parentClientId || !childClientId) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.hierarchy.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setHierarchySubmitting(true);
+      try {
+        const payload = {
+          parentClientId: Number(parentClientId),
+          childClientId: Number(childClientId),
+          relationshipType: hierarchyFormState.relationshipType.trim() || null,
+        };
+        const isEditing = editingHierarchy !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/hierarchies/${editingHierarchy?.id}`
+          : `/api/gerit/v1/clients/hierarchies`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.hierarchy.toasts.updated")
+            : t("clients.hierarchy.toasts.created"),
+        });
+        resetHierarchyForm();
+        await loadClientHierarchy();
+      } catch (error) {
+        logError("clients.details.hierarchySubmit", "Falha ao salvar hierarquia", error, {
+          clientId: client?.id,
+          parentClientId: hierarchyFormState.parentClientId,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.hierarchy.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setHierarchySubmitting(false);
+      }
+    },
+    [client, hierarchyFormState, editingHierarchy, fetchWithAuth, loadClientHierarchy, resetHierarchyForm, t, toast],
+  );
+
+  const handleHierarchyEdit = useCallback((data: ClientHierarchyItem) => {
+    setEditingHierarchy(data);
+    setHierarchyFormState({
+      parentClientId: String(data.parentClientId),
+      childClientId: String(data.childClientId),
+      relationshipType: data.relationshipType ?? "",
+    });
+  }, []);
+
+  const handleHierarchyToggleStatus = useCallback(
+    async (data: ClientHierarchyItem) => {
+      if (!client?.id) return;
+      try {
+        const endpoint = data.isActive
+          ? `/api/gerit/v1/clients/hierarchies/${data.id}/deactivate`
+          : `/api/gerit/v1/clients/hierarchies/${data.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: data.isActive
+            ? t("clients.hierarchy.toasts.deactivated")
+            : t("clients.hierarchy.toasts.activated"),
+        });
+        await loadClientHierarchy();
+      } catch (error) {
+        logError("clients.details.hierarchyToggleStatus", "Falha ao alterar estado da relação", error, {
+          clientId: client?.id,
+          hierarchyId: data.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.hierarchy.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientHierarchy, t, toast],
+  );
+
+  const handleHierarchyDelete = useCallback(
+    (data: ClientHierarchyItem) => {
+      hierarchyDeleteRef.current = data;
+      setHierarchyDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleHierarchyDeleteConfirm = useCallback(async () => {
+    const data = hierarchyDeleteRef.current;
+    hierarchyDeleteRef.current = null;
+    setHierarchyDeleteConfirmOpen(false);
+    if (!data || !client?.id) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/hierarchies/${data.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.hierarchy.toasts.deleted"),
+        });
+        await loadClientHierarchy();
+      } catch (error) {
+        logError("clients.details.hierarchyDelete", "Falha ao eliminar relação", error, {
+          clientId: client?.id,
+          hierarchyId: data.id,
+          parentClientName: data.parentClientName,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.hierarchy.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientHierarchy, t, toast],
+  );
+
   /* ---------- Bulk upload handlers ---------- */
 
   const handleContactsBulkUpload = useCallback(
@@ -1626,6 +2719,499 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       setAddressSortBy(normalized);
     },
     [addressSortBy],
+  );
+
+  /* ---------- Fiscal Data grid ---------- */
+
+  const fiscalDataColumns = useMemo<HubGridColumn<ClientFiscalDataItem>[]>(
+    () => [
+      { key: "TaxNumber", label: t("clients.fiscalData.table.taxNumber") },
+      { key: "VatNumber", label: t("clients.fiscalData.table.vatNumber") },
+      { key: "FiscalCountry", label: t("clients.fiscalData.table.fiscalCountry") },
+      { key: "IsVatRegistered", label: t("clients.fiscalData.table.isVatRegistered") },
+      { key: "Iban", label: t("clients.fiscalData.table.iban") },
+      { key: "FiscalEmail", label: t("clients.fiscalData.table.fiscalEmail") },
+    ],
+    [t],
+  );
+
+  const fiscalDataStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredFiscalData = useMemo(() => {
+    const searchTerm = fiscalDataSearch.trim().toLowerCase();
+    return fiscalData.filter((item) => {
+      if (fiscalDataStatusFilter !== "all") {
+        const expected = fiscalDataStatusFilter === "active";
+        if (item.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      return (
+        (item.taxNumber ?? "").toLowerCase().includes(searchTerm) ||
+        (item.vatNumber ?? "").toLowerCase().includes(searchTerm) ||
+        (item.fiscalEmail ?? "").toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [fiscalDataSearch, fiscalDataStatusFilter, fiscalData]);
+
+  const sortedFiscalData = useMemo(() => {
+    const items = [...filteredFiscalData];
+    items.sort((current, next) => {
+      const a = getFiscalDataSortValue(current, fiscalDataSortBy);
+      const b = getFiscalDataSortValue(next, fiscalDataSortBy);
+      const comparison = a.localeCompare(b);
+      return fiscalDataSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredFiscalData, fiscalDataSortBy, fiscalDataSortDirection]);
+
+  const fiscalDataTotalPages = Math.max(1, Math.ceil(sortedFiscalData.length / fiscalDataPageSize));
+
+  useEffect(() => {
+    setFiscalDataPage((current) => Math.min(current, fiscalDataTotalPages));
+  }, [fiscalDataTotalPages]);
+
+  const fiscalDataPageButtons = useMemo(
+    () => buildPageButtons(fiscalDataPage, fiscalDataTotalPages),
+    [fiscalDataPage, fiscalDataTotalPages],
+  );
+
+  const visibleFiscalData = useMemo(() => {
+    const startIndex = (fiscalDataPage - 1) * fiscalDataPageSize;
+    return sortedFiscalData.slice(startIndex, startIndex + fiscalDataPageSize);
+  }, [fiscalDataPage, fiscalDataPageSize, sortedFiscalData]);
+
+  const fiscalDataPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedFiscalData.length) }),
+    [sortedFiscalData.length, t],
+  );
+
+  useEffect(() => {
+    setFiscalDataPage(1);
+  }, [fiscalDataStatusFilter, fiscalDataSearch, fiscalDataSortBy, fiscalDataSortDirection, fiscalDataPageSize]);
+
+  const fiscalDataRowCells = useCallback(
+    (item: ClientFiscalDataItem) => [
+      item.taxNumber ?? "-",
+      item.vatNumber ?? "-",
+      item.fiscalCountry ?? "-",
+      item.isVatRegistered ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+      item.iban ?? "-",
+      item.fiscalEmail ?? "-",
+    ],
+    [t],
+  );
+
+  const renderFiscalDataStatus = useCallback(
+    (item: ClientFiscalDataItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderFiscalDataActions = useCallback(
+    (item: ClientFiscalDataItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleFiscalDataEdit(item)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleFiscalDataToggleStatus(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            item.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleFiscalDataDelete(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+      </div>
+    ),
+    [handleFiscalDataDelete, handleFiscalDataEdit, handleFiscalDataToggleStatus, t],
+  );
+
+  const handleFiscalDataSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as FiscalDataSortColumn;
+      if (normalized === fiscalDataSortBy) {
+        setFiscalDataSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setFiscalDataSortDirection("asc");
+      setFiscalDataSortBy(normalized);
+    },
+    [fiscalDataSortBy],
+  );
+
+  /* ---------- Consent grid ---------- */
+
+  const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
+    () => [
+      { key: "ConsentType", label: t("clients.consents.table.consentType") },
+      { key: "Granted", label: t("clients.consents.table.granted") },
+      { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
+      { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },
+      { key: "Origin", label: t("clients.consents.table.origin") },
+    ],
+    [t],
+  );
+
+  const consentStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredConsents = useMemo(() => {
+    const searchTerm = consentSearch.trim().toLowerCase();
+    return consents.filter((item) => {
+      if (consentStatusFilter !== "all") {
+        const expected = consentStatusFilter === "active";
+        if (item.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      return (
+        (item.consentTypeName ?? "").toLowerCase().includes(searchTerm) ||
+        (item.origin ?? "").toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [consentSearch, consentStatusFilter, consents]);
+
+  const sortedConsents = useMemo(() => {
+    const items = [...filteredConsents];
+    items.sort((current, next) => {
+      let a = "";
+      let b = "";
+      switch (consentSortBy) {
+        case "ConsentType":
+          a = (current.consentTypeName ?? "").toLowerCase();
+          b = (next.consentTypeName ?? "").toLowerCase();
+          break;
+        case "Granted":
+          a = current.granted ? "1" : "0";
+          b = next.granted ? "1" : "0";
+          break;
+        case "GrantedDate":
+          a = (current.grantedDate ?? "").toLowerCase();
+          b = (next.grantedDate ?? "").toLowerCase();
+          break;
+        case "RevokedDate":
+          a = (current.revokedDate ?? "").toLowerCase();
+          b = (next.revokedDate ?? "").toLowerCase();
+          break;
+        case "Origin":
+          a = (current.origin ?? "").toLowerCase();
+          b = (next.origin ?? "").toLowerCase();
+          break;
+      }
+      const comparison = a.localeCompare(b);
+      return consentSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredConsents, consentSortBy, consentSortDirection]);
+
+  const consentTotalPages = Math.max(1, Math.ceil(sortedConsents.length / consentPageSize));
+
+  useEffect(() => {
+    setConsentPage((current) => Math.min(current, consentTotalPages));
+  }, [consentTotalPages]);
+
+  const consentPageButtons = useMemo(
+    () => buildPageButtons(consentPage, consentTotalPages),
+    [consentPage, consentTotalPages],
+  );
+
+  const visibleConsents = useMemo(() => {
+    const startIndex = (consentPage - 1) * consentPageSize;
+    return sortedConsents.slice(startIndex, startIndex + consentPageSize);
+  }, [consentPage, consentPageSize, sortedConsents]);
+
+  const consentPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedConsents.length) }),
+    [sortedConsents.length, t],
+  );
+
+  useEffect(() => {
+    setConsentPage(1);
+  }, [consentStatusFilter, consentSearch, consentSortBy, consentSortDirection, consentPageSize]);
+
+  const consentRowCells = useCallback(
+    (item: ClientConsentItem) => [
+      item.consentTypeName ?? "-",
+      item.granted ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+      item.grantedDate ?? "-",
+      item.revokedDate ?? "-",
+      item.origin ?? "-",
+    ],
+    [t],
+  );
+
+  const renderConsentStatus = useCallback(
+    (item: ClientConsentItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderConsentActions = useCallback(
+    (item: ClientConsentItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleConsentEdit(item)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleConsentToggleStatus(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            item.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleConsentDelete(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+      </div>
+    ),
+    [handleConsentDelete, handleConsentEdit, handleConsentToggleStatus, t],
+  );
+
+  const handleConsentSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as ConsentSortColumn;
+      if (normalized === consentSortBy) {
+        setConsentSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setConsentSortDirection("asc");
+      setConsentSortBy(normalized);
+    },
+    [consentSortBy],
+  );
+
+  /* ---------- Hierarchy grid ---------- */
+
+  const hierarchyColumns = useMemo<HubGridColumn<ClientHierarchyItem>[]>(
+    () => [
+      { key: "ParentClient", label: t("clients.hierarchy.table.parentClient") },
+      { key: "ChildClient", label: t("clients.hierarchy.table.childClient") },
+      { key: "RelationshipType", label: t("clients.hierarchy.table.relationshipType") },
+    ],
+    [t],
+  );
+
+  const hierarchyStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredHierarchy = useMemo(() => {
+    const searchTerm = hierarchySearch.trim().toLowerCase();
+    return hierarchyItems.filter((item) => {
+      if (hierarchyStatusFilter !== "all") {
+        const expected = hierarchyStatusFilter === "active";
+        if (item.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      return (
+        (item.parentClientName ?? "").toLowerCase().includes(searchTerm) ||
+        (item.childClientName ?? "").toLowerCase().includes(searchTerm) ||
+        (item.relationshipType ?? "").toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [hierarchySearch, hierarchyStatusFilter, hierarchyItems]);
+
+  const sortedHierarchy = useMemo(() => {
+    const items = [...filteredHierarchy];
+    items.sort((current, next) => {
+      let a = "";
+      let b = "";
+      switch (hierarchySortBy) {
+        case "ParentClient":
+          a = (current.parentClientName ?? "").toLowerCase();
+          b = (next.parentClientName ?? "").toLowerCase();
+          break;
+        case "ChildClient":
+          a = (current.childClientName ?? "").toLowerCase();
+          b = (next.childClientName ?? "").toLowerCase();
+          break;
+        case "RelationshipType":
+          a = (current.relationshipType ?? "").toLowerCase();
+          b = (next.relationshipType ?? "").toLowerCase();
+          break;
+      }
+      const comparison = a.localeCompare(b);
+      return hierarchySortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredHierarchy, hierarchySortBy, hierarchySortDirection]);
+
+  const hierarchyTotalPages = Math.max(1, Math.ceil(sortedHierarchy.length / hierarchyPageSize));
+
+  useEffect(() => {
+    setHierarchyPage((current) => Math.min(current, hierarchyTotalPages));
+  }, [hierarchyTotalPages]);
+
+  const hierarchyPageButtons = useMemo(
+    () => buildPageButtons(hierarchyPage, hierarchyTotalPages),
+    [hierarchyPage, hierarchyTotalPages],
+  );
+
+  const visibleHierarchy = useMemo(() => {
+    const startIndex = (hierarchyPage - 1) * hierarchyPageSize;
+    return sortedHierarchy.slice(startIndex, startIndex + hierarchyPageSize);
+  }, [hierarchyPage, hierarchyPageSize, sortedHierarchy]);
+
+  const hierarchyPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedHierarchy.length) }),
+    [sortedHierarchy.length, t],
+  );
+
+  useEffect(() => {
+    setHierarchyPage(1);
+  }, [hierarchyStatusFilter, hierarchySearch, hierarchySortBy, hierarchySortDirection, hierarchyPageSize]);
+
+  const hierarchyRowCells = useCallback(
+    (item: ClientHierarchyItem) => [
+      item.parentClientName ?? "-",
+      item.childClientName ?? "-",
+      item.relationshipType ?? "-",
+    ],
+    [],
+  );
+
+  const renderHierarchyStatus = useCallback(
+    (item: ClientHierarchyItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderHierarchyActions = useCallback(
+    (item: ClientHierarchyItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleHierarchyEdit(item)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleHierarchyToggleStatus(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            item.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => handleHierarchyDelete(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+      </div>
+    ),
+    [handleHierarchyDelete, handleHierarchyEdit, handleHierarchyToggleStatus, t],
+  );
+
+  const handleHierarchySort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as HierarchySortColumn;
+      if (normalized === hierarchySortBy) {
+        setHierarchySortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setHierarchySortDirection("asc");
+      setHierarchySortBy(normalized);
+    },
+    [hierarchySortBy],
   );
 
   /* ---------- Derived values ---------- */
@@ -2230,13 +3816,397 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     );
   };
 
+  /* ---------- Render: Fiscal Data tab ---------- */
+
+  const renderFiscalDataTab = () => {
+    if (!loadedTabs.has("fiscalData")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Fiscal Data form */}
+        <form
+          onSubmit={(e) => void handleFiscalDataSubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.fiscalData.form.taxNumber")}
+              value={fiscalDataFormState.taxNumber}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, taxNumber: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.fiscalData.form.vatNumber")}
+              value={fiscalDataFormState.vatNumber}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, vatNumber: v }))
+              }
+            />
+            <SelectField
+              label={t("clients.fiscalData.form.fiscalCountry")}
+              value={fiscalDataFormState.fiscalCountry}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, fiscalCountry: v }))
+              }
+              options={EUROPEAN_COUNTRIES_PLUS_BR_US.map((c) => ({
+                value: c.code,
+                label: c.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
+              required
+            />
+            <ToggleField
+              label={t("clients.fiscalData.form.isVatRegistered")}
+              checked={fiscalDataFormState.isVatRegistered}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, isVatRegistered: v }))
+              }
+              onLabel={t("common.yes")}
+              offLabel={t("common.no")}
+            />
+            <FormField
+              label={t("clients.fiscalData.form.iban")}
+              value={fiscalDataFormState.iban}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, iban: v }))
+              }
+            />
+            <FormField
+              label={t("clients.fiscalData.form.fiscalEmail")}
+              value={fiscalDataFormState.fiscalEmail}
+              onChange={(v) =>
+                setFiscalDataFormState((prev) => ({ ...prev, fiscalEmail: v }))
+              }
+              type="email"
+              required
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={fiscalDataSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {fiscalDataSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingFiscalData ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingFiscalData && (
+              <button
+                type="button"
+                onClick={resetFiscalDataForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Fiscal Data grid */}
+        <HubGrid
+          columns={fiscalDataColumns}
+          items={visibleFiscalData}
+          renderRowCells={fiscalDataRowCells}
+          renderStatus={renderFiscalDataStatus}
+          renderActions={renderFiscalDataActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.fiscalData.table.actions")}
+          rowDensity={fiscalDataGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setFiscalDataGridDensity}
+          sortBy={fiscalDataSortBy}
+          sortDirection={fiscalDataSortDirection}
+          onSort={handleFiscalDataSort}
+          statusFilter={fiscalDataStatusFilter}
+          statusFilterOptions={fiscalDataStatusFilterOptions}
+          onStatusFilterChange={setFiscalDataStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={fiscalDataSearch}
+          onSearchChange={setFiscalDataSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={fiscalDataLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.fiscalData.empty")}
+          pageCaption={fiscalDataPageCaption}
+          page={fiscalDataPage}
+          totalPages={fiscalDataTotalPages}
+          pageButtons={fiscalDataPageButtons}
+          onPageChange={setFiscalDataPage}
+          pageSize={fiscalDataPageSize}
+          pageSizeOptions={FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setFiscalDataPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(item) => item.id}
+        />
+      </div>
+    );
+  };
+
+  /* ---------- Render: Consents tab ---------- */
+
+  const renderConsentsTab = () => {
+    if (!loadedTabs.has("consents")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Consent form */}
+        <form
+          onSubmit={(e) => void handleConsentSubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div>
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
+                {t("clients.consents.form.consentType")}
+              </label>
+              <select
+                value={consentFormState.consentTypeId}
+                onChange={(e) =>
+                  setConsentFormState((prev) => ({ ...prev, consentTypeId: e.target.value }))
+                }
+                className="flex h-10 w-full rounded-sm border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground"
+              >
+                <option value="">{t("clients.form.selectOption")}</option>
+                {consentTypes.map((ct) => (
+                  <option key={ct.id} value={String(ct.id)}>
+                    {ct.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <FormField
+              label={t("clients.consents.form.origin")}
+              value={consentFormState.origin}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, origin: v }))
+              }
+            />
+            <FormField
+              label={t("clients.consents.form.grantedDate")}
+              value={consentFormState.grantedDate}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, grantedDate: v }))
+              }
+              type="date"
+            />
+            <FormField
+              label={t("clients.consents.form.revokedDate")}
+              value={consentFormState.revokedDate}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, revokedDate: v }))
+              }
+              type="date"
+            />
+            <FormField
+              label={t("clients.consents.form.ipAddress")}
+              value={consentFormState.ipAddress}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, ipAddress: v }))
+              }
+            />
+            <FormField
+              label={t("clients.consents.form.userAgent")}
+              value={consentFormState.userAgent}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, userAgent: v }))
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={consentSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {consentSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingConsent ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingConsent && (
+              <button
+                type="button"
+                onClick={resetConsentForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Consents grid */}
+        <HubGrid
+          columns={consentColumns}
+          items={visibleConsents}
+          renderRowCells={consentRowCells}
+          renderStatus={renderConsentStatus}
+          renderActions={renderConsentActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.consents.table.actions")}
+          rowDensity={consentGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setConsentGridDensity}
+          sortBy={consentSortBy}
+          sortDirection={consentSortDirection}
+          onSort={handleConsentSort}
+          statusFilter={consentStatusFilter}
+          statusFilterOptions={consentStatusFilterOptions}
+          onStatusFilterChange={setConsentStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={consentSearch}
+          onSearchChange={setConsentSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={consentsLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.consents.empty")}
+          pageCaption={consentPageCaption}
+          page={consentPage}
+          totalPages={consentTotalPages}
+          pageButtons={consentPageButtons}
+          onPageChange={setConsentPage}
+          pageSize={consentPageSize}
+          pageSizeOptions={CONSENT_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setConsentPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(item) => item.id}
+        />
+      </div>
+    );
+  };
+
+  /* ---------- Render: Hierarchy tab ---------- */
+
+  const renderHierarchyTab = () => {
+    if (!loadedTabs.has("hierarchy")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Hierarchy form */}
+        <form
+          onSubmit={(e) => void handleHierarchySubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.hierarchy.form.parentClient")}
+              value={hierarchyFormState.parentClientId}
+              onChange={(v) =>
+                setHierarchyFormState((prev) => ({ ...prev, parentClientId: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.hierarchy.form.childClient")}
+              value={hierarchyFormState.childClientId}
+              onChange={(v) =>
+                setHierarchyFormState((prev) => ({ ...prev, childClientId: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.hierarchy.form.relationshipType")}
+              value={hierarchyFormState.relationshipType}
+              onChange={(v) =>
+                setHierarchyFormState((prev) => ({ ...prev, relationshipType: v }))
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={hierarchySubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {hierarchySubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingHierarchy ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingHierarchy && (
+              <button
+                type="button"
+                onClick={resetHierarchyForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Hierarchy grid */}
+        <HubGrid
+          columns={hierarchyColumns}
+          items={visibleHierarchy}
+          renderRowCells={hierarchyRowCells}
+          renderStatus={renderHierarchyStatus}
+          renderActions={renderHierarchyActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.hierarchy.table.actions")}
+          rowDensity={hierarchyGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setHierarchyGridDensity}
+          sortBy={hierarchySortBy}
+          sortDirection={hierarchySortDirection}
+          onSort={handleHierarchySort}
+          statusFilter={hierarchyStatusFilter}
+          statusFilterOptions={hierarchyStatusFilterOptions}
+          onStatusFilterChange={setHierarchyStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={hierarchySearch}
+          onSearchChange={setHierarchySearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={hierarchyLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.hierarchy.empty")}
+          pageCaption={hierarchyPageCaption}
+          page={hierarchyPage}
+          totalPages={hierarchyTotalPages}
+          pageButtons={hierarchyPageButtons}
+          onPageChange={setHierarchyPage}
+          pageSize={hierarchyPageSize}
+          pageSizeOptions={HIERARCHY_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setHierarchyPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(item) => item.id}
+        />
+      </div>
+    );
+  };
+
   /* ==========================
      RENDER
      ========================== */
 
   return (
     <WorkspaceShell>
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div data-testid="client-details-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-muted px-4 py-4 sm:px-6 dark:bg-muted">
           {/* ---------- Header ---------- */}
           <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-background px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
@@ -2339,6 +4309,21 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                   label: t("clients.detail.tabs.addressesSummary"),
                   panel: renderAddressesTab(),
                 },
+                {
+                  id: "fiscalData",
+                  label: t("clients.detail.tabs.fiscalDataSummary"),
+                  panel: renderFiscalDataTab(),
+                },
+                {
+                  id: "consents",
+                  label: t("clients.detail.tabs.consentsSummary"),
+                  panel: renderConsentsTab(),
+                },
+                {
+                  id: "hierarchy",
+                  label: t("clients.detail.tabs.hierarchySummary"),
+                  panel: renderHierarchyTab(),
+                },
               ]}
             />
           )}
@@ -2369,6 +4354,45 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         confirmLabel={t("clients.actions.delete")}
         cancelLabel={t("clients.actions.cancel")}
         onConfirm={() => void handleAddressDeleteConfirm()}
+      />
+      <ConfirmDialog
+        open={fiscalDataDeleteConfirmOpen}
+        onOpenChange={setFiscalDataDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          fiscalDataDeleteRef.current
+            ? t("clients.fiscalData.confirm.delete", { taxNumber: fiscalDataDeleteRef.current.taxNumber ?? t("clients.fiscalData.table.taxNumber") })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleFiscalDataDeleteConfirm()}
+      />
+      <ConfirmDialog
+        open={consentDeleteConfirmOpen}
+        onOpenChange={setConsentDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          consentDeleteRef.current
+            ? t("clients.consents.confirm.delete", { consentTypeName: consentDeleteRef.current.consentTypeName ?? t("clients.consents.table.consentType") })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleConsentDeleteConfirm()}
+      />
+      <ConfirmDialog
+        open={hierarchyDeleteConfirmOpen}
+        onOpenChange={setHierarchyDeleteConfirmOpen}
+        title={t("clients.toasts.validationTitle")}
+        description={
+          hierarchyDeleteRef.current
+            ? t("clients.hierarchy.confirm.delete", { parentClientName: hierarchyDeleteRef.current.parentClientName ?? t("clients.hierarchy.table.parentClient"), childClientName: hierarchyDeleteRef.current.childClientName ?? t("clients.hierarchy.table.childClient") })
+            : ""
+        }
+        confirmLabel={t("clients.actions.delete")}
+        cancelLabel={t("clients.actions.cancel")}
+        onConfirm={() => void handleHierarchyDeleteConfirm()}
       />
     </WorkspaceShell>
   );

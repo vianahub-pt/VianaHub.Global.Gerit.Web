@@ -23,7 +23,7 @@ interface DashboardInsightsProps {
 
 export default function DashboardInsights({ labels }: DashboardInsightsProps) {
   return (
-    <aside className="gerit-animate-enter flex flex-col gap-4">
+    <aside data-testid="dashboard-insights-root" className="gerit-animate-enter flex flex-col gap-4">
       <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] dark:border-slate-800 dark:bg-slate-900">
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-sky-600 dark:text-sky-400">
           {labels.insightsTitle}

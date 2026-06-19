@@ -41,7 +41,7 @@ npm run clean
 npx tsc --project tsconfig.typecheck.json --noEmit
 ```
 
-Quando houver scripts adicionais no `package.json`, os agentes devem verificar antes de executar.  
+Quando houver scripts adicionais no `package.json`, os agentes devem verificar antes de executar.
 Não inventar comandos inexistentes.
 
 ---
@@ -157,7 +157,7 @@ Toda página operacional deve seguir, sempre que aplicável, a estrutura em `dom
 - `useHttpClient()` de `platform/api` pode ser usado quando o domínio já usa esse padrão.
 - Para upload/FormData, passar `body: formData` sem header manual `Content-Type`.
 
-A decisão deve respeitar o padrão existente no domínio alterado.  
+A decisão deve respeitar o padrão existente no domínio alterado.
 Não criar novo client HTTP sem necessidade.
 
 ---
@@ -172,7 +172,7 @@ Não criar novo client HTTP sem necessidade.
 import { queryKeys } from '@/platform/query';
 ```
 
-Não criar query keys globais novas sem avaliar impacto.  
+Não criar query keys globais novas sem avaliar impacto.
 Alterações globais em query keys devem ser tratadas como tarefa de alta complexidade e roteadas para `developer-senior`.
 
 ---
@@ -208,6 +208,7 @@ po.md
 developer-junior.md
 developer-pleno.md
 developer-senior.md
+ui-ux.md
 qa.md
 ```
 
@@ -217,338 +218,297 @@ Instrução compartilhada:
 .opencode/instructions/kanban-flow.md
 ```
 
-Não usar mais o fluxo antigo baseado em `developer.md` genérico.
-
-Se ainda existir um `developer.md` antigo, ele deve ser removido, arquivado ou deixado explicitamente fora do fluxo para evitar conflito com os Developers por senioridade.
-
 ---
 
-# Workflow Automation
+# Fluxo Kanban
 
-## Regra Geral
-
-O fluxo deve ser **contínuo, automatizado e sem intervenção humana** entre os agentes.
-
-A intervenção humana acontece apenas no final, para:
-
-1. Validar o resultado final.
-2. Revisar o PR.
-3. Aprovar o PR.
-4. Fazer merge do PR para a branch de destino definida no fluxo do projeto.
-
-Os agentes não devem pedir confirmação para atividades operacionais normais do fluxo.
-
----
-
-# Regra Fundamental do Fluxo
-
-## O Kanban Coordinator NUNCA desenvolve
-
-O `kanban-coordinator` é **exclusivamente um orquestrador de fluxo**. Ele **NUNCA** deve criar branch, implementar código, executar validações técnicas, commitar, fazer push ou criar PR.
-
-### O Kanban Coordinator é o Único Gestor de Cards
-
-Toda movimentação de cards no board é feita **exclusivamente pelo `kanban-coordinator`**. Nenhum outro agente (PO, Developers ou QA) deve mover cards. O coordinator gerencia: assign, `To do`, `In Progress`, `For Tests`, `In Test`, `For Deploy` e retorno para `In Progress`.
-
-Todo o desenvolvimento é responsabilidade **exclusiva** dos subagentes:
-- `developer-junior` (baixa complexidade)
-- `developer-pleno` (média complexidade)
-- `developer-senior` (alta complexidade)
-
-Toda a validação é responsabilidade **exclusiva** do subagente `qa`.
-
-## Automação Total — Nenhuma Intervenção Humana
-
-Todo o fluxo operacional entre os agentes é **100% automático, contínuo e fluido**, sem qualquer intervenção humana.
-
-A **única** intervenção humana possível e inegociável em todo o ciclo de vida de uma issue é:
-
-1. **Revisar** o PR final.
-2. **Aprovar** o PR final.
-3. **Fazer o merge** do PR final para a branch de destino.
-
-Nenhum agente, em nenhuma circunstância, deve solicitar confirmação, autorização ou validação humana para qualquer atividade operacional. Todas as movimentações de cards, criações de branch, implementações, validações técnicas, commits, pushes, criação de PRs e acionamentos entre agentes devem ocorrer **automática e obrigatoriamente** sem intervenção humana.
-
-O fluxo **só pode parar** para intervenção humana em caso de:
-- Bloqueio real (requisito de negócio ausente, critério de aceite ambíguo, dependência externa não resolvida, contrato de API inexistente, erro técnico impeditivo, risco de segurança ou perda de dados).
-- Regra anti-loop (mesmo bug reportado 2 vezes na mesma issue).
-
-Mesmo nesses casos, o bloqueio deve ser registrado com clareza antes de qualquer ação.
-
-## Proteção da Estrutura de Agentes — NUNCA Alterar
-
-Nenhuma alteração no repositório — seja novo desenvolvimento, correção de bug/fix, instalação de dependência ou qualquer outra mudança — pode modificar, remover, renomear ou desativar a estrutura atual de agentes, instruções compartilhadas ou configurações do OpenCode.
-
-Isso inclui, mas não se limita a:
-- Arquivos em `.opencode/agents/` (todos os agentes)
-- Arquivo `.opencode/instructions/kanban-flow.md`
-- Arquivo `AGENTS.md` na raiz do projeto
-- Arquivo `.opencode/opencode.json`
-
-A **única** exceção é quando o usuário solicitar **expressamente e explicitamente** a alteração desses arquivos.
-
-Qualquer agente que identificar uma tentativa de alteração desses arquivos sem solicitação explícita do usuário deve **recusar a alteração imediatamente** e informar o usuário sobre a proteção vigente.
-
----
-
-## Fluxo Automatizado Oficial
+## Fluxo Oficial
 
 ```text
-PO -> Kanban Coordinator -> Developer Junior | Developer Pleno | Developer Senior -> QA
+PO -> Kanban Coordinator -> Developer Junior | Developer Pleno | Developer Senior | UI/UX -> QA
 ```
 
-Fluxo de status:
+Status no board:
 
 ```text
 Backlog -> To do -> In Progress -> For Tests -> In Test -> For Deploy -> Done
 ```
 
+## Regra de Movimentação de Cards
+
+Somente o `kanban-coordinator` move cards no board. Nenhum outro agente (PO, Developers, UI/UX, QA) deve executar `gh project item-edit` ou movimentar cards diretamente.
+
+Os demais agentes apenas **notificam** o coordinator ao finalizar sua etapa. O coordinator executa a transição de coluna.
+
+## Regra de Comunicação entre Agentes
+
+O `kanban-coordinator` passa aos agentes especializados **apenas**:
+
+- O que fazer (ação objetiva e específica)
+- Onde está (link da issue/PR)
+- Modo de execução
+- O que entregar de volta (resultado esperado)
+
+Não incluir nos handoffs: contexto completo da issue, histórico do que outros fizeram, comandos já executados, validações já realizadas.
+
+## Handoff Padrão
+
+O handoff deve ter **no máximo** este formato:
+
+```md
+Issue: #NUMERO
+Ação: [ação objetiva]
+Agente: [developer-junior | developer-pleno | developer-senior | ui-ux]
+Modo: [FAST_PATH | STANDARD_PATH | FULL_PATH]
+QA esperado: [QA_FAST | QA_STANDARD | QA_FULL]
+Entrega: branch, alteração mínima, commit, push, PR e notificação ao coordinator.
+```
+
+**Proibido incluir:** contexto completo da issue, histórico de outros agentes, comandos executados, validações realizadas, análises longas, logs, checklist completo.
+
 ---
 
-## Etapas Automatizadas
+# Modos de Execução
 
-| Etapa | Agente | Ação automática |
-|-------|--------|-----------------|
+O `kanban-coordinator` classifica cada tarefa em um dos três modos antes de fazer handoff. Cada modo define as validações obrigatórias.
+
+## FAST_PATH
+
+Usar para tarefas triviais e localizadas. **Sempre** `developer-junior`.
+
+Exemplos obrigatórios de classificação como FAST_PATH:
+- Remover input visual de uma tela
+- Remover botão visual
+- Remover label
+- Remover texto
+- Alterar texto
+- Alterar placeholder
+- Alterar ícone
+- Alterar valor default de dropdown/select
+- Ajustar classe Tailwind localizada
+- Ajustar espaçamento/alinhamento localizado
+- Ajuste i18n simples (chave de tradução)
+- Ocultar/exibir campo sem alterar regra de negócio
+- Mudança em um único componente
+- Mudança em uma única tela
+- Sem alteração de API, schema, payload, validação funcional complexa, hook
+- Sem alteração de `core/`, `platform/` ou `shared` crítico
+
+**Validações:**
+
+- `git diff --check` (sempre)
+- `npm run lint` somente se a alteração tocar arquivos TS/TSX relevantes
+- Typecheck somente se alterar tipos, imports/exports, hooks ou props
+- Build somente se alterar rota, config, shared crítico ou se houver erro de lint/typecheck
+
+**NÃO executar por padrão em FAST_PATH:** `npm run build`, `npx tsc --project tsconfig.typecheck.json --noEmit`. Esses comandos só devem rodar se houver alteração em rota, import/export, tipo compartilhado, props públicas, schema, hook, componente compartilhado crítico, config ou erro prévio de lint/typecheck.
+
+## STANDARD_PATH
+
+Usar para tarefas funcionais intermediárias:
+
+- Formulário com validação
+- Grid/tabela com filtros, paginação, ordenação
+- Tela existente com alteração funcional
+- Hook local de dados
+- Integração com API já existente
+- Correção funcional de média complexidade
+- CRUD seguindo padrão existente
+
+**Validações:**
+
+- `git diff --check` (sempre)
+- `npm run lint`
+- Typecheck quando aplicável
+- Build somente quando a alteração impactar rota, página, import/export, formulário complexo, hook de dados ou shared
+
+## FULL_PATH
+
+Usar para tarefas complexas, críticas ou arquiteturais:
+
+- Nova tela
+- CRUD completo com múltiplos componentes
+- Alteração em `shared/`, `core/`, `platform/`
+- Autenticação/autorização
+- Segurança e dados sensíveis
+- Tenant isolation
+- Query keys globais
+- Refatoração estrutural
+- Performance e otimização
+- Bug crítico ou alto
+
+**Validações:**
+
+- `git diff --check`
+- `npm run lint`
+- `npm run build`
+- `npx tsc --project tsconfig.typecheck.json --noEmit`
+- Testes existentes, se houver
+
+---
+
+# Modos de QA
+
+O handoff do coordinator para o QA também indica o modo de validação.
+
+## QA_FAST
+
+Para tarefas triviais onde o Developer já reportou validação suficiente:
+
+- Revisar diff do PR
+- Validar critérios de aceite
+- Não reexecutar build/typecheck quando a mudança for trivial e o Developer já reportou sucesso
+- Comentário curto na issue
+
+## QA_STANDARD
+
+Para tarefas de média complexidade:
+
+- Revisar diff do PR
+- Validar critérios de aceite
+- Rodar lint/typecheck quando necessário
+
+## QA_FULL
+
+Para tarefas críticas, arquiteturais ou de segurança:
+
+- `npm run lint`
+- `npm run build`
+- `npx tsc --project tsconfig.typecheck.json --noEmit`
+- Testes existentes
+- Validação funcional/manual quando aplicável
+
+---
+
+# Etapas do Fluxo
+
+| Etapa | Responsável | Ação |
+|-------|-------------|------|
 | 1. Demanda recebida | `kanban-coordinator` | Entende a demanda e aciona PO quando necessário |
-| 2. Issue criada/refinada | `po` | Cria/refina issue, adiciona ao board e move para `To do` quando pronta |
-| 3. Roteamento | `kanban-coordinator` | Classifica complexidade e escolhe Developer |
-| 4. Desenvolvimento | `developer-junior`, `developer-pleno` ou `developer-senior` | Move para `In Progress`, cria branch, implementa, valida, commita, faz push e cria PR |
-| 5. Entrega para QA | Developer escolhido | Move para `For Tests` e aciona QA |
-| 6. Validação | `qa` | Move para `In Test`, valida e gera relatório |
-| 7. QA aprovado | `qa` | Move para `For Deploy` e orienta o usuário a revisar/aprovar/mergear PR |
-| 8. QA reprovado | `qa` | Move para `In Progress`, recomenda Developer adequado e devolve ao `kanban-coordinator` |
-| 9. Correção | `kanban-coordinator` + Developer adequado | Encaminha correção sem pedir confirmação ao usuário |
-| 10. Revalidação | `qa` | Revalida até aprovação ou escalação anti-loop |
-
-> **Nota:** A movimentação de cards (In Progress, For Tests, In Test, For Deploy, In Progress) é feita **exclusivamente pelo `kanban-coordinator`**. Os agentes PO, Developers e QA notificam o coordinator, que executa as transições de coluna.
-
----
-
-## Atividades que NÃO exigem confirmação humana
-
-Os agentes não devem pedir confirmação para:
-
-- criar issue;
-- refinar issue;
-- adicionar issue ao GitHub Projects;
-- classificar complexidade;
-- escolher Developer;
-- criar branch;
-- implementar;
-- executar lint;
-- executar build;
-- executar typecheck;
-- executar testes existentes;
-- commitar alterações;
-- fazer push da branch;
-- criar PR;
-- comentar issue;
-- acionar QA;
-- aprovar QA e notificar coordinator para mover para `For Deploy`;
-- reprovar QA e notificar coordinator para mover para `In Progress`;
-- encaminhar correção para Developer adequado;
-- revalidar após correção.
-
----
-
-## Intervenção Humana Permitida
-
-A intervenção humana só deve ocorrer nos seguintes casos:
-
-### 1. Aprovação final do PR
-
-O usuário deve revisar, aprovar e fazer merge do PR no GitHub.
-
-### 2. Bloqueio real
-
-O fluxo pode parar quando houver:
-
-- requisito de negócio ausente;
-- critério de aceite ambíguo;
-- dependência externa não resolvida;
-- contrato de API inexistente ou incompatível;
-- erro técnico impeditivo que o agente não consiga resolver;
-- risco de segurança, perda de dados ou exposição de dados que exija decisão humana.
-
-### 3. Regra anti-loop
-
-Se o mesmo bug for reportado duas vezes na mesma issue, escalar para o usuário e `kanban-coordinator`.
-
-O usuário decide:
-
-- corrigir com `developer-senior`;
-- aceitar com ressalva;
-- criar nova issue;
-- revisar manualmente.
+| 2. Issue criada | `po` | Cria/refina issue e notifica coordinator |
+| 3. Card no board | `kanban-coordinator` | Adiciona issue ao board e move para To do |
+| 4. Roteamento | `kanban-coordinator` | Classifica modo, escolhe Developer/UI/UX, move para In Progress |
+| 5. Desenvolvimento | Developer/UI/UX | Implementa conforme modo, commita, cria PR e notifica coordinator |
+| 6. Para QA | `kanban-coordinator` | Move para For Tests e aciona QA |
+| 7. Validação | `qa` | Valida conforme modo QA e notifica coordinator |
+| 8. Aprovado | `kanban-coordinator` | Move para For Deploy |
+| 9. Reprovado | `kanban-coordinator` | Move para In Progress e encaminha correção |
+| 10. Merge | Usuário | Revisa, aprova e faz merge do PR |
 
 ---
 
 # Roteamento por Complexidade
 
-O `kanban-coordinator` é responsável pela decisão final de roteamento.
+## Regra Determinística
 
-A complexidade sugerida pelo PO é apenas um insumo.
+Tarefas triviais (remover input, botão, label, texto, alterar placeholder, ícone, valor default, ajuste Tailwind localizado, i18n simples) **sempre** vão para `developer-junior` + `FAST_PATH` + `QA_FAST`. Exceto se exigir alteração de API, schema, payload, validação, hook, regra de negócio ou tipo compartilhado.
 
----
-
-## Baixa Complexidade -> developer-junior
-
-Usar `developer-junior` para:
-
-- ajustes de texto;
-- ajustes simples de i18n;
-- correções visuais pequenas;
-- espaçamento, alinhamento, label, placeholder ou ícone;
-- pequenos bugs de layout;
-- ajustes localizados em componente existente;
-- estado loading/error/empty simples;
-- mudança em uma única tela ou componente;
-- mudança sem API nova;
-- mudança sem regra de negócio;
-- mudança sem impacto arquitetural.
-
----
-
-## Média Complexidade -> developer-pleno
-
-Usar `developer-pleno` para:
-
-- nova tela seguindo padrão existente;
-- CRUD simples ou intermediário;
-- formulários;
-- tabelas/grids;
-- filtros;
-- busca;
-- paginação;
-- ordenação;
-- integração com API existente;
-- hooks de domínio;
-- componentes de domínio;
-- validações de formulário;
-- correções funcionais médias;
-- melhorias em uma jornada específica.
-
----
-
-## Alta Complexidade -> developer-senior
-
-Usar `developer-senior` para:
-
-- features complexas ou transversais;
-- refatorações estruturais;
-- bugs críticos ou altos;
-- alterações em arquitetura frontend;
-- alterações em `core/`, `platform/`, `shared/` ou padrões reutilizáveis;
-- integrações críticas com API;
-- performance;
-- segurança;
-- autenticação/autorização;
-- tenant isolation;
-- query keys globais;
-- design system/componentes compartilhados críticos;
-- mudanças com impacto em múltiplos domínios;
-- correções que exigem análise de causa raiz.
-
----
-
-## Regra de Decisão
+| Critério | Developer | Modo padrão |
+|----------|-----------|-------------|
+| Simples, localizado, baixo risco | `developer-junior` | `FAST_PATH` |
+| Funcional, intermediário, padrão existente | `developer-pleno` | `STANDARD_PATH` |
+| Complexo, crítico, arquitetural | `developer-senior` | `FULL_PATH` |
+| UI/UX visual, layout, tema, responsividade | `ui-ux` | Conforme impacto |
 
 Em caso de dúvida:
 
 ```text
-Junior vs Pleno -> escolher Pleno
-Pleno vs Senior -> escolher Senior
+Tarefa parece trivial? → developer-junior + FAST_PATH
+Junior vs Pleno? → Verificar checklist de justificativa. Se nenhuma opção marcar, manter junior.
+Pleno vs Senior? → Senior
 ```
 
-A prioridade é reduzir risco de regressão e evitar que um agente abaixo do nível necessário altere áreas sensíveis.
+## Justificativa Obrigatória para Escalonamento
+
+Se o coordinator escolher `developer-pleno`, `developer-senior` ou `ui-ux` para tarefa aparentemente trivial, deve registrar na issue:
+
+```md
+## Justificativa de escalonamento
+
+A tarefa parecia trivial, mas foi roteada para `[agente]` porque envolve:
+
+- [ ] alteração de API
+- [ ] alteração de payload
+- [ ] alteração de schema/validação
+- [ ] alteração de hook
+- [ ] alteração de tipo compartilhado
+- [ ] alteração em `core/`
+- [ ] alteração em `platform/`
+- [ ] alteração em `shared` crítico
+- [ ] regra de negócio
+- [ ] risco funcional médio/alto
+- [ ] outro motivo: ...
+```
+
+Se nenhuma opção justificar → rotear para `developer-junior`.
 
 ---
 
-# QA Reprovado
+# Roteamento de Correção (após QA)
 
-Quando o QA reprovar:
-
-1. QA comenta a issue com detalhes.
-2. QA gera relatório em `docs/reviews/`.
-3. QA recomenda o Developer adequado.
-4. QA envia handoff ao `kanban-coordinator`.
-5. `kanban-coordinator` move card para `In Progress` e encaminha automaticamente para correção.
+| Tipo de problema | Developer | Modo |
+|------------------|-----------|------|
+| Texto, i18n simples, visual simples | `developer-junior` | `FAST_PATH` |
+| Formulário, grid, filtro, API existente | `developer-pleno` | `STANDARD_PATH` |
+| Arquitetura, segurança, performance | `developer-senior` | `FULL_PATH` |
 
 ---
 
-## Roteamento de Correção
+# Automação e Intervenção Humana
 
-| Tipo de problema | Developer recomendado |
-|------------------|----------------------|
-| Texto, i18n simples, visual simples, layout localizado | `developer-junior` |
-| Formulário, grid, filtro, paginação, API existente, regra funcional intermediária | `developer-pleno` |
-| Arquitetura, segurança, autenticação, autorização, tenant, performance, regressão complexa | `developer-senior` |
+## Fluxo contínuo
+
+O fluxo deve ser contínuo e sem intervenção humana entre as etapas operacionais. Os agentes não pedem confirmação para:
+
+- criar/refinar issue
+- criar branch
+- implementar
+- executar validações conforme modo
+- commitar, push, criar PR
+- comentar issue
+- notificar coordinator
+
+## Intervenção humana
+
+A intervenção humana ocorre apenas para:
+
+1. Revisar o PR final
+2. Aprovar o PR final
+3. Fazer o merge do PR
+
+Ou em caso de bloqueio real:
+
+- Requisito de negócio ausente
+- Critério de aceite ambíguo
+- Dependência externa não resolvida
+- Contrato de API inexistente
+- Erro técnico impeditivo
+- Risco de segurança ou perda de dados
+
+## Anti-loop
+
+Se o mesmo bug for reportado 2 vezes na mesma issue, escalar para o usuário e `kanban-coordinator`.
 
 ---
 
 # Execução Paralela
 
-A execução paralela é permitida apenas para issues independentes.
+**Permitido:** issues diferentes, branches diferentes, domínios isolados, arquivos sem conflito.
 
-Permitido:
-
-- issues diferentes;
-- branches diferentes;
-- worktrees diferentes, quando aplicável;
-- arquivos sem conflito;
-- domínios isolados;
-- ausência de dependência direta entre tarefas;
-- ausência de alterações simultâneas em áreas globais críticas.
-
-Não permitido:
-
-- dois Developers na mesma issue;
-- dois Developers na mesma branch;
-- dois Developers alterando os mesmos arquivos;
-- dois Developers alterando `core/`, `platform/`, `shared/ui` crítico ou query keys globais ao mesmo tempo;
-- tarefas com dependência direta;
-- risco alto de conflito ou regressão.
-
-Regra prática:
-
-```text
-Paralelismo por issue independente é permitido.
-Paralelismo dentro da mesma issue é proibido, salvo orientação explícita do usuário e divisão técnica muito clara.
-```
+**Proibido:** mesma issue, mesma branch, mesmos arquivos, áreas globais críticas ao mesmo tempo, tarefas com dependência direta.
 
 ---
 
-# Docs Structure
+# Estrutura de Agentes
 
-```text
-docs/
-├── stories/          # User stories (STORY-XXX-title.md)
-│   ├── epics/        # Epic definitions (EPIC-XXX-title.md)
-│   └── bugs/         # Bug reports (BUG-XXX-title.md)
-├── templates/        # Story, bug, test report templates
-├── reviews/          # Relatórios de QA
-└── README.md
-```
+Os arquivos em `.opencode/agents/`, `.opencode/instructions/kanban-flow.md`, `AGENTS.md` e `.opencode/opencode.json` não devem ser alterados por agentes durante execução de tarefas. Alterações nesses arquivos só ocorrem por solicitação explícita do usuário.
 
 ---
 
-# What This Project Does NOT Have
+# O que este projeto NÃO tem
 
-- No test framework installed by default, unless `package.json` changes
-- No Jest/Playwright/Cypress unless added later
-- No pre-commit hooks / Husky, unless added later
-- No CI workflow files in `.github/`, unless added later
-- No codegen, migrations or build artifacts expected in source control
-
----
-
-# Regras Finais
-
-- Não usar mais `developer.md` genérico no fluxo.
-- O fluxo deve passar sempre pelo `kanban-coordinator`.
-- O PO cria/refina e entrega para o `kanban-coordinator`.
-- O `kanban-coordinator` escolhe Developer por complexidade e **gerencia toda movimentação de cards**.
-- O Developer implementa, commita, cria PR e notifica o coordinator automaticamente.
-- O QA aprova ou reprova e notifica o coordinator, que move os cards.
-- A intervenção humana fica apenas para revisão/aprovação/merge do PR ou bloqueios reais.
-- Sempre responder com estado atual do card, próximo responsável e pendências.
+- Framework de testes instalado (a menos que `package.json` mude)
+- Jest/Playwright/Cypress (a menos que seja adicionado)
+- Pre-commit hooks / Husky (a menos que seja adicionado)
+- CI workflow em `.github/` (a menos que seja adicionado)
+- Codegen, migrations ou build artifacts esperados no source control

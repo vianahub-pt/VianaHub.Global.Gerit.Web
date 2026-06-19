@@ -26,6 +26,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sidebarHovered, setSidebarHovered] = useState(false);
+  const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const menuSections = useWorkspaceMenuConfig();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
@@ -211,6 +212,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             sections={menuSections}
             collapsed={state.sidebarCollapsed}
             onToggleCollapse={toggleSidebar}
+            hoveredSection={hoveredSection ?? undefined}
+            onSectionHover={setHoveredSection}
           />
 
           <button

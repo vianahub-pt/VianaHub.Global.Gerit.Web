@@ -230,17 +230,23 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </button>
 
           {state.sidebarCollapsed && hoveredSection && (
-            <div
-              className="absolute left-full top-0 z-50 h-full w-64 overflow-y-auto border-l border-border bg-card shadow-xl"
-              onMouseEnter={() => setHoveredSection(hoveredSection)}
-              onMouseLeave={() => setHoveredSection(null)}
-            >
-              <HubMenu
-                sections={menuSections.filter((s) => s.key === hoveredSection)}
-                collapsed={false}
-                onToggleCollapse={toggleSidebar}
+            <>
+              {/* Backdrop to close panel when clicking outside */}
+              <div
+                className="fixed inset-0 z-40"
+                onClick={() => setHoveredSection(null)}
               />
-            </div>
+              <div
+                className="absolute left-full top-0 z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
+              >
+                <HubMenu
+                  sections={menuSections.filter((s) => s.key === hoveredSection)}
+                  collapsed={false}
+                  onToggleCollapse={toggleSidebar}
+                  floating
+                />
+              </div>
+            </>
           )}
         </aside>
 

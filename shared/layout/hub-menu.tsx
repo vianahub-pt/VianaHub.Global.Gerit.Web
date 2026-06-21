@@ -46,9 +46,11 @@ export type HubMenuProps = {
   onToggleCollapse: () => void;
   hoveredSection?: string;
   onSectionHover?: (sectionKey: string | null) => void;
+  /** When true, renders only items without section header/separator (for floating panels) */
+  floating?: boolean;
 };
 
-export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover }: HubMenuProps) {
+export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover, floating }: HubMenuProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { state } = useSidebar();
@@ -110,8 +112,6 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
               <div
                 key={section.key}
                 className="mb-1"
-                onMouseEnter={() => onSectionHover?.(section.key)}
-                onMouseLeave={() => onSectionHover?.(null)}
               >
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -122,6 +122,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                         isHovered && "bg-secondary"
                       )}
                       aria-label={section.title}
+                      onClick={() => onSectionHover?.(isHovered ? null : section.key)}
                     >
                       {section.icon && (
                         <section.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
@@ -144,43 +145,46 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
     <TooltipProvider>
       <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">
         {sections.map((section) => {
-          const expanded = isSectionExpanded(section.key);
+          const expanded = floating ? true : isSectionExpanded(section.key);
           const isCollapsible = section.collapsible === true;
 
           return (
             <SidebarGroup key={section.key} className={cn("mb-2", !expanded && isCollapsible && "mb-1")}>
-              <SidebarGroupLabel
-                className={cn(
-                  "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
-                  "mb-2",
-                  isCollapsible && "flex items-center justify-between cursor-pointer",
-                  isCollapsible && "hover:text-foreground"
-                )}
-                onClick={isCollapsible ? () => toggleSection(section.key) : undefined}
-              >
-                <span className="flex items-center gap-2 min-w-0">
-                  {section.icon && (
-                    <section.icon
-                      className={cn("h-4 w-4 shrink-0 text-muted-foreground")}
-                      aria-hidden="true"
-                    />
+              {!floating && (
+                <SidebarGroupLabel
+                  className={cn(
+                    "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
+                    "mb-2",
+                    isCollapsible && "flex items-center justify-between cursor-pointer",
+                    isCollapsible && "hover:text-foreground"
                   )}
-                  <span className="truncate">{section.title}</span>
-                  {isCollapsible && (
-                    <ChevronDown
-                      className={cn(
-                        "h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground",
-                        expanded && "rotate-180"
-                      )}
-                      aria-hidden="true"
-                    />
-                  )}
-                </span>
-              </SidebarGroupLabel>
+                  onClick={isCollapsible ? () => toggleSection(section.key) : undefined}
+                >
+                  <span className="flex items-center gap-2 min-w-0">
+                    {section.icon && (
+                      <section.icon
+                        className={cn("h-4 w-4 shrink-0 text-muted-foreground")}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <span className="truncate">{section.title}</span>
+                    {isCollapsible && (
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground",
+                          expanded && "rotate-180"
+                        )}
+                        aria-hidden="true"
+                      />
+                    )}
+                  </span>
+                </SidebarGroupLabel>
+              )}
               <SidebarGroupContent className={cn(
                 "transition-all duration-200 ease-in-out",
                 !expanded && "h-0 overflow-hidden opacity-0 pb-0",
-                expanded && "bg-accent/30 rounded-md px-2 py-1 -mx-2"
+                expanded && !floating && "bg-accent/30 rounded-md px-2 py-1 -mx-2",
+                expanded && floating && "px-2 py-1"
               )}>
                 <SidebarMenu>
                   {section.items.map((item) => {
@@ -218,7 +222,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                   })}
                 </SidebarMenu>
               </SidebarGroupContent>
-              <SidebarSeparator className="my-2" />
+              {!floating && <SidebarSeparator className="my-2" />}
             </SidebarGroup>
           );
         })}

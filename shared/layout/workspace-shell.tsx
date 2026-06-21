@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
-  import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
-  import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
 import { useAuth } from "@/platform/auth";
@@ -26,7 +25,6 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
   const menuSections = useWorkspaceMenuConfig();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
@@ -206,8 +204,6 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           id={`desktop-sidebar-${generatedId}`}
           data-testid="desktop-sidebar"
           className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex flex-col"
-          onMouseEnter={() => setSidebarHovered(true)}
-          onMouseLeave={() => setSidebarHovered(false)}
         >
           <HubMenu
             sections={menuSections}
@@ -234,16 +230,14 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </button>
         </aside>
 
-        {state.sidebarCollapsed && sidebarHovered && (
-          <Sidebar side="left" variant="floating" collapsible="none">
-            <SidebarContent className="w-64">
-              <HubMenu
-                sections={menuSections}
-                collapsed={false}
-                onToggleCollapse={toggleSidebar}
-              />
-            </SidebarContent>
-          </Sidebar>
+        {state.sidebarCollapsed && hoveredSection && (
+          <div className="absolute left-full top-0 z-50 h-full border-l border-border bg-card shadow-xl">
+            <HubMenu
+              sections={menuSections.filter((s) => s.key === hoveredSection)}
+              collapsed={false}
+              onToggleCollapse={toggleSidebar}
+            />
+          </div>
         )}
 
         <HubBody>{children}</HubBody>

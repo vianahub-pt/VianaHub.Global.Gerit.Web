@@ -88,6 +88,48 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
     return expandedSections[sectionKey] ?? section.defaultExpanded ?? true;
   };
 
+  // In collapsed mode, show only section icons with tooltips
+  // In expanded mode, show full section with items
+  if (collapsed) {
+    return (
+      <TooltipProvider>
+        <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">
+          {sections.map((section) => {
+            const isHovered = hoveredSection === section.key;
+            return (
+              <div
+                key={section.key}
+                className="mb-1"
+                onMouseEnter={() => onSectionHover?.(section.key)}
+                onMouseLeave={() => onSectionHover?.(null)}
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      className={cn(
+                        "flex h-9 w-9 items-center justify-center rounded-md transition-colors",
+                        "hover:bg-secondary",
+                        isHovered && "bg-secondary"
+                      )}
+                      aria-label={section.title}
+                    >
+                      {section.icon && (
+                        <section.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right" align="center">
+                    {section.title}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
+            );
+          })}
+        </nav>
+      </TooltipProvider>
+    );
+  }
+
   return (
     <TooltipProvider>
       <nav className="flex-1 overflow-y-auto px-2 py-4" data-testid="hub-menu-root">
@@ -101,7 +143,6 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                 className={cn(
                   "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
                   "mb-2",
-                  collapsed && "opacity-0 pointer-events-none h-0 mb-0",
                   isCollapsible && "flex items-center justify-between cursor-pointer",
                   isCollapsible && "hover:text-foreground"
                 )}
@@ -110,10 +151,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                 <span className="flex items-center gap-2 min-w-0">
                   {section.icon && (
                     <section.icon
-                      className={cn(
-                        "h-4 w-4 shrink-0 text-muted-foreground",
-                        collapsed && "opacity-0 w-0"
-                      )}
+                      className={cn("h-4 w-4 shrink-0 text-muted-foreground")}
                       aria-hidden="true"
                     />
                   )}
@@ -150,10 +188,8 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                             href={item.href}
                             className={cn(
                               "flex h-9 items-center gap-3 rounded-md px-2 text-sm font-medium transition-colors hover:bg-secondary",
-                              active && "bg-secondary",
-                              collapsed && "justify-center"
+                              active && "bg-secondary"
                             )}
-                            aria-label={collapsed ? item.label : undefined}
                           >
                             <Icon
                               className={cn(
@@ -161,8 +197,8 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                                 active && "text-primary",
                               )}
                             />
-                            {!collapsed && <span className="whitespace-nowrap truncate overflow-hidden">{item.label}</span>}
-                            {active && !collapsed && (
+                            <span className="whitespace-nowrap truncate overflow-hidden">{item.label}</span>
+                            {active && (
                               <span className="ml-auto h-4 w-0.5 rounded-full bg-primary" />
                             )}
                           </Link>

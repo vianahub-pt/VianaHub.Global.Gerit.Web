@@ -13,6 +13,7 @@ import {
   normalizeClientError,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
+import { HubTabs } from "@/shared/ui";
 import {
   FormField,
   SelectField,
@@ -43,6 +44,17 @@ export function ClientsCreatePage() {
     initialClientFormState,
   );
   const [submitting, setSubmitting] = useState(false);
+  const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+
+  type ClientCreateTab =
+    | "informacoes"
+    | "contactos"
+    | "enderecos"
+    | "fiscalData"
+    | "consents"
+    | "hierarchy";
+
+  const [activeTab, setActiveTab] = useState<ClientCreateTab>("informacoes");
 
   /* ---------- Client type change handler ---------- */
 
@@ -500,7 +512,7 @@ export function ClientsCreatePage() {
 
         // If API returned 201 (created) we should show success toast even when
         // the API doesn't return the created resource id. If we do have an id,
-        // redirect to details; otherwise redirect to list after showing toast.
+        // store it in state to unlock tabs instead of redirecting.
         if (isCreated || createdId !== null) {
           toast({
             title: t("clients.toasts.successTitle"),
@@ -508,13 +520,10 @@ export function ClientsCreatePage() {
             duration: 5000,
           });
 
-          setTimeout(() => {
-            if (createdId !== null) {
-              void router.replace(`/clients-details/${createdId}/`);
-            } else {
-              void router.replace(`/clients/`);
-            }
-          }, 3000);
+          if (createdId !== null) {
+            setCreatedClientId(String(createdId));
+            setActiveTab("contactos");
+          }
         }
       } catch (error) {
         logError("clients.create", "Falha ao salvar cliente", error);
@@ -588,48 +597,120 @@ export function ClientsCreatePage() {
             </div>
           </div>
 
-          {/* ---------- Form ---------- */}
-          <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
-            {/* Client type selector */}
-            <div className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                <SelectField
-                  label={t("clients.form.clientType")}
-                  value={clientFormState.clientType}
-                  onChange={handleClientTypeChange}
-                  options={CLIENT_TYPE_OPTIONS.map((opt) => ({
-                    value: opt.value,
-                    label: t(opt.labelKey),
-                  }))}
-                  placeholder={t("clients.form.selectOption")}
-                />
-              </div>
-            </div>
+          {/* ---------- Tabs ---------- */}
+          <HubTabs<ClientCreateTab>
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            tabs={[
+              {
+                id: "informacoes",
+                label: t("clients.detail.tabs.clientSummary"),
+                panel: (
+                  <form onSubmit={(e) => void handleSubmit(e)} className="space-y-6">
+                    {/* Client type selector */}
+                    <div className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        <SelectField
+                          label={t("clients.form.clientType")}
+                          value={clientFormState.clientType}
+                          onChange={handleClientTypeChange}
+                          options={CLIENT_TYPE_OPTIONS.map((opt) => ({
+                            value: opt.value,
+                            label: t(opt.labelKey),
+                          }))}
+                          placeholder={t("clients.form.selectOption")}
+                        />
+                      </div>
+                    </div>
 
-            {/* Dynamic individual/company fields */}
-            {showIndividualFields && renderIndividualFields()}
-            {showCompanyFields && renderCompanyFields()}
+                    {/* Dynamic individual/company fields */}
+                    {showIndividualFields && renderIndividualFields()}
+                    {showCompanyFields && renderCompanyFields()}
 
-            {/* Footer: Voltar + Guardar */}
-            <div className="flex justify-start gap-3">
-              <button
-                type="button"
-                onClick={() => router.push("/clients/")}
-                className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary dark:border-input dark:bg-card dark:text-muted-foreground dark:hover:border-ring dark:hover:text-primary"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                {t("clients.actions.back")}
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
-              >
-                {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                {t("clients.actions.save")}
-              </button>
-            </div>
-          </form>
+                    {/* Footer: Voltar + Guardar */}
+                    <div className="flex justify-start gap-3">
+                      <button
+                        type="button"
+                        onClick={() => router.push("/clients/")}
+                        className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary dark:border-input dark:bg-card dark:text-muted-foreground dark:hover:border-ring dark:hover:text-primary"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        {t("clients.actions.back")}
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+                      >
+                        {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                        {t("clients.actions.save")}
+                      </button>
+                    </div>
+                  </form>
+                ),
+              },
+              {
+                id: "contactos",
+                label: t("clients.detail.tabs.contactsSummary"),
+                disabled: !createdClientId,
+                panel: createdClientId ? (
+                  <div>Conteúdo de Contatos (placeholder por agora)</div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {t("clients.create.tabs.saveFirst")}
+                  </div>
+                ),
+              },
+              {
+                id: "enderecos",
+                label: t("clients.detail.tabs.addressesSummary"),
+                disabled: !createdClientId,
+                panel: createdClientId ? (
+                  <div>Conteúdo de Endereços (placeholder por agora)</div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {t("clients.create.tabs.saveFirst")}
+                  </div>
+                ),
+              },
+              {
+                id: "fiscalData",
+                label: t("clients.detail.tabs.fiscalDataSummary"),
+                disabled: !createdClientId,
+                panel: createdClientId ? (
+                  <div>Conteúdo de Dados Fiscais (placeholder por agora)</div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {t("clients.create.tabs.saveFirst")}
+                  </div>
+                ),
+              },
+              {
+                id: "consents",
+                label: t("clients.detail.tabs.consentsSummary"),
+                disabled: !createdClientId,
+                panel: createdClientId ? (
+                  <div>Conteúdo de Consentimentos (placeholder por agora)</div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {t("clients.create.tabs.saveFirst")}
+                  </div>
+                ),
+              },
+              {
+                id: "hierarchy",
+                label: t("clients.detail.tabs.hierarchySummary"),
+                disabled: !createdClientId,
+                panel: createdClientId ? (
+                  <div>Conteúdo de Hierarquia (placeholder por agora)</div>
+                ) : (
+                  <div className="py-8 text-center text-sm text-muted-foreground">
+                    {t("clients.create.tabs.saveFirst")}
+                  </div>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
   );

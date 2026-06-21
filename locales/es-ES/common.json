@@ -419,6 +419,7 @@
   "clients.hierarchy.toasts.activated": "Relación activada con éxito.",
   "clients.hierarchy.toasts.deactivated": "Relación desactivada con éxito.",
   "clients.detail.tabs.hierarchySummary": "Jerarquía",
+  "clients.create.tabs.saveFirst": "Guarde primero la Información del cliente para acceder a esta pestaña.",
   "equipments.title": "Equipos",
   "equipments.subtitle": "Gestiona los equipos de tu empresa.",
   "equipments.loading": "Cargando equipos...",

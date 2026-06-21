@@ -74,6 +74,19 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     return () => document.removeEventListener("keydown", handleKey);
   }, [mobileMenuOpen]);
 
+  // Close floating panel when clicking outside the sidebar
+  useEffect(() => {
+    if (!hoveredSection) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const sidebar = document.querySelector(`#desktop-sidebar-${generatedId}`);
+      if (sidebar && !sidebar.contains(event.target as Node)) {
+        setHoveredSection(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [hoveredSection, generatedId]);
+
   if (isHydrating || !isAuthenticated) {
     return <div className="h-screen bg-background" aria-hidden="true" />;
   }
@@ -235,24 +248,17 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </button>
 
           {state.sidebarCollapsed && hoveredSection && (
-            <>
-              {/* Backdrop to close panel when clicking outside */}
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setHoveredSection(null)}
+            <div
+              className="absolute left-full z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
+              style={{ top: sectionIconTop }}
+            >
+              <HubMenu
+                sections={menuSections.filter((s) => s.key === hoveredSection)}
+                collapsed={false}
+                onToggleCollapse={toggleSidebar}
+                floating
               />
-              <div
-                className="absolute left-full z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
-                style={{ top: sectionIconTop }}
-              >
-                <HubMenu
-                  sections={menuSections.filter((s) => s.key === hoveredSection)}
-                  collapsed={false}
-                  onToggleCollapse={toggleSidebar}
-                  floating
-                />
-              </div>
-            </>
+            </div>
           )}
         </aside>
 

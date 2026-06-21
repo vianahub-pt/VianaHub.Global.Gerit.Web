@@ -419,6 +419,7 @@
   "clients.hierarchy.toasts.activated": "Relationship activated successfully.",
   "clients.hierarchy.toasts.deactivated": "Relationship deactivated successfully.",
   "clients.detail.tabs.hierarchySummary": "Hierarchy",
+  "clients.create.tabs.saveFirst": "Save the client Information first to access this tab.",
   "equipments.title": "Equipment",
   "equipments.subtitle": "Manage your company equipment.",
   "equipments.loading": "Loading equipment...",

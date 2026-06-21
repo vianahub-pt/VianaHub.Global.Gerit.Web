@@ -18,12 +18,13 @@ interface HubBodyProps {
  */
 export function HubBody({ children }: HubBodyProps) {
   return (
-    <main
+    <div
       id="hub-body"
+      role="main"
       data-testid="hub-body"
       className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background dark:bg-background"
     >
       {children}
-    </main>
+    </div>
   );
 }

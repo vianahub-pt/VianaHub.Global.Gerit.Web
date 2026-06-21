@@ -14,7 +14,7 @@ import {
 import { useEffect, useMemo } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
-import { WorkspaceShell } from "@/shared/layout";
+
 import {
   Select,
   SelectContent,
@@ -191,7 +191,6 @@ export function UserPreferencesPage() {
   }, [setActiveTab]);
 
   return (
-    <WorkspaceShell>
       <div data-testid="user-preferences-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="border-b border-border bg-muted px-4 py-4 dark:border-border dark:bg-muted sm:px-6">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -538,6 +537,5 @@ export function UserPreferencesPage() {
           </>
         )}
       </div>
-    </WorkspaceShell>
   );
 }

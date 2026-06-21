@@ -5,7 +5,7 @@ import { SquarePen, Trash2, UserRoundPlus, Power, Loader2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
-import { WorkspaceShell } from "@/shared/layout";
+
 import { Input } from "@/shared/ui/input";
 import { useToast } from "@/shared/feedback";
 import {
@@ -690,7 +690,6 @@ export function TeamsPage() {
   }, [page, totalPagesFromServer]);
 
   return (
-    <WorkspaceShell>
       <div data-testid="teams-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
@@ -830,6 +829,5 @@ export function TeamsPage() {
           ) : null}
         </div>
       </div>
-    </WorkspaceShell>
   );
 }

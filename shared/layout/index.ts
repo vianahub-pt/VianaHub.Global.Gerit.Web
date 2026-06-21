@@ -9,6 +9,7 @@ export {
 export { Navbar } from "@/shared/layout/navbar";
 export { HubNav } from "@/shared/layout/hub-nav";
 export { HubMenu } from "@/shared/layout/hub-menu";
+export { HubBody } from "@/shared/layout/hub-body";
 export type { HubNavProps, HubNavVariant } from "@/shared/layout/hub-nav";
 export type {
   HubMenuProps,

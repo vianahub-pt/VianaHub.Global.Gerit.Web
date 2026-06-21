@@ -814,11 +814,11 @@ function GeritDashboardHomeContent() {
           "min-h-0 flex-1 px-3 py-3 sm:px-4",
           isMonthView
             ? "gerit-calendar-scrollbar overflow-auto"
-            : "gerit-calendar-scrollbar flex overflow-x-auto overflow-y-hidden",
+            : "gerit-calendar-scrollbar overflow-x-auto overflow-y-hidden",
         )}
       >
         {isMonthView ? (
-          <section className="min-w-[52rem] overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+          <section className="w-full min-w-[52rem] overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
             <div className="grid grid-cols-7 border-b border-border dark:border-border">
               {weekdayHeaders.map((weekday) => (
                 <div
@@ -869,12 +869,12 @@ function GeritDashboardHomeContent() {
             </div>
           </section>
         ) : (
-          <section
-            className={clsx(
-              "min-h-0 flex h-full flex-1 flex-col overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card",
-              isDayView ? "min-w-[24rem]" : "min-w-[68rem]",
-            )}
-          >
+            <section
+              className={clsx(
+                "min-h-0 h-full w-full flex flex-col overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card",
+                isDayView ? "min-w-[24rem]" : "min-w-[68rem]",
+              )}
+            >
             <div
               className={clsx(
                 "grid",

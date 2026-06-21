@@ -84,7 +84,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       <div
         id={`workspace-shell-${generatedId}`}
         data-testid="workspace-shell-root"
-        className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
+        className="gerit-shell flex h-[100dvh] w-full min-w-0 flex-col overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
         data-collapsed={state.sidebarCollapsed}
       >
         <HubNav
@@ -199,7 +199,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       )}
 
       <div
-        className="flex h-[calc(100vh-3.5rem)] min-h-0"
+        className="flex min-h-0 w-full min-w-0 flex-1 overflow-hidden"
         aria-hidden={mobileMenuOpen ? true : undefined}
       >
         <aside

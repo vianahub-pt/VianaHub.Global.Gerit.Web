@@ -14,6 +14,7 @@ import { GeritLogo } from "@/shared/ui/gerit-logo";
 import { DashboardShellProvider, useDashboardShell } from "@/shared/layout";
 import { HubNav } from "@/shared/layout/hub-nav";
 import { HubMenu } from "@/shared/layout/hub-menu";
+import { HubBody } from "@/shared/layout/hub-body";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
@@ -245,9 +246,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           </Sidebar>
         )}
 
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background dark:bg-background">
-          {children}
-        </main>
+        <HubBody>{children}</HubBody>
       </div>
       </div>
     </SidebarProvider>

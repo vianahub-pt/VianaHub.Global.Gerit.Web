@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
-import { WorkspaceShell } from "@/shared/layout";
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
 import {
@@ -510,7 +509,7 @@ export function ClientsPage() {
   );
 
   return (
-    <WorkspaceShell>
+    <>
       <div data-testid="clients-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar min-h-0 flex-1 overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           <div className="mb-5 overflow-hidden rounded-sm border border-border/80 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
@@ -589,6 +588,6 @@ export function ClientsPage() {
         cancelLabel={t("clients.actions.cancel")}
         onConfirm={() => void handleDeleteConfirm()}
       />
-    </WorkspaceShell>
+    </>
   );
 }

@@ -5,7 +5,7 @@ import { FormEvent, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
-import { WorkspaceShell } from "@/shared/layout";
+
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
 import {
@@ -551,7 +551,6 @@ export function ClientsCreatePage() {
      ========================== */
 
   return (
-    <WorkspaceShell>
       <div data-testid="clients-create-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
           {/* ---------- Header ---------- */}
@@ -633,6 +632,5 @@ export function ClientsCreatePage() {
           </form>
         </div>
       </div>
-    </WorkspaceShell>
   );
 }

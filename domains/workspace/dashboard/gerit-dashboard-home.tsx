@@ -12,7 +12,7 @@ import {
 import { type Language, useTranslation } from "@/platform/i18n";
 import { STORAGE_KEYS } from "@/core/constants/storage-keys";
 import { getStorageItem } from "@/platform/storage";
-import { useDashboardShell, WorkspaceShell } from "@/shared/layout";
+import { useDashboardShell } from "@/shared/layout";
 
 const viewTabs = ["month", "week", "day"] as const;
 const calendarStartMinutes = 0;
@@ -1020,8 +1020,6 @@ function GeritDashboardHomeContent() {
 
 export function GeritDashboardHome() {
   return (
-    <WorkspaceShell>
       <GeritDashboardHomeContent />
-    </WorkspaceShell>
   );
 }

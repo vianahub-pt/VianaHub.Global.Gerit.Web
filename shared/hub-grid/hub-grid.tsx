@@ -133,7 +133,7 @@ export function HubGrid<Item>({
     <section className="overflow-hidden rounded-sm border border-border/80 bg-background shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-background dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)]">
       <div className="border-b border-border/80 bg-muted px-6 py-4 dark:border-border dark:bg-muted">
         <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
+          <div className="flex flex-1 flex-wrap items-center gap-3 min-w-0">
             <span className="sr-only">{statusFilterLabel}</span>
             <Select value={statusFilter} onValueChange={onStatusFilterChange}>
               <SelectTrigger className="max-w-[12rem] flex-1" aria-label={statusFilterLabel}>
@@ -147,7 +147,7 @@ export function HubGrid<Item>({
                 ))}
               </SelectContent>
             </Select>
-            <label className="relative flex-1 min-w-[12rem] max-w-[24rem]">
+            <label className="relative flex-1 min-w-0 max-w-[24rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={searchValue}

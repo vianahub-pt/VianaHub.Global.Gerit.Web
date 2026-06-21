@@ -75,7 +75,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   }, [mobileMenuOpen]);
 
   if (isHydrating || !isAuthenticated) {
-    return <div className="h-screen bg-background" aria-hidden="true" />;
+    return <div className="h-full bg-background" aria-hidden="true" />;
   }
 
   return (
@@ -83,7 +83,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       <div
         id={`workspace-shell-${generatedId}`}
         data-testid="workspace-shell-root"
-        className="gerit-shell h-screen overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
+        className="gerit-shell h-full overflow-hidden bg-background text-foreground dark:bg-background dark:text-foreground"
         data-collapsed={state.sidebarCollapsed}
       >
         <HubNav
@@ -198,7 +198,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
       )}
 
       <div
-        className="flex h-[calc(100vh-3.5rem)] min-h-0"
+        className="flex flex-1 min-h-0"
         aria-hidden={mobileMenuOpen ? true : undefined}
       >
         <aside
@@ -249,7 +249,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
           {children}
         </main>
       </div>
-      </div>
+    </div>
     </SidebarProvider>
   );
 }

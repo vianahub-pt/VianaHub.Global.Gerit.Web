@@ -814,11 +814,11 @@ function GeritDashboardHomeContent() {
           "min-h-0 flex-1 px-3 py-3 sm:px-4",
           isMonthView
             ? "gerit-calendar-scrollbar overflow-auto"
-            : "gerit-calendar-scrollbar flex overflow-x-auto overflow-y-hidden",
+            : "gerit-calendar-scrollbar flex overflow-y-hidden",
         )}
       >
         {isMonthView ? (
-          <section className="min-w-[52rem] overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+          <section className="min-w-0 overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
             <div className="grid grid-cols-7 border-b border-border dark:border-border">
               {weekdayHeaders.map((weekday) => (
                 <div
@@ -872,18 +872,18 @@ function GeritDashboardHomeContent() {
           <section
             className={clsx(
               "min-h-0 flex h-full flex-1 flex-col overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card",
-              isDayView ? "min-w-[24rem]" : "min-w-[68rem]",
+              "min-w-0",
             )}
           >
             <div
               className={clsx(
                 "grid",
-                isDayView
-                  ? "grid-cols-[4rem_minmax(0,1fr)]"
-                  : "grid-cols-[4rem_repeat(7,minmax(8.75rem,1fr))]",
-              )}
-            >
-              <div className="flex h-[3.25rem] items-center gap-1 border-b border-r border-border bg-secondary px-3 dark:border-border dark:bg-secondary">
+              isDayView
+                    ? "grid-cols-[4rem_minmax(0,1fr)]"
+                    : "grid-cols-[4rem_repeat(7,1fr)]",
+                )}
+              >
+                <div className="flex h-[3.25rem] items-center gap-1 border-b border-r border-border bg-secondary px-3 dark:border-border dark:bg-secondary">
                 <button
                   type="button"
                   onClick={() => setSlotMinutes(60)}
@@ -946,7 +946,7 @@ function GeritDashboardHomeContent() {
                   "grid",
                   isDayView
                     ? "grid-cols-[4rem_minmax(0,1fr)]"
-                    : "grid-cols-[4rem_repeat(7,minmax(8.75rem,1fr))]",
+                    : "grid-cols-[4rem_repeat(7,1fr)]",
                 )}
               >
                 {timeSlots.map((slot) => {

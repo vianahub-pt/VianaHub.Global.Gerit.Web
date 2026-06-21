@@ -107,7 +107,7 @@ export function ClientLayout({ children }: ClientLayoutProps) {
         tabIndex={-1}
         className={
           isImmersiveRoute
-            ? `h-[100dvh] overflow-hidden focus:outline-none${
+            ? `h-[100dvh] w-full min-w-0 overflow-hidden focus:outline-none${
                 isLoginRoute ? " bg-background" : ""
               }`
             : "flex-1 focus:outline-none"

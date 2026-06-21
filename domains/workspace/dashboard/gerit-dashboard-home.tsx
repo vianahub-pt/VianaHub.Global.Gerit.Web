@@ -636,7 +636,7 @@ function GeritDashboardHomeContent() {
   };
 
   return (
-    <div data-testid="gerit-dashboard-home-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <div data-testid="gerit-dashboard-home-root" className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-border bg-muted px-4 py-3 dark:border-border dark:bg-muted sm:px-6 md:flex-row md:items-center md:justify-between md:py-2">
         <div className="flex items-center overflow-x-auto">
           <button
@@ -810,10 +810,12 @@ function GeritDashboardHomeContent() {
       </div>
 
       <div
-        className="min-h-0 flex-1 px-3 py-3 sm:px-4"
+        className="min-h-0 w-full min-w-0 flex-1 overflow-hidden px-3 py-3 sm:px-4"
       >
         {isMonthView ? (
-          <section className="w-full min-w-[52rem] overflow-auto gerit-calendar-scrollbar rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+          <section className="h-full w-full min-w-0 overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+            <div className="h-full w-full overflow-auto gerit-calendar-scrollbar">
+              <div className="min-w-[52rem]">
             <div className="grid grid-cols-7 border-b border-border dark:border-border">
               {weekdayHeaders.map((weekday) => (
                 <div
@@ -862,14 +864,13 @@ function GeritDashboardHomeContent() {
                 </button>
               ))}
             </div>
+              </div>
+            </div>
           </section>
         ) : (
-            <section
-              className={clsx(
-                "min-h-0 h-full w-full flex flex-col overflow-x-auto overflow-y-hidden gerit-calendar-scrollbar rounded-sm border border-border bg-card dark:border-border dark:bg-card",
-                isDayView ? "min-w-[24rem]" : "min-w-[68rem]",
-              )}
-            >
+            <section className="min-h-0 h-full w-full min-w-0 overflow-hidden rounded-sm border border-border bg-card dark:border-border dark:bg-card">
+              <div className="h-full w-full overflow-x-auto overflow-y-hidden gerit-calendar-scrollbar">
+                <div className={clsx(isDayView ? "min-w-[24rem]" : "min-w-[68rem]")}>
             <div
               className={clsx(
                 "grid",
@@ -1005,6 +1006,8 @@ function GeritDashboardHomeContent() {
                   );
                 })}
               </div>
+            </div>
+          </div>
             </div>
           </section>
         )}

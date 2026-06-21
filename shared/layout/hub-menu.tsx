@@ -76,10 +76,20 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
   const sidebarCollapsed = state === "collapsed";
 
   const toggleSection = (sectionKey: string) => {
-    setExpandedSections((prev) => ({
-      ...prev,
-      [sectionKey]: !prev[sectionKey],
-    }));
+    setExpandedSections((prev) => {
+      const isCurrentlyExpanded = prev[sectionKey];
+      if (isCurrentlyExpanded) {
+        // Se já está aberta, fecha
+        return { ...prev, [sectionKey]: false };
+      }
+      // Se está fechando, fecha todas e abre apenas a clicada
+      const next: Record<string, boolean> = {};
+      for (const key of Object.keys(prev)) {
+        next[key] = false;
+      }
+      next[sectionKey] = true;
+      return next;
+    });
   };
 
   const isSectionExpanded = (sectionKey: string) => {

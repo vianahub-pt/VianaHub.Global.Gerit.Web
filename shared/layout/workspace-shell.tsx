@@ -203,7 +203,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         <aside
           id={`desktop-sidebar-${generatedId}`}
           data-testid="desktop-sidebar"
-          className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex flex-col"
+          className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex flex-col overflow-visible"
         >
           <HubMenu
             sections={menuSections}
@@ -228,17 +228,21 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
-        </aside>
 
-        {state.sidebarCollapsed && hoveredSection && (
-          <div className="absolute left-full top-0 z-50 h-full border-l border-border bg-card shadow-xl">
-            <HubMenu
-              sections={menuSections.filter((s) => s.key === hoveredSection)}
-              collapsed={false}
-              onToggleCollapse={toggleSidebar}
-            />
-          </div>
-        )}
+          {state.sidebarCollapsed && hoveredSection && (
+            <div
+              className="absolute left-full top-0 z-50 h-full w-64 overflow-y-auto border-l border-border bg-card shadow-xl"
+              onMouseEnter={() => setHoveredSection(hoveredSection)}
+              onMouseLeave={() => setHoveredSection(null)}
+            >
+              <HubMenu
+                sections={menuSections.filter((s) => s.key === hoveredSection)}
+                collapsed={false}
+                onToggleCollapse={toggleSidebar}
+              />
+            </div>
+          )}
+        </aside>
 
         <HubBody>{children}</HubBody>
       </div>

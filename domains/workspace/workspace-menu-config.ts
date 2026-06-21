@@ -77,13 +77,13 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "clientes",
             label: t("workspace.sidebar.clientesList"),
-            href: "/clientes",
+            href: "/clients",
             icon: Users,
           },
           {
             key: "novoCliente",
             label: t("workspace.sidebar.novoCliente"),
-            href: "/clientes/novo",
+            href: "/clients/new",
             icon: UserRound,
           },
           {

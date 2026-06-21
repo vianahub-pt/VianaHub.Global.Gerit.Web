@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
-  import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
-  import { Sidebar, SidebarContent } from "@/components/ui/sidebar";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
 import { useAuth } from "@/platform/auth";
@@ -26,8 +25,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const { t } = useTranslation();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [sidebarHovered, setSidebarHovered] = useState(false);
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+  const [sectionIconTop, setSectionIconTop] = useState<number>(0);
   const menuSections = useWorkspaceMenuConfig();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
@@ -74,6 +73,19 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [mobileMenuOpen]);
+
+  // Close floating panel when clicking outside the sidebar
+  useEffect(() => {
+    if (!hoveredSection) return;
+    const handleClickOutside = (event: MouseEvent) => {
+      const sidebar = document.querySelector(`#desktop-sidebar-${generatedId}`);
+      if (sidebar && !sidebar.contains(event.target as Node)) {
+        setHoveredSection(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [hoveredSection, generatedId]);
 
   if (isHydrating || !isAuthenticated) {
     return <div className="h-screen bg-background" aria-hidden="true" />;
@@ -205,9 +217,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         <aside
           id={`desktop-sidebar-${generatedId}`}
           data-testid="desktop-sidebar"
-          className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex flex-col"
-          onMouseEnter={() => setSidebarHovered(true)}
-          onMouseLeave={() => setSidebarHovered(false)}
+          className="gerit-sidebar relative hidden h-full shrink-0 border-r border-border bg-card lg:flex flex-col overflow-visible"
         >
           <HubMenu
             sections={menuSections}
@@ -215,6 +225,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             onToggleCollapse={toggleSidebar}
             hoveredSection={hoveredSection ?? undefined}
             onSectionHover={setHoveredSection}
+            onSectionClick={(key, top) => {
+              setHoveredSection(key);
+              if (top !== undefined) setSectionIconTop(top);
+            }}
           />
 
           <button
@@ -232,19 +246,21 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
               <ChevronLeft className="h-4 w-4" aria-hidden="true" />
             )}
           </button>
-        </aside>
 
-        {state.sidebarCollapsed && sidebarHovered && (
-          <Sidebar side="left" variant="floating" collapsible="none">
-            <SidebarContent className="w-64">
+          {state.sidebarCollapsed && hoveredSection && (
+            <div
+              className="absolute left-full z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
+              style={{ top: sectionIconTop }}
+            >
               <HubMenu
-                sections={menuSections}
+                sections={menuSections.filter((s) => s.key === hoveredSection)}
                 collapsed={false}
                 onToggleCollapse={toggleSidebar}
+                floating
               />
-            </SidebarContent>
-          </Sidebar>
-        )}
+            </div>
+          )}
+        </aside>
 
         <HubBody>{children}</HubBody>
       </div>

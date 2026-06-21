@@ -117,7 +117,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                       aria-hidden="true"
                     />
                   )}
-                  {section.title}
+                  <span className="truncate">{section.title}</span>
                   {isCollapsible && (
                     <ChevronDown
                       className={cn(
@@ -161,7 +161,7 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                                 active && "text-primary",
                               )}
                             />
-                            {!collapsed && <span className="whitespace-nowrap">{item.label}</span>}
+                            {!collapsed && <span className="whitespace-nowrap truncate overflow-hidden">{item.label}</span>}
                             {active && !collapsed && (
                               <span className="ml-auto h-4 w-0.5 rounded-full bg-primary" />
                             )}

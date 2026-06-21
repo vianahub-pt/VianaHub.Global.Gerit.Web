@@ -8,7 +8,7 @@ import { Textarea } from "@/shared/ui/textarea";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
-import { WorkspaceShell } from "@/shared/layout";
+
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
 import { ClientItem } from "@/domains/operations/clients/client-models";
@@ -4205,7 +4205,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
      ========================== */
 
   return (
-    <WorkspaceShell>
+    <>
       <div data-testid="client-details-page-root" className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-muted px-4 py-4 sm:px-6 dark:bg-muted">
           {/* ---------- Header ---------- */}
@@ -4394,6 +4394,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         cancelLabel={t("clients.actions.cancel")}
         onConfirm={() => void handleHierarchyDeleteConfirm()}
       />
-    </WorkspaceShell>
+    </>
   );
 }

@@ -6,6 +6,7 @@ export type HubTabDefinition<T extends string> = {
   label: React.ReactNode;
   helper?: React.ReactNode;
   panel: React.ReactNode;
+  disabled?: boolean;
 };
 
 export interface HubTabsProps<T extends string> {
@@ -63,12 +64,15 @@ export function HubTabs<T extends string>({
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => handleChange(tab.id)}
+                aria-disabled={tab.disabled}
+                disabled={tab.disabled}
+                onClick={() => !tab.disabled && handleChange(tab.id)}
                 className={clsx(
                   "rounded-t-md border border-transparent px-5 py-2 text-sm font-semibold transition duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                   isActive
                     ? "border-b-card dark:border-b-card border-t border-l border-r border-border dark:border-border bg-card dark:bg-card text-foreground dark:text-foreground"
                     : "border-b-secondary dark:border-b-card border-t border-l border-r border-border dark:border-border bg-secondary dark:bg-border text-foreground dark:text-foreground",
+                  tab.disabled && "opacity-50 cursor-not-allowed"
                 )}
               >
                 {tab.label}

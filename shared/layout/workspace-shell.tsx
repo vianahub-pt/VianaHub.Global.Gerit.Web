@@ -26,6 +26,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [hoveredSection, setHoveredSection] = useState<string | null>(null);
+  const [sectionIconTop, setSectionIconTop] = useState<number>(0);
   const menuSections = useWorkspaceMenuConfig();
   const mobileMenuRef = useRef<HTMLDivElement>(null);
   const hamburgerRef = useRef<HTMLButtonElement>(null);
@@ -211,6 +212,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
             onToggleCollapse={toggleSidebar}
             hoveredSection={hoveredSection ?? undefined}
             onSectionHover={setHoveredSection}
+            onSectionClick={(key, top) => {
+              setHoveredSection(key);
+              if (top !== undefined) setSectionIconTop(top);
+            }}
           />
 
           <button
@@ -237,7 +242,8 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
                 onClick={() => setHoveredSection(null)}
               />
               <div
-                className="absolute left-full top-0 z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
+                className="absolute left-full z-50 w-64 overflow-y-auto rounded-r-md border border-border bg-card shadow-xl"
+                style={{ top: sectionIconTop }}
               >
                 <HubMenu
                   sections={menuSections.filter((s) => s.key === hoveredSection)}

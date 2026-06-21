@@ -48,9 +48,11 @@ export type HubMenuProps = {
   onSectionHover?: (sectionKey: string | null) => void;
   /** When true, renders only items without section header/separator (for floating panels) */
   floating?: boolean;
+  /** Callback when a section icon is clicked in collapsed mode, passes the section key and the icon's top offset */
+  onSectionClick?: (sectionKey: string | null, topOffset?: number) => void;
 };
 
-export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover, floating }: HubMenuProps) {
+export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover, floating, onSectionClick }: HubMenuProps) {
   const pathname = usePathname();
   const { t } = useTranslation();
   const { state } = useSidebar();
@@ -122,7 +124,15 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
                         isHovered && "bg-secondary"
                       )}
                       aria-label={section.title}
-                      onClick={() => onSectionHover?.(isHovered ? null : section.key)}
+                      onClick={(e) => {
+                        const btn = e.currentTarget;
+                        const topOffset = btn.offsetTop;
+                        if (isHovered) {
+                          onSectionClick?.(null);
+                        } else {
+                          onSectionClick?.(section.key, topOffset);
+                        }
+                      }}
                     >
                       {section.icon && (
                         <section.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true" />

@@ -1,19 +1,23 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { FormEvent, useCallback, useState } from "react";
+import clsx from "clsx";
+import { ArrowLeft, Loader2, Power, SquarePen, Trash2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
+import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
+import { HubTabs } from "@/shared/ui";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   normalizeClient,
   normalizeClientError,
+  normalizeErrorMessage,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
-import { HubTabs } from "@/shared/ui";
 import {
   FormField,
   SelectField,
@@ -34,6 +38,152 @@ import {
   initialClientFormState,
 } from "@/domains/operations/clients/clients-form-components";
 
+/* ---------- Constants ---------- */
+
+const CONTACT_PAGE_SIZE = 25;
+const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+/* ---------- Sort column types ---------- */
+
+type ContactSortColumn = "Name" | "Email" | "Phone";
+
+/* ---------- Pagination helper ---------- */
+
+const PAGE_BUTTON_MAX = 5;
+
+function buildPageButtons(page: number, totalPages: number) {
+  const pages: number[] = [];
+  const normalTotal = Math.max(1, totalPages);
+  let start = Math.max(1, page - Math.floor(PAGE_BUTTON_MAX / 2));
+  const end = Math.min(normalTotal, start + PAGE_BUTTON_MAX - 1);
+  start = Math.max(1, end - PAGE_BUTTON_MAX + 1);
+  for (let index = start; index <= end; index += 1) {
+    pages.push(index);
+  }
+  return pages;
+}
+
+/* ---------- Sort value helpers ---------- */
+
+function getContactSortValue(item: ContactItem, column: ContactSortColumn) {
+  switch (column) {
+    case "Email":
+      return (item.email ?? "").toLowerCase();
+    case "Phone":
+      return (item.phoneNumber ?? "").toLowerCase();
+    default:
+      return item.name.toLowerCase();
+  }
+}
+
+/* ---------- Interfaces ---------- */
+
+interface ContactItem {
+  id: number;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+  isActive: boolean;
+  isPrimary: boolean;
+}
+
+interface ContactsPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+interface ContactFormState {
+  name: string;
+  email: string;
+  phoneNumber: string;
+}
+
+const initialContactFormState: ContactFormState = {
+  name: "",
+  email: "",
+  phoneNumber: "",
+};
+
+/* ---------- Contact normalize/parse ---------- */
+
+function normalizeContact(payload: unknown): ContactItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.contactId === "number"
+          ? candidate.contactId
+          : typeof candidate.contactId === "string"
+            ? Number(candidate.contactId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const name =
+    typeof candidate.name === "string"
+      ? candidate.name
+      : typeof candidate.fullName === "string"
+        ? candidate.fullName
+        : typeof candidate.contactName === "string"
+          ? candidate.contactName
+          : "";
+  const phoneNumber =
+    typeof candidate.phoneNumber === "string"
+      ? candidate.phoneNumber
+      : typeof candidate.phone === "string"
+        ? candidate.phone
+        : typeof candidate.mobile === "string"
+          ? candidate.mobile
+          : null;
+  const email = typeof candidate.email === "string" ? candidate.email : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+  const isPrimaryValue =
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
+
+  return {
+    id: rawId,
+    name,
+    email,
+    phoneNumber,
+    isActive: Boolean(isActiveValue),
+    isPrimary: Boolean(isPrimaryValue),
+  };
+}
+
+function parsePagedContacts(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ContactItem[], totalItems: 0 };
+  const candidate = payload as ContactsPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeContact)
+    .filter((item): item is ContactItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
 export function ClientsCreatePage() {
   const { fetchWithAuth } = useAuth();
   const { t } = useTranslation();
@@ -45,6 +195,39 @@ export function ClientsCreatePage() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+
+  /* ---------- Contacts state ---------- */
+
+  const [contacts, setContacts] = useState<ContactItem[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactFormState, setContactFormState] = useState<ContactFormState>(initialContactFormState);
+  const [editingContact, setEditingContact] = useState<ContactItem | null>(null);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactDeleteConfirmOpen, setContactDeleteConfirmOpen] = useState(false);
+  const contactDeleteRef = useRef<ContactItem | null>(null);
+  const [contactsBulkUploading, setContactsBulkUploading] = useState(false);
+
+  /* ---------- Contact grid state ---------- */
+
+  const [contactGridDensity, setContactGridDensity] = useState<RowDensity>("medium");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactStatusFilter, setContactStatusFilter] = useState("all");
+  const [contactPage, setContactPage] = useState(1);
+  const [contactPageSize, setContactPageSize] = useState<number>(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [contactSortBy, setContactSortBy] = useState<ContactSortColumn>("Name");
+  const [contactSortDirection, setContactSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Tab lazy loading state ---------- */
+
+  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
+
+  const handleTabChange = useCallback((tab: ClientCreateTab) => {
+    setActiveTab(tab);
+    setLoadedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      return new Set(prev).add(tab);
+    });
+  }, []);
 
   type ClientCreateTab =
     | "informacoes"
@@ -522,7 +705,7 @@ export function ClientsCreatePage() {
 
           if (createdId !== null) {
             setCreatedClientId(String(createdId));
-            setActiveTab("contactos");
+            handleTabChange("contactos");
           }
         }
       } catch (error) {
@@ -554,6 +737,572 @@ export function ClientsCreatePage() {
     },
     [clientFormState, fetchWithAuth, router, t, toast],
   );
+
+  /* ---------- Reset helpers ---------- */
+
+  const resetContactForm = useCallback(() => {
+    setEditingContact(null);
+    setContactFormState(initialContactFormState);
+  }, []);
+
+  /* ---------- Load contacts ---------- */
+
+  const loadClientContacts = useCallback(async () => {
+    if (!createdClientId) {
+      setContacts([]);
+      return;
+    }
+    setContactsLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(CONTACT_PAGE_SIZE),
+      SortBy: "Name",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/contacts/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.contacts.errors.load")));
+      }
+      const parsed = parsePagedContacts(payload);
+      setContacts(parsed.items);
+    } catch (error) {
+      logError("clients.create.loadContacts", "Falha ao carregar contactos", error, {
+        clientId: createdClientId,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.contacts.errors.load"),
+        variant: "destructive",
+      });
+      setContacts([]);
+    } finally {
+      setContactsLoading(false);
+    }
+  }, [createdClientId, fetchWithAuth, t, toast]);
+
+  /* ---------- Contact submit ---------- */
+
+  const handleContactSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!createdClientId) return;
+      const name = contactFormState.name.trim();
+      const phoneNumber = contactFormState.phoneNumber.trim();
+      const email = contactFormState.email.trim();
+      if (!name || !phoneNumber) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.contacts.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setContactSubmitting(true);
+      try {
+        const payload = {
+          name,
+          phoneNumber,
+          email: email.length > 0 ? email : null,
+        };
+        const isEditing = editingContact !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${createdClientId}/contacts/${editingContact?.id}`
+          : `/api/gerit/v1/clients/${createdClientId}/contacts`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.contacts.toasts.updated")
+            : t("clients.contacts.toasts.created"),
+        });
+        resetContactForm();
+        await loadClientContacts();
+      } catch (error) {
+        logError("clients.create.contactSubmit", "Falha ao salvar contacto", error, {
+          clientId: createdClientId,
+          contactName: contactFormState.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setContactSubmitting(false);
+      }
+    },
+    [createdClientId, contactFormState, editingContact, fetchWithAuth, loadClientContacts, resetContactForm, t, toast],
+  );
+
+  const handleContactEdit = useCallback((contact: ContactItem) => {
+    setEditingContact(contact);
+    setContactFormState({
+      name: contact.name,
+      email: contact.email ?? "",
+      phoneNumber: contact.phoneNumber ?? "",
+    });
+  }, []);
+
+  const handleContactToggleStatus = useCallback(
+    async (contact: ContactItem) => {
+      if (!createdClientId) return;
+      try {
+        const endpoint = contact.isActive
+          ? `/api/gerit/v1/clients/${createdClientId}/contacts/${contact.id}/deactivate`
+          : `/api/gerit/v1/clients/${createdClientId}/contacts/${contact.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: contact.isActive
+            ? t("clients.contacts.toasts.deactivated")
+            : t("clients.contacts.toasts.activated"),
+        });
+        await loadClientContacts();
+      } catch (error) {
+        logError("clients.create.contactToggleStatus", "Falha ao alterar estado do contacto", error, {
+          clientId: createdClientId,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [createdClientId, fetchWithAuth, loadClientContacts, t, toast],
+  );
+
+  const handleContactDelete = useCallback(
+    (contact: ContactItem) => {
+      contactDeleteRef.current = contact;
+      setContactDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleContactDeleteConfirm = useCallback(async () => {
+    const contact = contactDeleteRef.current;
+    contactDeleteRef.current = null;
+    setContactDeleteConfirmOpen(false);
+    if (!contact || !createdClientId) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${createdClientId}/contacts/${contact.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.contacts.toasts.deleted"),
+        });
+        await loadClientContacts();
+      } catch (error) {
+        logError("clients.create.contactDelete", "Falha ao eliminar contacto", error, {
+          clientId: createdClientId,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [createdClientId, fetchWithAuth, loadClientContacts, t, toast],
+  );
+
+  const handleContactsBulkUpload = useCallback(
+    async (file: File | null) => {
+      if (!file || contactsBulkUploading || !createdClientId) return;
+      setContactsBulkUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${createdClientId}/contacts/bulk-upload`,
+          { method: "POST", body: formData },
+        );
+        if (!response) return;
+        const payload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(
+              payload,
+              t("clients.bulk.upload.error", { resource: t("clients.contacts.title") }),
+            ),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.bulk.upload.success", { resource: t("clients.contacts.title") }),
+        });
+        await loadClientContacts();
+      } catch (error) {
+        logError("clients.create.contactsBulkUpload", "Falha no upload em massa de contactos", error, {
+          clientId: createdClientId,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error
+              ? error.message
+              : t("clients.bulk.upload.error", { resource: t("clients.contacts.title") }),
+          variant: "destructive",
+        });
+      } finally {
+        setContactsBulkUploading(false);
+      }
+    },
+    [createdClientId, contactsBulkUploading, fetchWithAuth, loadClientContacts, t, toast],
+  );
+
+  /* ---------- Contact grid ---------- */
+
+  const contactColumns = useMemo<HubGridColumn<ContactItem>[]>(
+    () => [
+      { key: "Name", label: t("clients.contacts.table.name") },
+      { key: "Phone", label: t("clients.contacts.table.phone") },
+      { key: "Email", label: t("clients.contacts.table.email") },
+      { key: "Primary", label: t("clients.contacts.table.primary") },
+    ],
+    [t],
+  );
+
+  const contactStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredContacts = useMemo(() => {
+    const searchTerm = contactSearch.trim().toLowerCase();
+    return contacts.filter((contact) => {
+      if (contactStatusFilter !== "all") {
+        const expected = contactStatusFilter === "active";
+        if (contact.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      const email = contact.email ?? "";
+      const phone = contact.phoneNumber ?? "";
+      return (
+        contact.name.toLowerCase().includes(searchTerm) ||
+        email.toLowerCase().includes(searchTerm) ||
+        phone.toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [contactSearch, contactStatusFilter, contacts]);
+
+  const sortedContacts = useMemo(() => {
+    const items = [...filteredContacts];
+    items.sort((current, next) => {
+      const a = getContactSortValue(current, contactSortBy);
+      const b = getContactSortValue(next, contactSortBy);
+      const comparison = a.localeCompare(b);
+      return contactSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredContacts, contactSortBy, contactSortDirection]);
+
+  const contactTotalPages = Math.max(1, Math.ceil(sortedContacts.length / contactPageSize));
+
+  const contactPageButtons = useMemo(
+    () => buildPageButtons(contactPage, contactTotalPages),
+    [contactPage, contactTotalPages],
+  );
+
+  const visibleContacts = useMemo(() => {
+    const startIndex = (contactPage - 1) * contactPageSize;
+    return sortedContacts.slice(startIndex, startIndex + contactPageSize);
+  }, [contactPage, contactPageSize, sortedContacts]);
+
+  const contactPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedContacts.length) }),
+    [sortedContacts.length, t],
+  );
+
+  const contactRowCells = useCallback(
+    (contact: ContactItem) => [
+      contact.name,
+      contact.phoneNumber ?? "-",
+      contact.email ?? "-",
+      contact.isPrimary ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+    ],
+    [t],
+  );
+
+  const renderContactStatus = useCallback(
+    (contact: ContactItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {contact.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderContactActions = useCallback(
+    (contact: ContactItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleContactEdit(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleContactToggleStatus(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            contact.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleContactDelete(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+      </div>
+    ),
+    [handleContactDelete, handleContactEdit, handleContactToggleStatus, t],
+  );
+
+  const handleContactSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as ContactSortColumn;
+      if (normalized === contactSortBy) {
+        setContactSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setContactSortDirection("asc");
+      setContactSortBy(normalized);
+    },
+    [contactSortBy],
+  );
+
+  const gridDensityOptions = useMemo(
+    () => [
+      { key: "compact" as const, label: t("clients.grid.density.slow") },
+      { key: "medium" as const, label: t("clients.grid.density.medium") },
+      { key: "expanded" as const, label: t("clients.grid.density.expanded") },
+    ],
+    [t],
+  );
+
+  /* ---------- Contact page effects ---------- */
+
+  useEffect(() => {
+    setContactPage((current) => Math.min(current, contactTotalPages));
+  }, [contactTotalPages]);
+
+  useEffect(() => {
+    setContactPage(1);
+  }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
+
+  /* ---------- Lazy load contacts when tab becomes active ---------- */
+
+  useEffect(() => {
+    if (loadedTabs.has("contactos") && createdClientId && contacts.length === 0 && !contactsLoading) {
+      void loadClientContacts();
+    }
+  }, [loadedTabs, createdClientId, contacts.length, contactsLoading, loadClientContacts]);
+
+  /* ---------- Render: Contacts tab ---------- */
+
+  const renderContactsTab = () => {
+    if (!loadedTabs.has("contactos")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Contact form */}
+        <form
+          onSubmit={(e) => void handleContactSubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.contacts.form.name")}
+              value={contactFormState.name}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, name: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.contacts.form.email")}
+              value={contactFormState.email}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, email: v }))
+              }
+              type="email"
+            />
+            <FormField
+              label={t("clients.contacts.form.phone")}
+              value={contactFormState.phoneNumber}
+              onChange={(v) =>
+                setContactFormState((prev) => ({ ...prev, phoneNumber: v }))
+              }
+              required
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={contactSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {contactSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingContact ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingContact && (
+              <button
+                type="button"
+                onClick={resetContactForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+            {/* Bulk upload */}
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
+              {contactsBulkUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {t("clients.contacts.bulk.label")}
+              <input
+                type="file"
+                accept=".csv"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  void handleContactsBulkUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </form>
+
+        {/* Contacts grid */}
+        <HubGrid
+          columns={contactColumns}
+          items={visibleContacts}
+          renderRowCells={contactRowCells}
+          renderStatus={renderContactStatus}
+          renderActions={renderContactActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.contacts.table.actions")}
+          rowDensity={contactGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setContactGridDensity}
+          sortBy={contactSortBy}
+          sortDirection={contactSortDirection}
+          onSort={handleContactSort}
+          statusFilter={contactStatusFilter}
+          statusFilterOptions={contactStatusFilterOptions}
+          onStatusFilterChange={setContactStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={contactSearch}
+          onSearchChange={setContactSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={contactsLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.contacts.empty")}
+          pageCaption={contactPageCaption}
+          page={contactPage}
+          totalPages={contactTotalPages}
+          pageButtons={contactPageButtons}
+          onPageChange={setContactPage}
+          pageSize={contactPageSize}
+          pageSizeOptions={CONTACT_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setContactPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(contact) => contact.id}
+        />
+
+        {/* Delete confirmation dialog */}
+        <ConfirmDialog
+          open={contactDeleteConfirmOpen}
+          onOpenChange={setContactDeleteConfirmOpen}
+          onConfirm={() => void handleContactDeleteConfirm()}
+          title={t("clients.contacts.deleteConfirm.title")}
+          description={t("clients.contacts.deleteConfirm.description")}
+          confirmLabel={t("clients.actions.confirm")}
+          cancelLabel={t("clients.actions.cancel")}
+        />
+      </div>
+    );
+  };
 
   /* ==========================
      RENDER
@@ -600,7 +1349,7 @@ export function ClientsCreatePage() {
           {/* ---------- Tabs ---------- */}
           <HubTabs<ClientCreateTab>
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={handleTabChange}
             tabs={[
               {
                 id: "informacoes",
@@ -654,7 +1403,7 @@ export function ClientsCreatePage() {
                 label: t("clients.detail.tabs.contactsSummary"),
                 disabled: !createdClientId,
                 panel: createdClientId ? (
-                  <div>Conteúdo de Contatos (placeholder por agora)</div>
+                  renderContactsTab()
                 ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}

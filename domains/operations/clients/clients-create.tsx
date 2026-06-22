@@ -1,19 +1,28 @@
 "use client";
 
-import { ArrowLeft, Loader2 } from "lucide-react";
-import { FormEvent, useCallback, useState } from "react";
+import clsx from "clsx";
+import { ArrowLeft, Loader2, Power, SquarePen, Trash2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
+import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { Textarea } from "@/shared/ui/textarea";
 
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
+import { ClientItem } from "@/domains/operations/clients/client-models";
+import {
+  HubGrid,
+  type HubGridColumn,
+  type RowDensity,
+} from "@/shared/hub-grid";
+import { HubTabs } from "@/shared/ui";
 import {
   normalizeClient,
   normalizeClientError,
+  normalizeErrorMessage,
 } from "@/domains/operations/clients/client-utils";
-import { Textarea } from "@/shared/ui/textarea";
-import { HubTabs } from "@/shared/ui";
 import {
   FormField,
   SelectField,
@@ -33,6 +42,157 @@ import {
   initialCompanyFormState,
   initialClientFormState,
 } from "@/domains/operations/clients/clients-form-components";
+import {
+  type ClientFiscalDataItem,
+  type ClientFiscalDataFormState,
+  initialFiscalDataFormState,
+  type ClientConsentItem,
+  type ConsentTypeItem,
+  type ClientConsentFormState,
+  initialConsentFormState,
+  type ClientHierarchyItem,
+  type ClientHierarchyFormState,
+  initialHierarchyFormState,
+} from "@/domains/operations/clients/client-models";
+import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
+
+/* ---------- Contact types & constants ---------- */
+
+const CONTACT_PAGE_SIZE = 25;
+const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+
+type ContactSortColumn = "Name" | "Email" | "Phone";
+
+const PAGE_BUTTON_MAX = 5;
+
+function buildPageButtons(page: number, totalPages: number) {
+  const pages: number[] = [];
+  const normalTotal = Math.max(1, totalPages);
+  let start = Math.max(1, page - Math.floor(PAGE_BUTTON_MAX / 2));
+  const end = Math.min(normalTotal, start + PAGE_BUTTON_MAX - 1);
+  start = Math.max(1, end - PAGE_BUTTON_MAX + 1);
+  for (let index = start; index <= end; index += 1) {
+    pages.push(index);
+  }
+  return pages;
+}
+
+function getContactSortValue(item: ContactItem, column: ContactSortColumn) {
+  switch (column) {
+    case "Email":
+      return (item.email ?? "").toLowerCase();
+    case "Phone":
+      return (item.phoneNumber ?? "").toLowerCase();
+    default:
+      return item.name.toLowerCase();
+  }
+}
+
+interface ContactItem {
+  id: number;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+  isActive: boolean;
+  isPrimary: boolean;
+}
+
+interface ContactsPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+interface ContactFormState {
+  name: string;
+  email: string;
+  phoneNumber: string;
+}
+
+const initialContactFormState: ContactFormState = {
+  name: "",
+  email: "",
+  phoneNumber: "",
+};
+
+/* ---------- Contact normalize/parse ---------- */
+
+function normalizeContact(payload: unknown): ContactItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.contactId === "number"
+          ? candidate.contactId
+          : typeof candidate.contactId === "string"
+            ? Number(candidate.contactId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const name =
+    typeof candidate.name === "string"
+      ? candidate.name
+      : typeof candidate.fullName === "string"
+        ? candidate.fullName
+        : typeof candidate.contactName === "string"
+          ? candidate.contactName
+          : "";
+  const phoneNumber =
+    typeof candidate.phoneNumber === "string"
+      ? candidate.phoneNumber
+      : typeof candidate.phone === "string"
+        ? candidate.phone
+        : typeof candidate.mobile === "string"
+          ? candidate.mobile
+          : null;
+  const email = typeof candidate.email === "string" ? candidate.email : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+  const isPrimaryValue =
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
+
+  return {
+    id: rawId,
+    name,
+    email,
+    phoneNumber,
+    isActive: Boolean(isActiveValue),
+    isPrimary: Boolean(isPrimaryValue),
+  };
+}
+
+function parsePagedContacts(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ContactItem[], totalItems: 0 };
+  const candidate = payload as ContactsPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeContact)
+    .filter((item): item is ContactItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
 
 export function ClientsCreatePage() {
   const { fetchWithAuth } = useAuth();
@@ -45,6 +205,27 @@ export function ClientsCreatePage() {
   );
   const [submitting, setSubmitting] = useState(false);
   const [createdClientId, setCreatedClientId] = useState<string | null>(null);
+
+  /* ---------- Contacts state ---------- */
+
+  const [contacts, setContacts] = useState<ContactItem[]>([]);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactFormState, setContactFormState] = useState<ContactFormState>(initialContactFormState);
+  const [editingContact, setEditingContact] = useState<ContactItem | null>(null);
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactDeleteConfirmOpen, setContactDeleteConfirmOpen] = useState(false);
+  const contactDeleteRef = useRef<ContactItem | null>(null);
+  const [contactsBulkUploading, setContactsBulkUploading] = useState(false);
+
+  /* ---------- Contact grid state ---------- */
+
+  const [contactGridDensity, setContactGridDensity] = useState<RowDensity>("medium");
+  const [contactSearch, setContactSearch] = useState("");
+  const [contactStatusFilter, setContactStatusFilter] = useState("all");
+  const [contactPage, setContactPage] = useState(1);
+  const [contactPageSize, setContactPageSize] = useState<number>(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [contactSortBy, setContactSortBy] = useState<ContactSortColumn>("Name");
+  const [contactSortDirection, setContactSortDirection] = useState<"asc" | "desc">("asc");
 
   type ClientCreateTab =
     | "informacoes"

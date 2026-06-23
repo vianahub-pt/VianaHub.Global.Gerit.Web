@@ -21,6 +21,9 @@ import { HubTabs } from "@/shared/ui";
 import {
   normalizeClient,
   normalizeErrorMessage,
+  normalizeAddress,
+  parsePagedAddresses,
+  getAddressSortValue,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -52,6 +55,10 @@ import {
   type ClientHierarchyItem,
   type ClientHierarchyFormState,
   initialHierarchyFormState,
+  type AddressItem,
+  type AddressFormState,
+  type AddressSortColumn,
+  initialAddressFormState,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -71,7 +78,6 @@ const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
-type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
 type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
@@ -102,21 +108,6 @@ function getContactSortValue(item: ContactItem, column: ContactSortColumn) {
       return (item.phoneNumber ?? "").toLowerCase();
     default:
       return item.name.toLowerCase();
-  }
-}
-
-function getAddressSortValue(item: AddressItem, column: AddressSortColumn) {
-  switch (column) {
-    case "City":
-      return (item.city ?? "").toLowerCase();
-    case "State":
-      return (item.state ?? "").toLowerCase();
-    case "PostalCode":
-      return (item.postalCode ?? "").toLowerCase();
-    case "Country":
-      return (item.country ?? "").toLowerCase();
-    default:
-      return (item.street ?? "").toLowerCase();
   }
 }
 
@@ -153,34 +144,10 @@ interface ContactsPagedResponse {
   totalItems?: unknown;
 }
 
-interface AddressItem {
-  id: number;
-  street: string | null;
-  city: string | null;
-  state: string | null;
-  postalCode: string | null;
-  country: string | null;
-  isActive: boolean;
-  isPrimary: boolean;
-}
-
-interface AddressesPagedResponse {
-  items?: unknown;
-  totalItems?: unknown;
-}
-
 interface ContactFormState {
   name: string;
   email: string;
   phoneNumber: string;
-}
-
-interface AddressFormState {
-  street: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
 }
 
 interface FiscalDataFormState {
@@ -203,14 +170,6 @@ const initialContactFormState: ContactFormState = {
   name: "",
   email: "",
   phoneNumber: "",
-};
-
-const initialAddressFormState: AddressFormState = {
-  street: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  country: "",
 };
 
 const initialFiscalDataFormStateLocal: FiscalDataFormState = {
@@ -309,109 +268,6 @@ function parsePagedContacts(payload: unknown) {
   const items = rawItems
     .map(normalizeContact)
     .filter((item): item is ContactItem => item !== null);
-  return {
-    items,
-    totalItems:
-      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
-  };
-}
-
-/* ---------- Address normalize/parse ---------- */
-
-function normalizeAddress(payload: unknown): AddressItem | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const candidate = payload as Record<string, unknown>;
-  const rawId =
-    typeof candidate.id === "number"
-      ? candidate.id
-      : typeof candidate.id === "string"
-        ? Number(candidate.id)
-        : typeof candidate.addressId === "number"
-          ? candidate.addressId
-          : typeof candidate.addressId === "string"
-            ? Number(candidate.addressId)
-            : null;
-  if (rawId === null || !Number.isFinite(rawId)) return null;
-
-  const street =
-    typeof candidate.street === "string"
-      ? candidate.street
-      : typeof candidate.addressLine1 === "string"
-        ? candidate.addressLine1
-        : typeof candidate.address === "string"
-          ? candidate.address
-          : typeof candidate.line1 === "string"
-            ? candidate.line1
-            : null;
-  const city =
-    typeof candidate.city === "string"
-      ? candidate.city
-      : typeof candidate.town === "string"
-        ? candidate.town
-        : null;
-  const state =
-    typeof candidate.state === "string"
-      ? candidate.state
-      : typeof candidate.region === "string"
-        ? candidate.region
-        : typeof candidate.district === "string"
-          ? candidate.district
-          : null;
-  const postalCode =
-    typeof candidate.postalCode === "string"
-      ? candidate.postalCode
-      : typeof candidate.zipCode === "string"
-        ? candidate.zipCode
-        : null;
-  const country =
-    typeof candidate.country === "string"
-      ? candidate.country
-      : typeof candidate.countryCode === "string"
-        ? candidate.countryCode
-        : typeof candidate.regionCode === "string"
-          ? candidate.regionCode
-          : null;
-  const isActiveValue =
-    typeof candidate.isActive === "boolean"
-      ? candidate.isActive
-      : typeof candidate.isActive === "string"
-        ? candidate.isActive.toLowerCase() === "true"
-        : typeof candidate.active === "boolean"
-          ? candidate.active
-          : typeof candidate.active === "string"
-            ? candidate.active.toLowerCase() === "true"
-            : typeof candidate.enabled === "boolean"
-              ? candidate.enabled
-              : typeof candidate.enabled === "string"
-                ? candidate.enabled.toLowerCase() === "true"
-                : true;
-  const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean"
-      ? candidate.isPrimary
-      : typeof candidate.isPrimary === "string"
-        ? candidate.isPrimary.toLowerCase() === "true"
-        : false;
-
-  return {
-    id: rawId,
-    street,
-    city,
-    state,
-    postalCode,
-    country,
-    isActive: Boolean(isActiveValue),
-    isPrimary: Boolean(isPrimaryValue),
-  };
-}
-
-function parsePagedAddresses(payload: unknown) {
-  if (typeof payload !== "object" || payload === null)
-    return { items: [] as AddressItem[], totalItems: 0 };
-  const candidate = payload as AddressesPagedResponse;
-  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
-  const items = rawItems
-    .map(normalizeAddress)
-    .filter((item): item is AddressItem => item !== null);
   return {
     items,
     totalItems:

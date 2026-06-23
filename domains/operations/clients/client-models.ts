@@ -1,5 +1,38 @@
 "use client";
 
+/* ---------- Client Addresses ---------- */
+
+export interface AddressItem {
+  id: number;
+  street: string | null;
+  city: string | null;
+  state: string | null;
+  postalCode: string | null;
+  country: string | null;
+  isActive: boolean;
+  isPrimary: boolean;
+}
+
+export interface AddressFormState {
+  street: string;
+  city: string;
+  state: string;
+  postalCode: string;
+  country: string;
+}
+
+export type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
+
+export const initialAddressFormState: AddressFormState = {
+  street: "",
+  city: "",
+  state: "",
+  postalCode: "",
+  country: "",
+};
+
+/* ---------- Client Individual ---------- */
+
 export interface ClientIndividual {
   id?: number;
   tenantId?: number;

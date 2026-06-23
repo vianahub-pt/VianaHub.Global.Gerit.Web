@@ -16,6 +16,8 @@ import {
   normalizeClient,
   normalizeClientError,
   normalizeErrorMessage,
+  parsePagedAddresses,
+  getAddressSortValue,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
 import {
@@ -37,11 +39,20 @@ import {
   initialCompanyFormState,
   initialClientFormState,
 } from "@/domains/operations/clients/clients-form-components";
+import {
+  type AddressItem,
+  type AddressFormState,
+  type AddressSortColumn,
+  initialAddressFormState,
+} from "@/domains/operations/clients/client-models";
+import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
 /* ---------- Constants ---------- */
 
 const CONTACT_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const ADDRESS_PAGE_SIZE = 25;
+const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
@@ -216,6 +227,26 @@ export function ClientsCreatePage() {
   const [contactPageSize, setContactPageSize] = useState<number>(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
   const [contactSortBy, setContactSortBy] = useState<ContactSortColumn>("Name");
   const [contactSortDirection, setContactSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Addresses state ---------- */
+
+  const [addresses, setAddresses] = useState<AddressItem[]>([]);
+  const [addressesLoading, setAddressesLoading] = useState(false);
+  const [addressFormState, setAddressFormState] = useState<AddressFormState>(initialAddressFormState);
+  const [editingAddress, setEditingAddress] = useState<AddressItem | null>(null);
+  const [addressSubmitting, setAddressSubmitting] = useState(false);
+  const [addressDeleteConfirmOpen, setAddressDeleteConfirmOpen] = useState(false);
+  const addressDeleteRef = useRef<AddressItem | null>(null);
+
+  /* ---------- Address grid state ---------- */
+
+  const [addressGridDensity, setAddressGridDensity] = useState<RowDensity>("medium");
+  const [addressSearch, setAddressSearch] = useState("");
+  const [addressStatusFilter, setAddressStatusFilter] = useState("all");
+  const [addressPage, setAddressPage] = useState(1);
+  const [addressPageSize, setAddressPageSize] = useState<number>(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [addressSortBy, setAddressSortBy] = useState<AddressSortColumn>("Street");
+  const [addressSortDirection, setAddressSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
 
@@ -1304,6 +1335,387 @@ export function ClientsCreatePage() {
     );
   };
 
+  /* ---------- Addresses: reset form ---------- */
+
+  const resetAddressForm = useCallback(() => {
+    setEditingAddress(null);
+    setAddressFormState(initialAddressFormState);
+  }, []);
+
+  /* ---------- Addresses: load ---------- */
+
+  const loadAddresses = useCallback(async () => {
+    if (!createdClientId) {
+      setAddresses([]);
+      return;
+    }
+    setAddressesLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(ADDRESS_PAGE_SIZE),
+      SortBy: "Street",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/addresses/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(
+          normalizeErrorMessage(payload, t("clients.addresses.errors.load")),
+        );
+      }
+      const parsed = parsePagedAddresses(payload);
+      setAddresses(parsed.items);
+    } catch (error) {
+      logError("clients.create.loadAddresses", "Falha ao carregar endereços", error);
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error
+            ? error.message
+            : t("clients.addresses.errors.load"),
+        variant: "destructive",
+      });
+      setAddresses([]);
+    } finally {
+      setAddressesLoading(false);
+    }
+  }, [createdClientId, fetchWithAuth, t, toast]);
+
+  /* ---------- Addresses: load on tab activate ---------- */
+
+  useEffect(() => {
+    if (createdClientId && activeTab === "enderecos") {
+      void loadAddresses();
+    }
+  }, [createdClientId, activeTab, loadAddresses]);
+
+  /* ---------- Addresses: submit (create/update) ---------- */
+
+  const handleAddressSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!createdClientId) return;
+      const street = addressFormState.street.trim();
+      const city = addressFormState.city.trim();
+      const state = addressFormState.state.trim();
+      const postalCode = addressFormState.postalCode.trim();
+      const country = addressFormState.country.trim();
+      if (!street || !city) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.addresses.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setAddressSubmitting(true);
+      try {
+        const payload = {
+          street,
+          city,
+          state: state.length > 0 ? state : null,
+          postalCode: postalCode.length > 0 ? postalCode : null,
+          country: country.length > 0 ? country : null,
+        };
+        const isEditing = editingAddress !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${createdClientId}/addresses/${editingAddress?.id}`
+          : `/api/gerit/v1/clients/${createdClientId}/addresses`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.addresses.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.addresses.toasts.updated")
+            : t("clients.addresses.toasts.created"),
+        });
+        resetAddressForm();
+        await loadAddresses();
+      } catch (error) {
+        logError("clients.create.addressSubmit", "Falha ao salvar endereço", error);
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error
+              ? error.message
+              : t("clients.addresses.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setAddressSubmitting(false);
+      }
+    },
+    [
+      addressFormState,
+      createdClientId,
+      editingAddress,
+      fetchWithAuth,
+      loadAddresses,
+      resetAddressForm,
+      t,
+      toast,
+    ],
+  );
+
+  /* ---------- Addresses: edit ---------- */
+
+  const handleAddressEdit = useCallback((address: AddressItem) => {
+    setEditingAddress(address);
+    setAddressFormState({
+      street: address.street ?? "",
+      city: address.city ?? "",
+      state: address.state ?? "",
+      postalCode: address.postalCode ?? "",
+      country: address.country ?? "",
+    });
+  }, []);
+
+  /* ---------- Addresses: toggle status ---------- */
+
+  const handleAddressToggleStatus = useCallback(
+    async (address: AddressItem) => {
+      if (!createdClientId) return;
+      try {
+        const endpoint = address.isActive
+          ? `/api/gerit/v1/clients/${createdClientId}/addresses/${address.id}/deactivate`
+          : `/api/gerit/v1/clients/${createdClientId}/addresses/${address.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.addresses.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: address.isActive
+            ? t("clients.addresses.toasts.deactivated")
+            : t("clients.addresses.toasts.activated"),
+        });
+        await loadAddresses();
+      } catch (error) {
+        logError("clients.create.addressToggleStatus", "Falha ao alterar estado do endereço", error);
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error
+              ? error.message
+              : t("clients.addresses.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [createdClientId, fetchWithAuth, loadAddresses, t, toast],
+  );
+
+  /* ---------- Addresses: delete ---------- */
+
+  const handleAddressDelete = useCallback(
+    (address: AddressItem) => {
+      addressDeleteRef.current = address;
+      setAddressDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleAddressDeleteConfirm = useCallback(async () => {
+    const address = addressDeleteRef.current;
+    addressDeleteRef.current = null;
+    setAddressDeleteConfirmOpen(false);
+    if (!address || !createdClientId) return;
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/addresses/${address.id}`,
+        { method: "DELETE" },
+      );
+      if (!response) return;
+      const responsePayload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(
+          normalizeErrorMessage(responsePayload, t("clients.addresses.errors.delete")),
+        );
+      }
+      toast({
+        title: t("clients.toasts.successTitle"),
+        description: t("clients.addresses.toasts.deleted"),
+      });
+      await loadAddresses();
+    } catch (error) {
+      logError("clients.create.addressDelete", "Falha ao eliminar endereço", error);
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error
+            ? error.message
+            : t("clients.addresses.errors.delete"),
+        variant: "destructive",
+      });
+    }
+  }, [createdClientId, fetchWithAuth, loadAddresses, t, toast]);
+
+  /* ---------- Addresses: grid derived ---------- */
+
+  const addressStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredAddresses = useMemo(() => {
+    const searchTerm = addressSearch.trim().toLowerCase();
+    return addresses.filter((address) => {
+      if (addressStatusFilter !== "all") {
+        const expected = addressStatusFilter === "active";
+        if (address.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      const street = address.street ?? "";
+      const city = address.city ?? "";
+      return (
+        street.toLowerCase().includes(searchTerm) ||
+        city.toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [addressSearch, addressStatusFilter, addresses]);
+
+  const sortedAddresses = useMemo(() => {
+    const items = [...filteredAddresses];
+    items.sort((current, next) => {
+      const a = getAddressSortValue(current, addressSortBy);
+      const b = getAddressSortValue(next, addressSortBy);
+      const comparison = a.localeCompare(b);
+      return addressSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [addressSortBy, addressSortDirection, filteredAddresses]);
+
+  const addressTotalPages = Math.max(1, Math.ceil(sortedAddresses.length / addressPageSize));
+
+  useEffect(() => {
+    setAddressPage((current) => Math.min(current, addressTotalPages));
+  }, [addressTotalPages]);
+
+  const addressPageButtons = useMemo(
+    () => buildPageButtons(addressPage, addressTotalPages),
+    [addressPage, addressTotalPages],
+  );
+
+  const visibleAddresses = useMemo(() => {
+    const startIndex = (addressPage - 1) * addressPageSize;
+    return sortedAddresses.slice(startIndex, startIndex + addressPageSize);
+  }, [addressPage, addressPageSize, sortedAddresses]);
+
+  const addressPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedAddresses.length) }),
+    [sortedAddresses.length, t],
+  );
+
+  useEffect(() => {
+    setAddressPage(1);
+  }, [addressStatusFilter, addressSearch, addressSortBy, addressSortDirection, addressPageSize]);
+
+  const addressColumns = useMemo<HubGridColumn<AddressItem>[]>(
+    () => [
+      { key: "Street", label: t("clients.addresses.table.street") },
+      { key: "City", label: t("clients.addresses.table.city") },
+      { key: "State", label: t("clients.addresses.table.state") },
+      { key: "PostalCode", label: t("clients.addresses.table.postalCode") },
+    ],
+    [t],
+  );
+
+  const addressRowCells = useCallback(
+    (address: AddressItem) => [
+      address.street ?? "-",
+      address.city ?? "-",
+      address.state ?? "-",
+      address.postalCode ?? "-",
+    ],
+    [],
+  );
+
+  const renderAddressStatus = useCallback(
+    (address: AddressItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {address.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderAddressActions = useCallback(
+    (address: AddressItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleAddressEdit(address)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleAddressToggleStatus(address)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            address.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleAddressDelete(address)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+      </div>
+    ),
+    [handleAddressDelete, handleAddressEdit, handleAddressToggleStatus, t],
+  );
+
+  const handleAddressSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as AddressSortColumn;
+      if (normalized === addressSortBy) {
+        setAddressSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setAddressSortDirection("asc");
+      setAddressSortBy(normalized);
+    },
+    [addressSortBy],
+  );
+
   /* ==========================
      RENDER
      ========================== */
@@ -1415,7 +1827,131 @@ export function ClientsCreatePage() {
                 label: t("clients.detail.tabs.addressesSummary"),
                 disabled: !createdClientId,
                 panel: createdClientId ? (
-                  <div>Conteúdo de Endereços (placeholder por agora)</div>
+                  <div className="space-y-4">
+                    {/* Address form */}
+                    <form
+                      onSubmit={(e) => void handleAddressSubmit(e)}
+                      className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+                    >
+                      <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        <FormField
+                          label={t("clients.addresses.form.street")}
+                          value={addressFormState.street}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, street: v }))
+                          }
+                          required
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.city")}
+                          value={addressFormState.city}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, city: v }))
+                          }
+                          required
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.state")}
+                          value={addressFormState.state}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, state: v }))
+                          }
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.postalCode")}
+                          value={addressFormState.postalCode}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, postalCode: v }))
+                          }
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.country")}
+                          value={addressFormState.country}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, country: v }))
+                          }
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="submit"
+                          disabled={addressSubmitting}
+                          className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+                        >
+                          {addressSubmitting && (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          )}
+                          {editingAddress
+                            ? t("clients.actions.save")
+                            : t("clients.actions.add")}
+                        </button>
+                        {editingAddress && (
+                          <button
+                            type="button"
+                            onClick={resetAddressForm}
+                            className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+                          >
+                            {t("clients.actions.cancel")}
+                          </button>
+                        )}
+                      </div>
+                    </form>
+
+                    {/* Addresses grid */}
+                    <HubGrid
+                      columns={addressColumns}
+                      items={visibleAddresses}
+                      renderRowCells={addressRowCells}
+                      renderStatus={renderAddressStatus}
+                      renderActions={renderAddressActions}
+                      statusColumnLabel={t("clients.table.status")}
+                      actionsColumnLabel={t("clients.addresses.table.actions")}
+                      rowDensity={addressGridDensity}
+                      densityOptions={gridDensityOptions}
+                      onDensityChange={setAddressGridDensity}
+                      sortBy={addressSortBy}
+                      sortDirection={addressSortDirection}
+                      onSort={handleAddressSort}
+                      statusFilter={addressStatusFilter}
+                      statusFilterOptions={addressStatusFilterOptions}
+                      onStatusFilterChange={setAddressStatusFilter}
+                      statusFilterLabel={t("clients.filters.statusLabel")}
+                      searchValue={addressSearch}
+                      onSearchChange={setAddressSearch}
+                      searchPlaceholder={t("clients.filters.search")}
+                      loading={addressesLoading}
+                      loadingText={t("clients.loading")}
+                      emptyText={t("clients.addresses.empty")}
+                      pageCaption={addressPageCaption}
+                      page={addressPage}
+                      totalPages={addressTotalPages}
+                      pageButtons={addressPageButtons}
+                      onPageChange={setAddressPage}
+                      pageSize={addressPageSize}
+                      pageSizeOptions={ADDRESS_GRID_PAGE_SIZE_OPTIONS}
+                      onPageSizeChange={setAddressPageSize}
+                      paginationPreviousLabel={t("clients.pagination.previous")}
+                      paginationNextLabel={t("clients.pagination.next")}
+                      paginationPageLabel={t("clients.pagination.page")}
+                      paginationPerPageLabel={t("clients.pagination.perPage")}
+                      getRowKey={(address) => address.id}
+                    />
+
+                    {/* Delete confirmation */}
+                    <ConfirmDialog
+                      open={addressDeleteConfirmOpen}
+                      onOpenChange={setAddressDeleteConfirmOpen}
+                      title={t("clients.actions.delete")}
+                      description={
+                        addressDeleteRef.current
+                          ? t("clients.addresses.confirm.delete", {
+                              street: addressDeleteRef.current.street ?? "",
+                            })
+                          : t("clients.addresses.confirm.delete", { street: "" })
+                      }
+                      onConfirm={() => void handleAddressDeleteConfirm()}
+                    />
+                  </div>
                 ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}

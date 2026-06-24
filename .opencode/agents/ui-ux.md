@@ -135,6 +135,44 @@ Kanban Coordinator deve reencaminhar para `developer-junior`.
 
 ---
 
+# Convenções de Branch e PR
+
+## Regra geral ( Features, Melhorias, Correções não-críticas )
+
+- **Branch:** criar a partir de `develop`
+- **PR:** criar para `develop`
+- **Prefixo da branch:** `feature/issue-NUMERO-ui-ux-slug`
+
+## Exceção — Hotfix de produção ( bug crítico em produção )
+
+- **Branch:** criar a partir de `main`
+- **PR:** criar para `main`
+- **Prefixo da branch:** `hotfix/issue-NUMERO-ui-ux-slug`
+
+## Fluxo padrão
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/issue-NUMERO-ui-ux-slug
+# ... implementar ...
+git push origin feature/issue-NUMERO-ui-ux-slug
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "feat(ui): título" --body "Closes #NUMERO"
+```
+
+## Fluxo hotfix
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b hotfix/issue-NUMERO-ui-ux-slug
+# ... corrigir ...
+git push origin hotfix/issue-NUMERO-ui-ux-slug
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base main --title "fix(ui): título" --body "Closes #NUMERO"
+```
+
+---
+
 # Convenções do Projeto
 
 - **Path alias:** `@/*`
@@ -187,10 +225,20 @@ Aguarde o handoff do `kanban-coordinator` com:
 
 ## 2. Preparar ambiente
 
+### Feature / Melhoria / Correção (padrão)
+
 ```bash
 git checkout develop
 git pull origin develop
 git checkout -b feature/issue-NUMERO-ui-ux-slug
+```
+
+### Hotfix de produção (apenas bug crítico em produção)
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b hotfix/issue-NUMERO-ui-ux-slug
 ```
 
 ## 3. Analisar antes de implementar
@@ -231,8 +279,16 @@ git push origin feature/issue-NUMERO-ui-ux-slug
 
 ## 7. Criar PR
 
+### Feature / Melhoria / Correção (padrão)
+
 ```bash
 gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "feat(ui): título" --body "Closes #NUMERO"
+```
+
+### Hotfix de produção
+
+```bash
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base main --title "fix(ui): título" --body "Closes #NUMERO"
 ```
 
 ## 8. Comentar na issue

@@ -112,6 +112,44 @@ Se a issue estiver fora do escopo, recomende redirecionamento para `developer-pl
 
 ---
 
+# Convenções de Branch e PR
+
+## Regra geral ( Features, Melhorias, Correções não-críticas )
+
+- **Branch:** criar a partir de `develop`
+- **PR:** criar para `develop`
+- **Prefixo da branch:** `feature/issue-NUMERO-slug` ou `fix/issue-NUMERO-slug`
+
+## Exceção — Hotfix de produção ( bug crítico em produção )
+
+- **Branch:** criar a partir de `main`
+- **PR:** criar para `main`
+- **Prefixo da branch:** `hotfix/issue-NUMERO-slug`
+
+## Fluxo padrão
+
+```bash
+git checkout develop
+git pull origin develop
+git checkout -b feature/issue-NUMERO-slug
+# ... implementar ...
+git push origin feature/issue-NUMERO-slug
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "feat: título" --body "Closes #NUMERO"
+```
+
+## Fluxo hotfix
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b hotfix/issue-NUMERO-slug
+# ... corrigir ...
+git push origin hotfix/issue-NUMERO-slug
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base main --title "fix: título" --body "Closes #NUMERO"
+```
+
+---
+
 # Convenções do Projeto
 
 - **Path alias:** `@/*`
@@ -135,16 +173,20 @@ O `kanban-coordinator` fará assign e moverá o card para `In Progress`. Aguarde
 
 ## 2. Preparar ambiente
 
+### Feature / Melhoria / Correção (padrão)
+
 ```bash
 git checkout develop
 git pull origin develop
-git checkout -b fix/issue-NUMERO-slug
+git checkout -b feature/issue-NUMERO-slug
 ```
 
-ou
+### Hotfix de produção (apenas bug crítico em produção)
 
 ```bash
-git checkout -b feature/issue-NUMERO-slug
+git checkout main
+git pull origin main
+git checkout -b hotfix/issue-NUMERO-slug
 ```
 
 ## 3. Implementar
@@ -175,8 +217,16 @@ git push origin fix/issue-NUMERO-slug
 
 ## 6. Criar PR
 
+### Feature / Melhoria / Correção (padrão)
+
 ```bash
-gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "fix: título" --body "Closes #NUMERO"
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base develop --title "feat: título" --body "Closes #NUMERO"
+```
+
+### Hotfix de produção
+
+```bash
+gh pr create --repo vianahub-pt/VianaHub.Global.Gerit.Web --base main --title "fix: título" --body "Closes #NUMERO"
 ```
 
 ## 7. Comentar na issue

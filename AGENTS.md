@@ -222,6 +222,20 @@ Instrução compartilhada:
 
 # Fluxo Kanban
 
+## Convenções de Branch e PR
+
+Toda e qualquer alteração no repositório deve seguir estas convenções:
+
+| Tipo de demanda | Branch base | PR base | Prefixo branch | Exemplo |
+|-----------------|-------------|---------|----------------|---------|
+| Feature, Melhoria, Correção (padrão) | `develop` | `develop` | `feature/` ou `fix/` | `feature/issue-184-expand-addresses` |
+| Hotfix de produção (bug crítico) | `main` | `main` | `hotfix/` | `hotfix/issue-200-fix-login-error` |
+
+**Regra padrão:** toda demanda cria branch a partir de `develop` e PR para `develop`.
+**Exceção:** apenas fix de bug em produção usa `main` como base.
+
+Os agentes `developer-junior`, `developer-pleno`, `developer-senior` e `ui-ux` são responsáveis por criar branches e PRs seguindo estas convenções.
+
 ## Fluxo Oficial
 
 ```text

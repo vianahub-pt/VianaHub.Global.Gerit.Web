@@ -4,31 +4,54 @@
 
 export interface AddressItem {
   id: number;
+  addressTypeId: number | null;
   street: string | null;
+  number: string | null;
+  complement: string | null;
+  neighborhood: string | null;
   city: string | null;
   state: string | null;
   postalCode: string | null;
   country: string | null;
+  latitude: string | null;
+  longitude: string | null;
+  note: string | null;
   isActive: boolean;
   isPrimary: boolean;
 }
 
 export interface AddressFormState {
+  addressTypeId: string;
   street: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
   city: string;
   state: string;
   postalCode: string;
   country: string;
+  latitude: string;
+  longitude: string;
+  note: string;
+  isPrimary: boolean;
 }
 
 export type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
 
 export const initialAddressFormState: AddressFormState = {
+  addressTypeId: "",
   street: "",
+  number: "",
+  complement: "",
+  neighborhood: "",
   city: "",
   state: "",
   postalCode: "",
   country: "",
+  latitude: "",
+  longitude: "",
+  note: "",
+  isPrimary: false,
 };
 
 /* ---------- Client Individual ---------- */

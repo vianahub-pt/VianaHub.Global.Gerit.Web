@@ -472,7 +472,9 @@ Se nenhuma opção justificar → rotear para `developer-junior`.
 
 ## Fluxo contínuo
 
-O fluxo deve ser contínuo e sem intervenção humana entre as etapas operacionais. Os agentes não pedem confirmação para:
+O fluxo deve ser contínuo e sem intervenção humana entre as etapas operacionais. Os agentes não devem parar para pedir/solicitar informações ao usuário enquanto o processo de desenvolvimento estiver acontecendo — o processo deve obrigatoriamente ser contínuo. As únicas intervenções do usuário serão aprovar o PR e fazer o merge.
+
+Os agentes não pedem confirmação para:
 
 - criar/refinar issue
 - criar branch

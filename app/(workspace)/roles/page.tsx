@@ -1,5 +1,5 @@
 import { RolesPage } from "@/domains/operations/roles";
 
-export default function OperationsRolesPage() {
+export default function RolesPageWrapper() {
   return <RolesPage />;
 }

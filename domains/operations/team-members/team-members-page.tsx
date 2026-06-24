@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Power, Loader2, SquarePen, Trash2, UserRoundPlus } from "lucide-react";
+import { Power, PowerOff, Loader2, SquarePen, Trash2, UserRoundPlus } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -655,8 +655,8 @@ export function TeamMembersPage() {
         className={clsx(
           "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
           member.isActive
-            ? "text-foreground dark:text-foreground"
-            : "text-foreground dark:text-foreground",
+            ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+            : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
         )}
       >
         {member.isActive
@@ -687,14 +687,16 @@ export function TeamMembersPage() {
             event.stopPropagation();
             void handleToggleStatus(member);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
           title={
             member.isActive
               ? t("teamMembers.actions.deactivate")
               : t("teamMembers.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
+          {member.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -702,10 +704,10 @@ export function TeamMembersPage() {
             event.stopPropagation();
             void handleDeleteTeamMember(member);
           }}
-          className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-destructive"
+          className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
           title={t("teamMembers.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),

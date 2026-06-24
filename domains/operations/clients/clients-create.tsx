@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, Loader2, Power, SquarePen, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Power, PowerOff, SquarePen, Trash2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
@@ -1148,7 +1148,9 @@ export function ClientsCreatePage() {
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {contact.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -1156,7 +1158,7 @@ export function ClientsCreatePage() {
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),
@@ -1741,7 +1743,9 @@ export function ClientsCreatePage() {
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {address.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -1749,7 +1753,7 @@ export function ClientsCreatePage() {
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),

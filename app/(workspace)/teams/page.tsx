@@ -1,5 +1,5 @@
 import { TeamsPage } from "@/domains/operations/teams";
 
-export default function OperationsTeamsPage() {
+export default function TeamsPageWrapper() {
   return <TeamsPage />;
 }

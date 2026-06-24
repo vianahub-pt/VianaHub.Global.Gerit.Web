@@ -98,7 +98,7 @@ export function UserProfileMenu({
 
   const handlePreferencesClick = useCallback(() => {
     setIsOpen(false);
-    router.push("/settings/preferences");
+    router.push("/preferences");
   }, [router]);
 
   const handleSignOutClick = useCallback(() => {

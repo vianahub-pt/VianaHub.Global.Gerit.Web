@@ -91,6 +91,8 @@ Toda movimentação de cards no board é feita **exclusivamente pelo `kanban-coo
 
 ## Automação Total — Nenhuma Intervenção Humana
 
+O fluxo deve ser **contínuo e fluido**, sem parar para pedir/solicitar informações ao usuário enquanto o processo de desenvolvimento estiver acontecendo. O processo deve obrigatoriamente ser contínuo.
+
 A **única** intervenção humana possível e inegociável:
 
 1. **Revisar** o PR final.

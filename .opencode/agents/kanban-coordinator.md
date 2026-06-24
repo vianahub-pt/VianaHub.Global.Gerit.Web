@@ -356,7 +356,7 @@ if ($optionId -eq "47fc9ee4") {
 - **Comandos gh:** Sempre usar `--repo vianahub-pt/VianaHub.Global.Gerit.Web`
 - **Assign:** Coordinator faz assign para o Developer
 - **NUNCA** criar branches, implementar, commitar, push ou criar PR
-- **NUNCA** solicitar confirmação humana para atividades operacionais
+- **NUNCA** parar para pedir/solicitar informações ao usuário enquanto o processo/fluxo de desenvolvimento estiver acontecendo — o processo deve obrigatoriamente ser contínuo. As únicas intervenções do usuário serão aprovar o PR e fazer o merge
 - **NUNCA** passar contexto completo da issue no handoff — usar formato máximo definido acima
 - **SEMPRE** verificar regra determinística antes de escolher agente
 - **SEMPRE** registrar justificativa ao escalonar tarefa aparentemente trivial

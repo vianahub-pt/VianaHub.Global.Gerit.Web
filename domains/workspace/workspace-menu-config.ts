@@ -96,13 +96,13 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "teams",
             label: t("workspace.sidebar.teams"),
-            href: "/operations/teams",
+            href: "/teams",
             icon: Building2,
           },
           {
             key: "teamMembers",
             label: t("workspace.sidebar.teamMembers"),
-            href: "/operations/teamMembers",
+            href: "/teamMembers",
             icon: UserRound,
           },
           {
@@ -114,7 +114,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "equipments",
             label: t("workspace.sidebar.equipments"),
-            href: "/operations/equipments",
+            href: "/equipments",
             icon: HardHat,
           },
           {
@@ -126,7 +126,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "vehicles",
             label: t("workspace.sidebar.vehicles"),
-            href: "/operations/vehicles",
+            href: "/vehicles",
             icon: Truck,
           },
         ],
@@ -177,7 +177,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "preferences",
             label: t("workspace.sidebar.preferences"),
-            href: "/settings/preferences",
+            href: "/preferences",
             icon: Settings,
           },
         ],
@@ -192,13 +192,13 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "users",
             label: t("workspace.sidebar.users"),
-            href: "/operations/users",
+            href: "/users",
             icon: Users,
           },
           {
             key: "roles",
             label: t("workspace.sidebar.roles"),
-            href: "/operations/roles",
+            href: "/roles",
             icon: UserCog,
           },
           {

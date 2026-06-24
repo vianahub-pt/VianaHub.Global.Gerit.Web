@@ -1,5 +1,5 @@
 import { UsersPage } from "@/domains/operations/users";
 
-export default function OperationsUsersPage() {
+export default function UsersPageWrapper() {
   return <UsersPage />;
 }

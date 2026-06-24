@@ -135,7 +135,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         logo={tenantName ? (
           <>
             <span className="mx-2 text-muted-foreground" aria-hidden="true">|</span>
-            <p className="truncate text-sm font-semibold text-foreground">
+            <p className="truncate text-base font-bold text-foreground">
               {tenantName}
             </p>
           </>

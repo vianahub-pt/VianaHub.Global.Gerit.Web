@@ -6,6 +6,8 @@ import {
   ClientConsentItem,
   ConsentTypeItem,
   ClientHierarchyItem,
+  AddressItem,
+  type AddressSortColumn,
 } from "./client-models";
 
 export interface ClientsPagedResponse {
@@ -34,6 +36,136 @@ export interface ConsentTypesResponse {
 export interface HierarchyPagedResponse {
   items?: unknown;
   totalItems?: unknown;
+}
+
+export interface AddressesPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+/* ---------- Address normalize/parse ---------- */
+
+export function normalizeAddress(payload: unknown): AddressItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.addressId === "number"
+          ? candidate.addressId
+          : typeof candidate.addressId === "string"
+            ? Number(candidate.addressId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const street =
+    typeof candidate.street === "string"
+      ? candidate.street
+      : typeof candidate.addressLine1 === "string"
+        ? candidate.addressLine1
+        : typeof candidate.address === "string"
+          ? candidate.address
+          : typeof candidate.line1 === "string"
+            ? candidate.line1
+            : null;
+  const city =
+    typeof candidate.city === "string"
+      ? candidate.city
+      : typeof candidate.town === "string"
+        ? candidate.town
+        : null;
+  const state =
+    typeof candidate.state === "string"
+      ? candidate.state
+      : typeof candidate.region === "string"
+        ? candidate.region
+        : typeof candidate.district === "string"
+          ? candidate.district
+          : null;
+  const postalCode =
+    typeof candidate.postalCode === "string"
+      ? candidate.postalCode
+      : typeof candidate.zipCode === "string"
+        ? candidate.zipCode
+        : null;
+  const country =
+    typeof candidate.country === "string"
+      ? candidate.country
+      : typeof candidate.countryCode === "string"
+        ? candidate.countryCode
+        : typeof candidate.regionCode === "string"
+          ? candidate.regionCode
+          : null;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+  const isPrimaryValue =
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
+
+  return {
+    id: rawId,
+    addressTypeId: typeof candidate.addressTypeId === "number" ? candidate.addressTypeId : typeof candidate.addressTypeId === "string" ? Number(candidate.addressTypeId) : null,
+    street,
+    number: typeof candidate.number === "string" ? candidate.number : null,
+    complement: typeof candidate.complement === "string" ? candidate.complement : null,
+    neighborhood: typeof candidate.neighborhood === "string" ? candidate.neighborhood : null,
+    city,
+    state,
+    postalCode,
+    country,
+    latitude: typeof candidate.latitude === "string" ? candidate.latitude : typeof candidate.latitude === "number" ? String(candidate.latitude) : null,
+    longitude: typeof candidate.longitude === "string" ? candidate.longitude : typeof candidate.longitude === "number" ? String(candidate.longitude) : null,
+    note: typeof candidate.note === "string" ? candidate.note : null,
+    isActive: Boolean(isActiveValue),
+    isPrimary: Boolean(isPrimaryValue),
+  };
+}
+
+export function parsePagedAddresses(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as AddressItem[], totalItems: 0 };
+  const candidate = payload as AddressesPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeAddress)
+    .filter((item): item is AddressItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+export function getAddressSortValue(item: AddressItem, column: AddressSortColumn) {
+  switch (column) {
+    case "City":
+      return (item.city ?? "").toLowerCase();
+    case "State":
+      return (item.state ?? "").toLowerCase();
+    case "PostalCode":
+      return (item.postalCode ?? "").toLowerCase();
+    case "Country":
+      return (item.country ?? "").toLowerCase();
+    default:
+      return (item.street ?? "").toLowerCase();
+  }
 }
 
 function normalizeIndividual(payload: unknown): ClientIndividual | undefined {

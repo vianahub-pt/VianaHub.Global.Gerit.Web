@@ -21,6 +21,9 @@ import { HubTabs } from "@/shared/ui";
 import {
   normalizeClient,
   normalizeErrorMessage,
+  normalizeAddress,
+  parsePagedAddresses,
+  getAddressSortValue,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -52,6 +55,10 @@ import {
   type ClientHierarchyItem,
   type ClientHierarchyFormState,
   initialHierarchyFormState,
+  type AddressItem,
+  type AddressFormState,
+  type AddressSortColumn,
+  initialAddressFormState,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -71,7 +78,6 @@ const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
-type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
 type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
@@ -102,21 +108,6 @@ function getContactSortValue(item: ContactItem, column: ContactSortColumn) {
       return (item.phoneNumber ?? "").toLowerCase();
     default:
       return item.name.toLowerCase();
-  }
-}
-
-function getAddressSortValue(item: AddressItem, column: AddressSortColumn) {
-  switch (column) {
-    case "City":
-      return (item.city ?? "").toLowerCase();
-    case "State":
-      return (item.state ?? "").toLowerCase();
-    case "PostalCode":
-      return (item.postalCode ?? "").toLowerCase();
-    case "Country":
-      return (item.country ?? "").toLowerCase();
-    default:
-      return (item.street ?? "").toLowerCase();
   }
 }
 
@@ -153,34 +144,10 @@ interface ContactsPagedResponse {
   totalItems?: unknown;
 }
 
-interface AddressItem {
-  id: number;
-  street: string | null;
-  city: string | null;
-  state: string | null;
-  postalCode: string | null;
-  country: string | null;
-  isActive: boolean;
-  isPrimary: boolean;
-}
-
-interface AddressesPagedResponse {
-  items?: unknown;
-  totalItems?: unknown;
-}
-
 interface ContactFormState {
   name: string;
   email: string;
   phoneNumber: string;
-}
-
-interface AddressFormState {
-  street: string;
-  city: string;
-  state: string;
-  postalCode: string;
-  country: string;
 }
 
 interface FiscalDataFormState {
@@ -203,14 +170,6 @@ const initialContactFormState: ContactFormState = {
   name: "",
   email: "",
   phoneNumber: "",
-};
-
-const initialAddressFormState: AddressFormState = {
-  street: "",
-  city: "",
-  state: "",
-  postalCode: "",
-  country: "",
 };
 
 const initialFiscalDataFormStateLocal: FiscalDataFormState = {
@@ -309,109 +268,6 @@ function parsePagedContacts(payload: unknown) {
   const items = rawItems
     .map(normalizeContact)
     .filter((item): item is ContactItem => item !== null);
-  return {
-    items,
-    totalItems:
-      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
-  };
-}
-
-/* ---------- Address normalize/parse ---------- */
-
-function normalizeAddress(payload: unknown): AddressItem | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const candidate = payload as Record<string, unknown>;
-  const rawId =
-    typeof candidate.id === "number"
-      ? candidate.id
-      : typeof candidate.id === "string"
-        ? Number(candidate.id)
-        : typeof candidate.addressId === "number"
-          ? candidate.addressId
-          : typeof candidate.addressId === "string"
-            ? Number(candidate.addressId)
-            : null;
-  if (rawId === null || !Number.isFinite(rawId)) return null;
-
-  const street =
-    typeof candidate.street === "string"
-      ? candidate.street
-      : typeof candidate.addressLine1 === "string"
-        ? candidate.addressLine1
-        : typeof candidate.address === "string"
-          ? candidate.address
-          : typeof candidate.line1 === "string"
-            ? candidate.line1
-            : null;
-  const city =
-    typeof candidate.city === "string"
-      ? candidate.city
-      : typeof candidate.town === "string"
-        ? candidate.town
-        : null;
-  const state =
-    typeof candidate.state === "string"
-      ? candidate.state
-      : typeof candidate.region === "string"
-        ? candidate.region
-        : typeof candidate.district === "string"
-          ? candidate.district
-          : null;
-  const postalCode =
-    typeof candidate.postalCode === "string"
-      ? candidate.postalCode
-      : typeof candidate.zipCode === "string"
-        ? candidate.zipCode
-        : null;
-  const country =
-    typeof candidate.country === "string"
-      ? candidate.country
-      : typeof candidate.countryCode === "string"
-        ? candidate.countryCode
-        : typeof candidate.regionCode === "string"
-          ? candidate.regionCode
-          : null;
-  const isActiveValue =
-    typeof candidate.isActive === "boolean"
-      ? candidate.isActive
-      : typeof candidate.isActive === "string"
-        ? candidate.isActive.toLowerCase() === "true"
-        : typeof candidate.active === "boolean"
-          ? candidate.active
-          : typeof candidate.active === "string"
-            ? candidate.active.toLowerCase() === "true"
-            : typeof candidate.enabled === "boolean"
-              ? candidate.enabled
-              : typeof candidate.enabled === "string"
-                ? candidate.enabled.toLowerCase() === "true"
-                : true;
-  const isPrimaryValue =
-    typeof candidate.isPrimary === "boolean"
-      ? candidate.isPrimary
-      : typeof candidate.isPrimary === "string"
-        ? candidate.isPrimary.toLowerCase() === "true"
-        : false;
-
-  return {
-    id: rawId,
-    street,
-    city,
-    state,
-    postalCode,
-    country,
-    isActive: Boolean(isActiveValue),
-    isPrimary: Boolean(isPrimaryValue),
-  };
-}
-
-function parsePagedAddresses(payload: unknown) {
-  if (typeof payload !== "object" || payload === null)
-    return { items: [] as AddressItem[], totalItems: 0 };
-  const candidate = payload as AddressesPagedResponse;
-  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
-  const items = rawItems
-    .map(normalizeAddress)
-    .filter((item): item is AddressItem => item !== null);
   return {
     items,
     totalItems:
@@ -709,6 +565,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [addressDeleteConfirmOpen, setAddressDeleteConfirmOpen] = useState(false);
   const addressDeleteRef = useRef<AddressItem | null>(null);
   const [addressesBulkUploading, setAddressesBulkUploading] = useState(false);
+  const [addressTypes, setAddressTypes] = useState<Array<{ id: number; name: string }>>([]);
 
   /* ---------- Fiscal Data state ---------- */
 
@@ -1064,6 +921,29 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [client, fetchWithAuth, t, toast]);
 
+  /* ---------- Load address types ---------- */
+
+  const loadAddressTypes = useCallback(async () => {
+    if (addressTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/address-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      if (Array.isArray(payload)) {
+        const parsed = payload
+          .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+          .map((item) => ({
+            id: typeof item.id === "number" ? item.id : 0,
+            name: typeof item.name === "string" ? item.name : "",
+          }));
+        setAddressTypes(parsed);
+      }
+    } catch {
+      // Silent fail — address types are optional
+    }
+  }, [addressTypes.length, fetchWithAuth]);
+
   /* ---------- Load fiscal data ---------- */
 
   const loadClientFiscalData = useCallback(async () => {
@@ -1226,6 +1106,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       void loadClientAddresses();
     }
   }, [loadedTabs, client?.id, addresses.length, addressesLoading, loadClientAddresses]);
+
+  // Lazy load address types when addresses tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("enderecos")) {
+      void loadAddressTypes();
+    }
+  }, [loadedTabs, loadAddressTypes]);
 
   // Lazy load fiscal data when tab becomes active
   useEffect(() => {
@@ -1653,11 +1540,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       event.preventDefault();
       if (!client) return;
       const street = addressFormState.street.trim();
+      const neighborhood = addressFormState.neighborhood.trim();
       const city = addressFormState.city.trim();
       const state = addressFormState.state.trim();
       const postalCode = addressFormState.postalCode.trim();
       const country = addressFormState.country.trim();
-      if (!street || !city) {
+      if (!street || !city || !neighborhood || !state || !country || !addressFormState.addressTypeId) {
         toast({
           title: t("clients.toasts.validationTitle"),
           description: t("clients.addresses.validation.required"),
@@ -1668,11 +1556,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       setAddressSubmitting(true);
       try {
         const payload = {
+          addressTypeId: addressFormState.addressTypeId ? Number(addressFormState.addressTypeId) : null,
           street,
+          number: addressFormState.number.trim().length > 0 ? addressFormState.number.trim() : null,
+          complement: addressFormState.complement.trim().length > 0 ? addressFormState.complement.trim() : null,
+          neighborhood,
           city,
           state: state.length > 0 ? state : null,
           postalCode: postalCode.length > 0 ? postalCode : null,
           country: country.length > 0 ? country : null,
+          latitude: addressFormState.latitude.trim().length > 0 ? addressFormState.latitude.trim() : null,
+          longitude: addressFormState.longitude.trim().length > 0 ? addressFormState.longitude.trim() : null,
+          note: addressFormState.note.trim().length > 0 ? addressFormState.note.trim() : null,
+          isPrimary: addressFormState.isPrimary,
         };
         const isEditing = editingAddress !== null;
         const endpoint = isEditing
@@ -1719,11 +1615,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const handleAddressEdit = useCallback((address: AddressItem) => {
     setEditingAddress(address);
     setAddressFormState({
+      addressTypeId: address.addressTypeId != null ? String(address.addressTypeId) : "",
       street: address.street ?? "",
+      number: address.number ?? "",
+      complement: address.complement ?? "",
+      neighborhood: address.neighborhood ?? "",
       city: address.city ?? "",
       state: address.state ?? "",
       postalCode: address.postalCode ?? "",
       country: address.country ?? "",
+      latitude: address.latitude ?? "",
+      longitude: address.longitude ?? "",
+      note: address.note ?? "",
+      isPrimary: address.isPrimary,
     });
   }, []);
 
@@ -3697,11 +3601,49 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            {/* Linha 1: Tipo de endereço — col 1 */}
+            <div>
+              <SelectField
+                label={t("clients.addresses.form.addressType")}
+                value={addressFormState.addressTypeId}
+                onChange={(v) =>
+                  setAddressFormState((prev) => ({ ...prev, addressTypeId: v }))
+                }
+                options={addressTypes.map((at) => ({ value: String(at.id), label: at.name }))}
+                placeholder={t("clients.addresses.form.addressTypePlaceholder")}
+                required
+              />
+            </div>
+            {/* Linha 2: Rua — col 1, Número — col 2, Complemento — col 3 */}
             <FormField
+              className="sm:col-start-1"
               label={t("clients.addresses.form.street")}
               value={addressFormState.street}
               onChange={(v) =>
                 setAddressFormState((prev) => ({ ...prev, street: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.addresses.form.number")}
+              value={addressFormState.number}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, number: v }))
+              }
+            />
+            <FormField
+              label={t("clients.addresses.form.complement")}
+              value={addressFormState.complement}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, complement: v }))
+              }
+            />
+            {/* Linha 3: Bairro — col 1, Cidade — col 2, Distrito — col 3 */}
+            <FormField
+              label={t("clients.addresses.form.neighborhood")}
+              value={addressFormState.neighborhood}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, neighborhood: v }))
               }
               required
             />
@@ -3719,6 +3661,16 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               onChange={(v) =>
                 setAddressFormState((prev) => ({ ...prev, state: v }))
               }
+              required
+            />
+            {/* Linha 4-5: País — col 1, Código postal — col 2, Observações — col 3 row-span-2 */}
+            <FormField
+              label={t("clients.addresses.form.country")}
+              value={addressFormState.country}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, country: v }))
+              }
+              required
             />
             <FormField
               label={t("clients.addresses.form.postalCode")}
@@ -3726,50 +3678,89 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               onChange={(v) =>
                 setAddressFormState((prev) => ({ ...prev, postalCode: v }))
               }
+              required
+            />
+            <div className="sm:row-span-2 flex flex-col">
+              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
+                {t("clients.addresses.form.note")}
+              </label>
+              <Textarea
+                value={addressFormState.note}
+                onChange={(event) =>
+                  setAddressFormState((prev) => ({ ...prev, note: event.target.value }))
+                }
+                rows={2}
+                className="flex-1 w-full rounded-sm border border-border bg-background px-3 py-2 text-sm text-foreground dark:border-border dark:bg-card dark:text-foreground"
+              />
+            </div>
+            {/* Linha 5: Latitude — col 1, Longitude — col 2 */}
+            <FormField
+              label={t("clients.addresses.form.latitude")}
+              value={addressFormState.latitude}
+              onChange={(v) =>
+                setAddressFormState((prev) => ({ ...prev, latitude: v }))
+              }
+              type="number"
             />
             <FormField
-              label={t("clients.addresses.form.country")}
-              value={addressFormState.country}
+              label={t("clients.addresses.form.longitude")}
+              value={addressFormState.longitude}
               onChange={(v) =>
-                setAddressFormState((prev) => ({ ...prev, country: v }))
+                setAddressFormState((prev) => ({ ...prev, longitude: v }))
               }
+              type="number"
             />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={addressSubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
-            >
-              {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
-            </button>
-            {editingAddress && (
-              <button
-                type="button"
-                onClick={resetAddressForm}
-                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
-              >
-                {t("clients.actions.cancel")}
-              </button>
-            )}
-            {/* Bulk upload */}
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
-              {addressesBulkUploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : null}
-              {t("clients.addresses.bulk.label")}
-              <input
-                type="file"
-                accept=".csv"
-                className="sr-only"
-                onChange={(event) => {
-                  const file = event.currentTarget.files?.[0] ?? null;
-                  void handleAddressesBulkUpload(file);
-                  event.currentTarget.value = "";
-                }}
+            {/* Linha 6: Endereço principal — col 1 */}
+            <div>
+              <ToggleField
+                label={t("clients.addresses.form.isPrimary")}
+                checked={addressFormState.isPrimary}
+                onChange={(v) =>
+                  setAddressFormState((prev) => ({ ...prev, isPrimary: v }))
+                }
+                onLabel={t("clients.addresses.form.isPrimaryOn")}
+                offLabel={t("clients.addresses.form.isPrimaryOff")}
               />
-            </label>
+            </div>
+            {/* Linha 7: Separator — col span 3 */}
+            <div className="sm:col-span-3 border-t border-border dark:border-border" />
+            {/* Linha 8: Botões — col span 3 */}
+            <div className="sm:col-span-3 flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={addressSubmitting}
+                className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+              >
+                {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
+              </button>
+              {editingAddress && (
+                <button
+                  type="button"
+                  onClick={resetAddressForm}
+                  className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+                >
+                  {t("clients.actions.cancel")}
+                </button>
+              )}
+              {/* Bulk upload */}
+              <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
+                {addressesBulkUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : null}
+                {t("clients.addresses.bulk.label")}
+                <input
+                  type="file"
+                  accept=".csv"
+                  className="sr-only"
+                  onChange={(event) => {
+                    const file = event.currentTarget.files?.[0] ?? null;
+                    void handleAddressesBulkUpload(file);
+                    event.currentTarget.value = "";
+                  }}
+                />
+              </label>
+            </div>
           </div>
         </form>
 

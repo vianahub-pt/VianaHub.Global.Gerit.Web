@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { SquarePen, Trash2, UserRoundPlus, Power, Loader2 } from "lucide-react";
+import { SquarePen, Trash2, UserRoundPlus, Power, PowerOff, Loader2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -655,14 +655,16 @@ export function UsersPage() {
             event.stopPropagation();
             void handleToggleStatus(user);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           title={
             user.isActive
               ? t("users.actions.deactivate")
               : t("users.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-foreground dark:text-foreground" />
+          {user.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -670,10 +672,10 @@ export function UsersPage() {
             event.stopPropagation();
             void handleDeleteUser(user);
           }}
-          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("users.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),

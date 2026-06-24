@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, Power, SquarePen, Trash2, ArrowLeft } from "lucide-react";
+import { Loader2, Power, PowerOff, SquarePen, Trash2, ArrowLeft } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Textarea } from "@/shared/ui/textarea";
@@ -2450,7 +2450,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {contact.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -2458,7 +2460,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),
@@ -2597,7 +2599,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {address.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -2605,7 +2609,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),
@@ -2755,7 +2759,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {item.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -2763,7 +2769,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),
@@ -2932,7 +2938,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {item.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -2940,7 +2948,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),
@@ -3090,7 +3098,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               : t("clients.actions.activate")
           }
         >
-          <Power className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          {item.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
         </button>
         <button
           type="button"
@@ -3098,7 +3108,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),

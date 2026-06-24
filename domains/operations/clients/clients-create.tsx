@@ -228,6 +228,10 @@ export function ClientsCreatePage() {
   const [contactSortBy, setContactSortBy] = useState<ContactSortColumn>("Name");
   const [contactSortDirection, setContactSortDirection] = useState<"asc" | "desc">("asc");
 
+  /* ---------- Address types ---------- */
+
+  const [addressTypes, setAddressTypes] = useState<Array<{ id: number; name: string }>>([]);
+
   /* ---------- Addresses state ---------- */
 
   const [addresses, setAddresses] = useState<AddressItem[]>([]);
@@ -1342,6 +1346,38 @@ export function ClientsCreatePage() {
     setAddressFormState(initialAddressFormState);
   }, []);
 
+  /* ---------- Address types: load ---------- */
+
+  const loadAddressTypes = useCallback(async () => {
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/address-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const items = Array.isArray(payload) ? payload : typeof payload === "object" && payload !== null && "items" in payload ? (payload as Record<string, unknown>).items : null;
+      if (Array.isArray(items)) {
+        setAddressTypes(
+          items
+            .map((item: unknown) => {
+              if (typeof item !== "object" || item === null) return null;
+              const record = item as Record<string, unknown>;
+              const id = typeof record.id === "number" ? record.id : typeof record.id === "string" ? Number(record.id) : null;
+              const name = typeof record.name === "string" ? record.name : typeof record.description === "string" ? record.description : "";
+              if (id === null || !Number.isFinite(id)) return null;
+              return { id, name };
+            })
+            .filter((item): item is { id: number; name: string } => item !== null),
+        );
+      }
+    } catch {
+      // silently ignore
+    }
+  }, [fetchWithAuth]);
+
+  useEffect(() => {
+    void loadAddressTypes();
+  }, [loadAddressTypes]);
+
   /* ---------- Addresses: load ---------- */
 
   const loadAddresses = useCallback(async () => {
@@ -1402,10 +1438,11 @@ export function ClientsCreatePage() {
       if (!createdClientId) return;
       const street = addressFormState.street.trim();
       const city = addressFormState.city.trim();
+      const neighborhood = addressFormState.neighborhood.trim();
       const state = addressFormState.state.trim();
       const postalCode = addressFormState.postalCode.trim();
       const country = addressFormState.country.trim();
-      if (!street || !city) {
+      if (!street || !city || !neighborhood || !state || !country || !addressFormState.addressTypeId) {
         toast({
           title: t("clients.toasts.validationTitle"),
           description: t("clients.addresses.validation.required"),
@@ -1416,11 +1453,19 @@ export function ClientsCreatePage() {
       setAddressSubmitting(true);
       try {
         const payload = {
+          addressTypeId: addressFormState.addressTypeId ? Number(addressFormState.addressTypeId) : null,
           street,
+          number: addressFormState.number.trim().length > 0 ? addressFormState.number.trim() : null,
+          complement: addressFormState.complement.trim().length > 0 ? addressFormState.complement.trim() : null,
+          neighborhood,
           city,
           state: state.length > 0 ? state : null,
           postalCode: postalCode.length > 0 ? postalCode : null,
           country: country.length > 0 ? country : null,
+          latitude: addressFormState.latitude.trim().length > 0 ? addressFormState.latitude.trim() : null,
+          longitude: addressFormState.longitude.trim().length > 0 ? addressFormState.longitude.trim() : null,
+          note: addressFormState.note.trim().length > 0 ? addressFormState.note.trim() : null,
+          isPrimary: addressFormState.isPrimary,
         };
         const isEditing = editingAddress !== null;
         const endpoint = isEditing
@@ -1477,11 +1522,19 @@ export function ClientsCreatePage() {
   const handleAddressEdit = useCallback((address: AddressItem) => {
     setEditingAddress(address);
     setAddressFormState({
+      addressTypeId: address.addressTypeId != null ? String(address.addressTypeId) : "",
       street: address.street ?? "",
+      number: address.number ?? "",
+      complement: address.complement ?? "",
+      neighborhood: address.neighborhood ?? "",
       city: address.city ?? "",
       state: address.state ?? "",
       postalCode: address.postalCode ?? "",
       country: address.country ?? "",
+      latitude: address.latitude ?? "",
+      longitude: address.longitude ?? "",
+      note: address.note ?? "",
+      isPrimary: address.isPrimary,
     });
   }, []);
 
@@ -1834,11 +1887,49 @@ export function ClientsCreatePage() {
                       className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
                     >
                       <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                        {/* Linha 1: Tipo de endereço — col 1 */}
+                        <div>
+                          <SelectField
+                            label={t("clients.addresses.form.addressType")}
+                            value={addressFormState.addressTypeId}
+                            onChange={(v) =>
+                              setAddressFormState((prev) => ({ ...prev, addressTypeId: v }))
+                            }
+                            options={addressTypes.map((at) => ({ value: String(at.id), label: at.name }))}
+                            placeholder={t("clients.addresses.form.addressTypePlaceholder")}
+                            required
+                          />
+                        </div>
+                        {/* Linha 2: Rua — col 1, Número — col 2, Complemento — col 3 */}
                         <FormField
+                          className="sm:col-start-1"
                           label={t("clients.addresses.form.street")}
                           value={addressFormState.street}
                           onChange={(v) =>
                             setAddressFormState((prev) => ({ ...prev, street: v }))
+                          }
+                          required
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.number")}
+                          value={addressFormState.number}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, number: v }))
+                          }
+                        />
+                        <FormField
+                          label={t("clients.addresses.form.complement")}
+                          value={addressFormState.complement}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, complement: v }))
+                          }
+                        />
+                        {/* Linha 3: Bairro — col 1, Cidade — col 2, Distrito — col 3 */}
+                        <FormField
+                          label={t("clients.addresses.form.neighborhood")}
+                          value={addressFormState.neighborhood}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, neighborhood: v }))
                           }
                           required
                         />
@@ -1856,6 +1947,16 @@ export function ClientsCreatePage() {
                           onChange={(v) =>
                             setAddressFormState((prev) => ({ ...prev, state: v }))
                           }
+                          required
+                        />
+                        {/* Linha 4-5: País — col 1, Código postal — col 2, Observações — col 3 row-span-2 */}
+                        <FormField
+                          label={t("clients.addresses.form.country")}
+                          value={addressFormState.country}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, country: v }))
+                          }
+                          required
                         />
                         <FormField
                           label={t("clients.addresses.form.postalCode")}
@@ -1863,37 +1964,72 @@ export function ClientsCreatePage() {
                           onChange={(v) =>
                             setAddressFormState((prev) => ({ ...prev, postalCode: v }))
                           }
+                          required
+                        />
+                        <div className="sm:row-span-2 flex flex-col">
+                          <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
+                            {t("clients.addresses.form.note")}
+                          </label>
+                          <Textarea
+                            value={addressFormState.note}
+                            onChange={(event) =>
+                              setAddressFormState((prev) => ({ ...prev, note: event.target.value }))
+                            }
+                            rows={2}
+                            className="flex-1 w-full rounded-sm border border-border bg-background px-3 py-2 text-sm text-foreground dark:border-border dark:bg-card dark:text-foreground"
+                          />
+                        </div>
+                        {/* Linha 5: Latitude — col 1, Longitude — col 2 */}
+                        <FormField
+                          label={t("clients.addresses.form.latitude")}
+                          value={addressFormState.latitude}
+                          onChange={(v) =>
+                            setAddressFormState((prev) => ({ ...prev, latitude: v }))
+                          }
+                          type="number"
                         />
                         <FormField
-                          label={t("clients.addresses.form.country")}
-                          value={addressFormState.country}
+                          label={t("clients.addresses.form.longitude")}
+                          value={addressFormState.longitude}
                           onChange={(v) =>
-                            setAddressFormState((prev) => ({ ...prev, country: v }))
+                            setAddressFormState((prev) => ({ ...prev, longitude: v }))
                           }
+                          type="number"
                         />
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="submit"
-                          disabled={addressSubmitting}
-                          className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
-                        >
-                          {addressSubmitting && (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          )}
-                          {editingAddress
-                            ? t("clients.actions.save")
-                            : t("clients.actions.add")}
-                        </button>
-                        {editingAddress && (
+                        {/* Linha 6: Endereço principal — col 1 */}
+                        <div>
+                          <ToggleField
+                            label={t("clients.addresses.form.isPrimary")}
+                            checked={addressFormState.isPrimary}
+                            onChange={(v) =>
+                              setAddressFormState((prev) => ({ ...prev, isPrimary: v }))
+                            }
+                            onLabel={t("clients.addresses.form.isPrimaryOn")}
+                            offLabel={t("clients.addresses.form.isPrimaryOff")}
+                          />
+                        </div>
+                        {/* Linha 7: Separator — col span 3 */}
+                        <div className="sm:col-span-3 border-t border-border dark:border-border" />
+                        {/* Linha 8: Botões — col span 3 */}
+                        <div className="sm:col-span-3 flex items-center gap-2">
                           <button
-                            type="button"
-                            onClick={resetAddressForm}
-                            className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+                            type="submit"
+                            disabled={addressSubmitting}
+                            className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
                           >
-                            {t("clients.actions.cancel")}
+                            {addressSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+                            {editingAddress ? t("clients.actions.save") : t("clients.actions.add")}
                           </button>
-                        )}
+                          {editingAddress && (
+                            <button
+                              type="button"
+                              onClick={resetAddressForm}
+                              className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+                            >
+                              {t("clients.actions.cancel")}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </form>
 

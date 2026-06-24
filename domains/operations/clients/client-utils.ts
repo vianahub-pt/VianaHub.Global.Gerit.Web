@@ -121,11 +121,18 @@ export function normalizeAddress(payload: unknown): AddressItem | null {
 
   return {
     id: rawId,
+    addressTypeId: typeof candidate.addressTypeId === "number" ? candidate.addressTypeId : typeof candidate.addressTypeId === "string" ? Number(candidate.addressTypeId) : null,
     street,
+    number: typeof candidate.number === "string" ? candidate.number : null,
+    complement: typeof candidate.complement === "string" ? candidate.complement : null,
+    neighborhood: typeof candidate.neighborhood === "string" ? candidate.neighborhood : null,
     city,
     state,
     postalCode,
     country,
+    latitude: typeof candidate.latitude === "string" ? candidate.latitude : typeof candidate.latitude === "number" ? String(candidate.latitude) : null,
+    longitude: typeof candidate.longitude === "string" ? candidate.longitude : typeof candidate.longitude === "number" ? String(candidate.longitude) : null,
+    note: typeof candidate.note === "string" ? candidate.note : null,
     isActive: Boolean(isActiveValue),
     isPrimary: Boolean(isPrimaryValue),
   };

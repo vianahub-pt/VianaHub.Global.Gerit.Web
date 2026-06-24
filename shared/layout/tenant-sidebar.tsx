@@ -123,7 +123,7 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
           {
             key: "settings",
             label: t("workspace.sidebar.settings"),
-            href: "/settings/preferences",
+            href: "/preferences",
             icon: Cog,
           },
         ],

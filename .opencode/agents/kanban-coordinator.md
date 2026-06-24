@@ -361,6 +361,18 @@ if ($optionId -eq "47fc9ee4") {
 - **SEMPRE** verificar regra determinística antes de escolher agente
 - **SEMPRE** registrar justificativa ao escalonar tarefa aparentemente trivial
 
+## Convenções de Branch e PR (informar no handoff)
+
+O coordinator deve indicar no handoff a base esperada para branch e PR:
+
+| Tipo de demanda | Branch base | PR base | Prefixo branch |
+|-----------------|-------------|---------|----------------|
+| Feature, Melhoria, Correção (padrão) | `develop` | `develop` | `feature/` ou `fix/` |
+| Hotfix de produção (bug crítico) | `main` | `main` | `hotfix/` |
+
+**Regra padrão:** toda demanda cria branch a partir de `develop` e PR para `develop`.
+**Exceção:** apenas fix de bug em produção usa `main` como base.
+
 ---
 
 # Execução Paralela

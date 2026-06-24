@@ -1,5 +1,5 @@
 export const identityPreferencesModule = {
-  route: "/settings/preferences",
+  route: "/preferences",
 } as const;
 
 export {

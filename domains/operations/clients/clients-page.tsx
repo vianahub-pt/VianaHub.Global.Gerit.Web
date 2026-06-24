@@ -501,7 +501,7 @@ export function ClientsPage() {
           className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
           title={t("clients.actions.delete")}
         >
-          <Trash2 className="h-4 w-4 text-foreground dark:text-foreground" />
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
       </div>
     ),

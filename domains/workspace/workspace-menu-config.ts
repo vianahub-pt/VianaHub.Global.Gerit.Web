@@ -41,7 +41,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "dashboard",
             label: t("workspace.sidebar.dashboard"),
-            href: "/workspace",
+            href: "/dashboards",
             icon: LayoutDashboard,
             matchExact: true,
           },
@@ -96,13 +96,13 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "teams",
             label: t("workspace.sidebar.teams"),
-            href: "/teams",
+            href: "/operations/teams",
             icon: Building2,
           },
           {
             key: "teamMembers",
             label: t("workspace.sidebar.teamMembers"),
-            href: "/teamMembers",
+            href: "/operations/teamMembers",
             icon: UserRound,
           },
           {
@@ -114,7 +114,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "equipments",
             label: t("workspace.sidebar.equipments"),
-            href: "/equipments",
+            href: "/operations/equipments",
             icon: HardHat,
           },
           {
@@ -126,7 +126,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "vehicles",
             label: t("workspace.sidebar.vehicles"),
-            href: "/vehicles",
+            href: "/operations/vehicles",
             icon: Truck,
           },
         ],
@@ -177,7 +177,7 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "preferences",
             label: t("workspace.sidebar.preferences"),
-            href: "/preferences",
+            href: "/settings/preferences",
             icon: Settings,
           },
         ],
@@ -192,13 +192,13 @@ export function useWorkspaceMenuConfig(): HubMenuSection[] {
           {
             key: "users",
             label: t("workspace.sidebar.users"),
-            href: "/users",
+            href: "/operations/users",
             icon: Users,
           },
           {
             key: "roles",
             label: t("workspace.sidebar.roles"),
-            href: "/roles",
+            href: "/operations/roles",
             icon: UserCog,
           },
           {

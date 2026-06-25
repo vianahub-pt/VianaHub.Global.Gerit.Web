@@ -10,6 +10,7 @@ import {
   type AddressSortColumn,
   type ContactNetworkItem,
   type ContactNetworkSortColumn,
+  type FiscalDataSortColumn,
 } from "./client-models";
 
 export interface ClientsPagedResponse {

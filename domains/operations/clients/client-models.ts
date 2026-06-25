@@ -47,10 +47,43 @@ export const initialAddressFormState: AddressFormState = {
   city: "",
   state: "",
   postalCode: "",
-  country: "",
+  country: "PT",
   latitude: "",
   longitude: "",
   note: "",
+  isPrimary: false,
+};
+
+/* ---------- Client Contact Network ---------- */
+
+export interface ContactNetworkItem {
+  id: number;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+  cellPhoneNumber: string | null;
+  isWhatsapp: boolean;
+  isPrimary: boolean;
+  isActive: boolean;
+}
+
+export interface ContactNetworkFormState {
+  name: string;
+  email: string;
+  phoneNumber: string;
+  cellPhoneNumber: string;
+  isWhatsapp: boolean;
+  isPrimary: boolean;
+}
+
+export type ContactNetworkSortColumn = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
+
+export const initialContactNetworkFormState: ContactNetworkFormState = {
+  name: "",
+  email: "",
+  phoneNumber: "",
+  cellPhoneNumber: "",
+  isWhatsapp: false,
   isPrimary: false,
 };
 

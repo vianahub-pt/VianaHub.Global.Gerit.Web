@@ -18,6 +18,10 @@ import {
   normalizeErrorMessage,
   parsePagedAddresses,
   getAddressSortValue,
+  normalizeContactNetwork,
+  parsePagedContactNetwork,
+  getContactNetworkSortValue,
+  type ContactNetworkPagedResponse,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
 import {
@@ -44,6 +48,10 @@ import {
   type AddressFormState,
   type AddressSortColumn,
   initialAddressFormState,
+  type ContactNetworkItem,
+  type ContactNetworkFormState,
+  type ContactNetworkSortColumn,
+  initialContactNetworkFormState,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -53,10 +61,13 @@ const CONTACT_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_PAGE_SIZE = 25;
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const CONTACT_NETWORK_PAGE_SIZE = 25;
+const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
+type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 
 /* ---------- Pagination helper ---------- */
 
@@ -252,6 +263,27 @@ export function ClientsCreatePage() {
   const [addressSortBy, setAddressSortBy] = useState<AddressSortColumn>("Street");
   const [addressSortDirection, setAddressSortDirection] = useState<"asc" | "desc">("asc");
 
+  /* ---------- Contact Network state ---------- */
+
+  const [contactNetwork, setContactNetwork] = useState<ContactNetworkItem[]>([]);
+  const [contactNetworkLoading, setContactNetworkLoading] = useState(false);
+  const [contactNetworkFormState, setContactNetworkFormState] = useState<ContactNetworkFormState>(initialContactNetworkFormState);
+  const [editingContactNetwork, setEditingContactNetwork] = useState<ContactNetworkItem | null>(null);
+  const [contactNetworkSubmitting, setContactNetworkSubmitting] = useState(false);
+  const [contactNetworkDeleteConfirmOpen, setContactNetworkDeleteConfirmOpen] = useState(false);
+  const contactNetworkDeleteRef = useRef<ContactNetworkItem | null>(null);
+  const [contactNetworkBulkUploading, setContactNetworkBulkUploading] = useState(false);
+
+  /* ---------- Contact Network grid state ---------- */
+
+  const [contactNetworkGridDensity, setContactNetworkGridDensity] = useState<RowDensity>("medium");
+  const [contactNetworkSearch, setContactNetworkSearch] = useState("");
+  const [contactNetworkStatusFilter, setContactNetworkStatusFilter] = useState("all");
+  const [contactNetworkPage, setContactNetworkPage] = useState(1);
+  const [contactNetworkPageSize, setContactNetworkPageSize] = useState<number>(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [contactNetworkSortBy, setContactNetworkSortBy] = useState<ContactNetworkSortColumn>("Name");
+  const [contactNetworkSortDirection, setContactNetworkSortDirection] = useState<"asc" | "desc">("asc");
+
   /* ---------- Tab lazy loading state ---------- */
 
   const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
@@ -267,6 +299,7 @@ export function ClientsCreatePage() {
   type ClientCreateTab =
     | "informacoes"
     | "contactos"
+    | "contactNetwork"
     | "enderecos"
     | "fiscalData"
     | "consents"
@@ -1954,12 +1987,17 @@ export function ClientsCreatePage() {
                           required
                         />
                         {/* Linha 4-5: País — col 1, Código postal — col 2, Observações — col 3 row-span-2 */}
-                        <FormField
+                        <SelectField
                           label={t("clients.addresses.form.country")}
                           value={addressFormState.country}
                           onChange={(v) =>
                             setAddressFormState((prev) => ({ ...prev, country: v }))
                           }
+                          options={EUROPEAN_COUNTRIES_PLUS_BR_US.map((c) => ({
+                            value: c.code,
+                            label: c.name,
+                          }))}
+                          placeholder={t("clients.form.selectOption")}
                           required
                         />
                         <FormField

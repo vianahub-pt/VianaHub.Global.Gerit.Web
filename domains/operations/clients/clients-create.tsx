@@ -22,6 +22,9 @@ import {
   parsePagedContactNetwork,
   getContactNetworkSortValue,
   type ContactNetworkPagedResponse,
+  normalizeFiscalData,
+  parsePagedFiscalData,
+  getFiscalDataSortValue,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
 import {
@@ -52,6 +55,10 @@ import {
   type ContactNetworkFormState,
   type ContactNetworkSortColumn,
   initialContactNetworkFormState,
+  type ClientFiscalDataItem,
+  type ClientFiscalDataFormState,
+  initialFiscalDataFormState,
+  type FiscalDataSortColumn,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -63,11 +70,14 @@ const ADDRESS_PAGE_SIZE = 25;
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const FISCAL_DATA_PAGE_SIZE = 25;
+const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
+type FiscalDataSortColumnLocal = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
 
 /* ---------- Pagination helper ---------- */
 
@@ -283,6 +293,27 @@ export function ClientsCreatePage() {
   const [contactNetworkPageSize, setContactNetworkPageSize] = useState<number>(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
   const [contactNetworkSortBy, setContactNetworkSortBy] = useState<ContactNetworkSortColumn>("Name");
   const [contactNetworkSortDirection, setContactNetworkSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Fiscal Data state ---------- */
+
+  const [fiscalData, setFiscalData] = useState<ClientFiscalDataItem[]>([]);
+  const [fiscalDataLoading, setFiscalDataLoading] = useState(false);
+  const [fiscalDataFormState, setFiscalDataFormState] = useState<ClientFiscalDataFormState>(initialFiscalDataFormState);
+  const [editingFiscalData, setEditingFiscalData] = useState<ClientFiscalDataItem | null>(null);
+  const [fiscalDataSubmitting, setFiscalDataSubmitting] = useState(false);
+  const [fiscalDataDeleteConfirmOpen, setFiscalDataDeleteConfirmOpen] = useState(false);
+  const fiscalDataDeleteRef = useRef<ClientFiscalDataItem | null>(null);
+  const [fiscalDataBulkUploading, setFiscalDataBulkUploading] = useState(false);
+
+  /* ---------- Fiscal Data grid state ---------- */
+
+  const [fiscalDataGridDensity, setFiscalDataGridDensity] = useState<RowDensity>("medium");
+  const [fiscalDataSearch, setFiscalDataSearch] = useState("");
+  const [fiscalDataStatusFilter, setFiscalDataStatusFilter] = useState("all");
+  const [fiscalDataPage, setFiscalDataPage] = useState(1);
+  const [fiscalDataPageSize, setFiscalDataPageSize] = useState<number>(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [fiscalDataSortBy, setFiscalDataSortBy] = useState<FiscalDataSortColumnLocal>("TaxNumber");
+  const [fiscalDataSortDirection, setFiscalDataSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
 
@@ -855,6 +886,48 @@ export function ClientsCreatePage() {
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
 
+  /* ---------- Fiscal Data load ---------- */
+
+  const loadFiscalData = useCallback(async () => {
+    if (!createdClientId) {
+      setFiscalData([]);
+      return;
+    }
+    setFiscalDataLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(FISCAL_DATA_PAGE_SIZE),
+      SortBy: "TaxNumber",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/fiscal-data/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.fiscalData.errors.load")));
+      }
+      const parsed = parsePagedFiscalData(payload);
+      setFiscalData(parsed.items);
+    } catch (error) {
+      logError("clients.create.loadFiscalData", "Falha ao carregar dados fiscais", error, {
+        clientId: createdClientId,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.fiscalData.errors.load"),
+        variant: "destructive",
+      });
+      setFiscalData([]);
+    } finally {
+      setFiscalDataLoading(false);
+    }
+  }, [createdClientId, fetchWithAuth, t, toast]);
+
   /* ---------- Contact submit ---------- */
 
   const handleContactSubmit = useCallback(
@@ -1237,6 +1310,14 @@ export function ClientsCreatePage() {
       void loadClientContacts();
     }
   }, [loadedTabs, createdClientId, contacts.length, contactsLoading, loadClientContacts]);
+
+  /* ---------- Lazy load fiscal data when tab becomes active ---------- */
+
+  useEffect(() => {
+    if (loadedTabs.has("fiscalData") && createdClientId && fiscalData.length === 0 && !fiscalDataLoading) {
+      void loadFiscalData();
+    }
+  }, [loadedTabs, createdClientId, fiscalData.length, fiscalDataLoading, loadFiscalData]);
 
   /* ---------- Render: Contacts tab ---------- */
 

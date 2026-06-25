@@ -169,11 +169,13 @@ export interface ClientFiscalDataFormState {
 export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   taxNumber: "",
   vatNumber: "",
-  fiscalCountry: "",
+  fiscalCountry: "PT",
   isVatRegistered: false,
   iban: "",
   fiscalEmail: "",
 };
+
+export type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "IBAN" | "FiscalEmail";
 
 /* ---------- Client Consents ---------- */
 

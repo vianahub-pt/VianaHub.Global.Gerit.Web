@@ -10,6 +10,7 @@ import {
   type AddressSortColumn,
   type ContactNetworkItem,
   type ContactNetworkSortColumn,
+  type FiscalDataSortColumn,
 } from "./client-models";
 
 export interface ClientsPagedResponse {
@@ -160,6 +161,88 @@ export function getContactNetworkSortValue(item: ContactNetworkItem, column: Con
       return item.isPrimary ? "1" : "0";
     default:
       return item.name.toLowerCase();
+  }
+}
+
+/* ---------- Fiscal Data normalize/parse ---------- */
+
+export function normalizeFiscalData(payload: unknown): ClientFiscalDataItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const clientId =
+    typeof candidate.clientId === "number"
+      ? candidate.clientId
+      : typeof candidate.clientId === "string"
+        ? Number(candidate.clientId)
+        : 0;
+  const taxNumber = typeof candidate.taxNumber === "string" ? candidate.taxNumber : null;
+  const vatNumber = typeof candidate.vatNumber === "string" ? candidate.vatNumber : null;
+  const fiscalCountry = typeof candidate.fiscalCountry === "string" ? candidate.fiscalCountry : null;
+  const isVatRegistered =
+    typeof candidate.isVatRegistered === "boolean"
+      ? candidate.isVatRegistered
+      : typeof candidate.isVatRegistered === "string"
+        ? candidate.isVatRegistered.toLowerCase() === "true"
+        : false;
+  const iban = typeof candidate.iban === "string" ? candidate.iban : null;
+  const fiscalEmail = typeof candidate.fiscalEmail === "string" ? candidate.fiscalEmail : null;
+  const isActive =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : true;
+
+  return {
+    id: rawId,
+    clientId,
+    taxNumber,
+    vatNumber,
+    fiscalCountry,
+    isVatRegistered: Boolean(isVatRegistered),
+    iban,
+    fiscalEmail,
+    isActive: Boolean(isActive),
+  };
+}
+
+export function parsePagedFiscalData(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ClientFiscalDataItem[], totalItems: 0 };
+  const candidate = payload as FiscalDataPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeFiscalData)
+    .filter((item): item is ClientFiscalDataItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+export function getFiscalDataSortValue(item: ClientFiscalDataItem, column: FiscalDataSortColumn) {
+  switch (column) {
+    case "VatNumber":
+      return (item.vatNumber ?? "").toLowerCase();
+    case "FiscalCountry":
+      return (item.fiscalCountry ?? "").toLowerCase();
+    case "IsVatRegistered":
+      return item.isVatRegistered ? "1" : "0";
+    case "IBAN":
+      return (item.iban ?? "").toLowerCase();
+    case "FiscalEmail":
+      return (item.fiscalEmail ?? "").toLowerCase();
+    default:
+      return (item.taxNumber ?? "").toLowerCase();
   }
 }
 

@@ -174,7 +174,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "contactNetwork" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -1225,7 +1225,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load contact network when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactNetwork") && client?.id && contactNetwork.length === 0 && !contactNetworkLoading) {
+    if (loadedTabs.has("contactos") && client?.id && contactNetwork.length === 0 && !contactNetworkLoading) {
       void loadClientContactNetwork();
     }
   }, [loadedTabs, client?.id, contactNetwork.length, contactNetworkLoading, loadClientContactNetwork]);
@@ -4074,7 +4074,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contact Network tab ---------- */
 
   const renderContactNetworkTab = () => {
-    if (!loadedTabs.has("contactNetwork")) {
+    if (!loadedTabs.has("contactos")) {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4947,11 +4947,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 {
                   id: "contactos",
                   label: t("clients.detail.tabs.contactsSummary"),
-                  panel: renderContactsTab(),
-                },
-                {
-                  id: "contactNetwork",
-                  label: t("clients.detail.tabs.contactNetworkSummary"),
                   panel: renderContactNetworkTab(),
                 },
                 {

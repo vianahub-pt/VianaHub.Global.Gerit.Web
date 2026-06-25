@@ -299,7 +299,6 @@ export function ClientsCreatePage() {
   type ClientCreateTab =
     | "informacoes"
     | "contactos"
-    | "contactNetwork"
     | "enderecos"
     | "fiscalData"
     | "consents"
@@ -1905,7 +1904,7 @@ export function ClientsCreatePage() {
                 label: t("clients.detail.tabs.contactsSummary"),
                 disabled: !createdClientId,
                 panel: createdClientId ? (
-                  renderContactsTab()
+                  renderContactNetworkTab()
                 ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}

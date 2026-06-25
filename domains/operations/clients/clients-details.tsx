@@ -24,6 +24,9 @@ import {
   normalizeAddress,
   parsePagedAddresses,
   getAddressSortValue,
+  normalizeContactNetwork,
+  parsePagedContactNetwork,
+  getContactNetworkSortValue,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -59,6 +62,10 @@ import {
   type AddressFormState,
   type AddressSortColumn,
   initialAddressFormState,
+  type ContactNetworkItem,
+  type ContactNetworkFormState,
+  type ContactNetworkSortColumn,
+  initialContactNetworkFormState,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -69,15 +76,18 @@ const ADDRESS_PAGE_SIZE = 25;
 const FISCAL_DATA_PAGE_SIZE = 25;
 const CONSENT_PAGE_SIZE = 25;
 const HIERARCHY_PAGE_SIZE = 25;
+const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
+type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
 type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
@@ -164,7 +174,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "contactNetwork" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -601,6 +611,17 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const hierarchyDeleteRef = useRef<ClientHierarchyItem | null>(null);
   const [hierarchyBulkUploading, setHierarchyBulkUploading] = useState(false);
 
+  /* ---------- Contact Network state ---------- */
+
+  const [contactNetwork, setContactNetwork] = useState<ContactNetworkItem[]>([]);
+  const [contactNetworkLoading, setContactNetworkLoading] = useState(false);
+  const [contactNetworkFormState, setContactNetworkFormState] = useState<ContactNetworkFormState>(initialContactNetworkFormState);
+  const [editingContactNetwork, setEditingContactNetwork] = useState<ContactNetworkItem | null>(null);
+  const [contactNetworkSubmitting, setContactNetworkSubmitting] = useState(false);
+  const [contactNetworkDeleteConfirmOpen, setContactNetworkDeleteConfirmOpen] = useState(false);
+  const contactNetworkDeleteRef = useRef<ContactNetworkItem | null>(null);
+  const [contactNetworkBulkUploading, setContactNetworkBulkUploading] = useState(false);
+
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
@@ -664,6 +685,16 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [hierarchySortBy, setHierarchySortBy] = useState<HierarchySortColumn>("ParentClient");
   const [hierarchySortDirection, setHierarchySortDirection] = useState<"asc" | "desc">("asc");
 
+  /* ---------- Contact Network grid state ---------- */
+
+  const [contactNetworkGridDensity, setContactNetworkGridDensity] = useState<RowDensity>("medium");
+  const [contactNetworkSearch, setContactNetworkSearch] = useState("");
+  const [contactNetworkStatusFilter, setContactNetworkStatusFilter] = useState("all");
+  const [contactNetworkPage, setContactNetworkPage] = useState(1);
+  const [contactNetworkPageSize, setContactNetworkPageSize] = useState<number>(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [contactNetworkSortBy, setContactNetworkSortBy] = useState<ContactNetworkSortColumnLocal>("Name");
+  const [contactNetworkSortDirection, setContactNetworkSortDirection] = useState<"asc" | "desc">("asc");
+
   /* ---------- Reset helpers ---------- */
 
   const resetContactForm = useCallback(() => {
@@ -691,6 +722,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setHierarchyFormState(initialHierarchyFormState);
   }, []);
 
+  const resetContactNetworkForm = useCallback(() => {
+    setEditingContactNetwork(null);
+    setContactNetworkFormState(initialContactNetworkFormState);
+  }, []);
+
   const resetClientForm = useCallback(() => {
     setClientFormState(initialClientFormState);
   }, []);
@@ -703,11 +739,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     resetFiscalDataForm();
     resetConsentForm();
     resetHierarchyForm();
+    resetContactNetworkForm();
     setContacts([]);
     setAddresses([]);
     setFiscalData([]);
     setConsents([]);
     setHierarchyItems([]);
+    setContactNetwork([]);
     setActiveTab("informacoes");
     setLoadedTabs(new Set(["informacoes"]));
     setContactGridDensity("medium");
@@ -715,26 +753,31 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setFiscalDataGridDensity("medium");
     setConsentGridDensity("medium");
     setHierarchyGridDensity("medium");
+    setContactNetworkGridDensity("medium");
     setContactSearch("");
     setAddressSearch("");
     setFiscalDataSearch("");
     setConsentSearch("");
     setHierarchySearch("");
+    setContactNetworkSearch("");
     setContactStatusFilter("all");
     setAddressStatusFilter("all");
     setFiscalDataStatusFilter("all");
     setConsentStatusFilter("all");
     setHierarchyStatusFilter("all");
+    setContactNetworkStatusFilter("all");
     setContactPage(1);
     setAddressPage(1);
     setFiscalDataPage(1);
     setConsentPage(1);
     setHierarchyPage(1);
+    setContactNetworkPage(1);
     setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
     setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
     setFiscalDataPageSize(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
     setConsentPageSize(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
     setHierarchyPageSize(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
+    setContactNetworkPageSize(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactSortBy("Name");
     setContactSortDirection("asc");
     setAddressSortBy("Street");
@@ -745,7 +788,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setConsentSortDirection("asc");
     setHierarchySortBy("ParentClient");
     setHierarchySortDirection("asc");
-  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm]);
+    setContactNetworkSortBy("Name");
+    setContactNetworkSortDirection("asc");
+  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm, resetContactNetworkForm]);
 
   /* ---------- Load client ---------- */
 
@@ -1080,6 +1125,48 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [client, fetchWithAuth, t, toast]);
 
+  /* ---------- Load contact network ---------- */
+
+  const loadClientContactNetwork = useCallback(async () => {
+    if (!client?.id) {
+      setContactNetwork([]);
+      return;
+    }
+    setContactNetworkLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(CONTACT_NETWORK_PAGE_SIZE),
+      SortBy: "Name",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${client.id}/contacts/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.contacts.errors.load")));
+      }
+      const parsed = parsePagedContactNetwork(payload);
+      setContactNetwork(parsed.items);
+    } catch (error) {
+      logError("clients.details.loadContactNetwork", "Falha ao carregar rede de contactos", error, {
+        clientId: client?.id,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.contacts.errors.load"),
+        variant: "destructive",
+      });
+      setContactNetwork([]);
+    } finally {
+      setContactNetworkLoading(false);
+    }
+  }, [client, fetchWithAuth, t, toast]);
+
   /* ---------- Effects ---------- */
 
   useEffect(() => {
@@ -1135,6 +1222,13 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       void loadClientHierarchy();
     }
   }, [loadedTabs, client?.id, hierarchyItems.length, hierarchyLoading, loadClientHierarchy]);
+
+  // Lazy load contact network when tab becomes active
+  useEffect(() => {
+    if (loadedTabs.has("contactNetwork") && client?.id && contactNetwork.length === 0 && !contactNetworkLoading) {
+      void loadClientContactNetwork();
+    }
+  }, [loadedTabs, client?.id, contactNetwork.length, contactNetworkLoading, loadClientContactNetwork]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -1531,6 +1625,174 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       }
     },
     [client, fetchWithAuth, loadClientContacts, t, toast],
+  );
+
+  /* ---------- Contact Network submit ---------- */
+
+  const handleContactNetworkSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!client) return;
+      const name = contactNetworkFormState.name.trim();
+      const phoneNumber = contactNetworkFormState.phoneNumber.trim();
+      const email = contactNetworkFormState.email.trim();
+      const cellPhoneNumber = contactNetworkFormState.cellPhoneNumber.trim();
+      if (!name || !phoneNumber) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.contacts.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setContactNetworkSubmitting(true);
+      try {
+        const payload = {
+          name,
+          phoneNumber,
+          email: email.length > 0 ? email : null,
+          cellPhoneNumber: cellPhoneNumber.length > 0 ? cellPhoneNumber : null,
+          isWhatsapp: contactNetworkFormState.isWhatsapp,
+          isPrimary: contactNetworkFormState.isPrimary,
+        };
+        const isEditing = editingContactNetwork !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${client.id}/contacts/${editingContactNetwork?.id}`
+          : `/api/gerit/v1/clients/${client.id}/contacts`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.contacts.toasts.updated")
+            : t("clients.contacts.toasts.created"),
+        });
+        resetContactNetworkForm();
+        await loadClientContactNetwork();
+      } catch (error) {
+        logError("clients.details.contactNetworkSubmit", "Falha ao salvar contacto da rede", error, {
+          clientId: client?.id,
+          contactName: contactNetworkFormState.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setContactNetworkSubmitting(false);
+      }
+    },
+    [client, contactNetworkFormState, editingContactNetwork, fetchWithAuth, loadClientContactNetwork, resetContactNetworkForm, t, toast],
+  );
+
+  const handleContactNetworkEdit = useCallback((contact: ContactNetworkItem) => {
+    setEditingContactNetwork(contact);
+    setContactNetworkFormState({
+      name: contact.name,
+      email: contact.email ?? "",
+      phoneNumber: contact.phoneNumber ?? "",
+      cellPhoneNumber: contact.cellPhoneNumber ?? "",
+      isWhatsapp: contact.isWhatsapp,
+      isPrimary: contact.isPrimary,
+    });
+  }, []);
+
+  const handleContactNetworkToggleStatus = useCallback(
+    async (contact: ContactNetworkItem) => {
+      if (!client?.id) return;
+      try {
+        const endpoint = contact.isActive
+          ? `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/deactivate`
+          : `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: contact.isActive
+            ? t("clients.contacts.toasts.deactivated")
+            : t("clients.contacts.toasts.activated"),
+        });
+        await loadClientContactNetwork();
+      } catch (error) {
+        logError("clients.details.contactNetworkToggleStatus", "Falha ao alterar estado do contacto da rede", error, {
+          clientId: client?.id,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientContactNetwork, t, toast],
+  );
+
+  const handleContactNetworkDelete = useCallback(
+    (contact: ContactNetworkItem) => {
+      contactNetworkDeleteRef.current = contact;
+      setContactNetworkDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleContactNetworkDeleteConfirm = useCallback(async () => {
+    const contact = contactNetworkDeleteRef.current;
+    contactNetworkDeleteRef.current = null;
+    setContactNetworkDeleteConfirmOpen(false);
+    if (!contact || !client?.id) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${client.id}/contacts/${contact.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.contacts.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.contacts.toasts.deleted"),
+        });
+        await loadClientContactNetwork();
+      } catch (error) {
+        logError("clients.details.contactNetworkDelete", "Falha ao eliminar contacto da rede", error, {
+          clientId: client?.id,
+          contactId: contact.id,
+          contactName: contact.name,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.contacts.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [client, fetchWithAuth, loadClientContactNetwork, t, toast],
   );
 
   /* ---------- Address submit ---------- */
@@ -2256,6 +2518,51 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     [client, contactsBulkUploading, fetchWithAuth, loadClientContacts, t, toast],
   );
 
+  const handleContactNetworkBulkUpload = useCallback(
+    async (file: File | null) => {
+      if (!file || contactNetworkBulkUploading || !client?.id) return;
+      setContactNetworkBulkUploading(true);
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${client.id}/contacts/bulk-upload`,
+          { method: "POST", body: formData },
+        );
+        if (!response) return;
+        const payload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(
+              payload,
+              t("clients.bulk.upload.error", { resource: t("clients.contacts.title") }),
+            ),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.bulk.upload.success", { resource: t("clients.contacts.title") }),
+        });
+        await loadClientContactNetwork();
+      } catch (error) {
+        logError("clients.details.contactNetworkBulkUpload", "Falha no upload em massa de contactos da rede", error, {
+          clientId: client?.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error
+              ? error.message
+              : t("clients.bulk.upload.error", { resource: t("clients.contacts.title") }),
+          variant: "destructive",
+        });
+      } finally {
+        setContactNetworkBulkUploading(false);
+      }
+    },
+    [client, contactNetworkBulkUploading, fetchWithAuth, loadClientContactNetwork, t, toast],
+  );
+
   const handleAddressesBulkUpload = useCallback(
     async (file: File | null) => {
       if (!file || addressesBulkUploading || !client?.id) return;
@@ -2478,6 +2785,178 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       setContactSortBy(normalized);
     },
     [contactSortBy],
+  );
+
+  /* ---------- Contact Network grid ---------- */
+
+  const contactNetworkColumns = useMemo<HubGridColumn<ContactNetworkItem>[]>(
+    () => [
+      { key: "Name", label: t("clients.contacts.table.name") },
+      { key: "PhoneNumber", label: t("clients.contacts.table.phone") },
+      { key: "CellPhoneNumber", label: t("clients.contacts.table.cellPhone") },
+      { key: "Email", label: t("clients.contacts.table.email") },
+      { key: "IsWhatsapp", label: t("clients.contacts.table.isWhatsapp") },
+      { key: "IsPrimary", label: t("clients.contacts.table.primary") },
+    ],
+    [t],
+  );
+
+  const contactNetworkStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredContactNetwork = useMemo(() => {
+    const searchTerm = contactNetworkSearch.trim().toLowerCase();
+    return contactNetwork.filter((contact) => {
+      if (contactNetworkStatusFilter !== "all") {
+        const expected = contactNetworkStatusFilter === "active";
+        if (contact.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      const email = contact.email ?? "";
+      const phone = contact.phoneNumber ?? "";
+      const cellPhone = contact.cellPhoneNumber ?? "";
+      return (
+        contact.name.toLowerCase().includes(searchTerm) ||
+        email.toLowerCase().includes(searchTerm) ||
+        phone.toLowerCase().includes(searchTerm) ||
+        cellPhone.toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [contactNetworkSearch, contactNetworkStatusFilter, contactNetwork]);
+
+  const sortedContactNetwork = useMemo(() => {
+    const items = [...filteredContactNetwork];
+    items.sort((current, next) => {
+      const a = getContactNetworkSortValue(current, contactNetworkSortBy);
+      const b = getContactNetworkSortValue(next, contactNetworkSortBy);
+      const comparison = a.localeCompare(b);
+      return contactNetworkSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredContactNetwork, contactNetworkSortBy, contactNetworkSortDirection]);
+
+  const contactNetworkTotalPages = Math.max(1, Math.ceil(sortedContactNetwork.length / contactNetworkPageSize));
+
+  useEffect(() => {
+    setContactNetworkPage((current) => Math.min(current, contactNetworkTotalPages));
+  }, [contactNetworkTotalPages]);
+
+  const contactNetworkPageButtons = useMemo(
+    () => buildPageButtons(contactNetworkPage, contactNetworkTotalPages),
+    [contactNetworkPage, contactNetworkTotalPages],
+  );
+
+  const visibleContactNetwork = useMemo(() => {
+    const startIndex = (contactNetworkPage - 1) * contactNetworkPageSize;
+    return sortedContactNetwork.slice(startIndex, startIndex + contactNetworkPageSize);
+  }, [contactNetworkPage, contactNetworkPageSize, sortedContactNetwork]);
+
+  const contactNetworkPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedContactNetwork.length) }),
+    [sortedContactNetwork.length, t],
+  );
+
+  useEffect(() => {
+    setContactNetworkPage(1);
+  }, [contactNetworkStatusFilter, contactNetworkSearch, contactNetworkSortBy, contactNetworkSortDirection, contactNetworkPageSize]);
+
+  const contactNetworkRowCells = useCallback(
+    (contact: ContactNetworkItem) => [
+      contact.name,
+      contact.phoneNumber ?? "-",
+      contact.cellPhoneNumber ?? "-",
+      contact.email ?? "-",
+      contact.isWhatsapp ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+      contact.isPrimary ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+    ],
+    [t],
+  );
+
+  const renderContactNetworkStatus = useCallback(
+    (contact: ContactNetworkItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {contact.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderContactNetworkActions = useCallback(
+    (contact: ContactNetworkItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleContactNetworkEdit(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleContactNetworkToggleStatus(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            contact.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          {contact.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleContactNetworkDelete(contact)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+        </button>
+      </div>
+    ),
+    [handleContactNetworkDelete, handleContactNetworkEdit, handleContactNetworkToggleStatus, t],
+  );
+
+  const handleContactNetworkSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as ContactNetworkSortColumnLocal;
+      if (normalized === contactNetworkSortBy) {
+        setContactNetworkSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setContactNetworkSortDirection("asc");
+      setContactNetworkSortBy(normalized);
+    },
+    [contactNetworkSortBy],
   );
 
   /* ---------- Address grid ---------- */
@@ -3592,6 +4071,171 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     );
   };
 
+  /* ---------- Render: Contact Network tab ---------- */
+
+  const renderContactNetworkTab = () => {
+    if (!loadedTabs.has("contactNetwork")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Contact Network form */}
+        <form
+          onSubmit={(e) => void handleContactNetworkSubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <FormField
+              label={t("clients.contacts.form.name")}
+              value={contactNetworkFormState.name}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, name: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.contacts.form.email")}
+              value={contactNetworkFormState.email}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, email: v }))
+              }
+              type="email"
+            />
+            <FormField
+              label={t("clients.contacts.form.phone")}
+              value={contactNetworkFormState.phoneNumber}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, phoneNumber: v }))
+              }
+              required
+            />
+            <FormField
+              label={t("clients.contacts.form.cellPhone")}
+              value={contactNetworkFormState.cellPhoneNumber}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, cellPhoneNumber: v }))
+              }
+            />
+            <ToggleField
+              label={t("clients.contacts.form.isWhatsapp")}
+              checked={contactNetworkFormState.isWhatsapp}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, isWhatsapp: v }))
+              }
+              onLabel={t("common.yes")}
+              offLabel={t("common.no")}
+            />
+            <ToggleField
+              label={t("clients.contacts.form.isPrimary")}
+              checked={contactNetworkFormState.isPrimary}
+              onChange={(v) =>
+                setContactNetworkFormState((prev) => ({ ...prev, isPrimary: v }))
+              }
+              onLabel={t("common.yes")}
+              offLabel={t("common.no")}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={contactNetworkSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {contactNetworkSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingContactNetwork ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingContactNetwork && (
+              <button
+                type="button"
+                onClick={resetContactNetworkForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+            {/* Bulk upload */}
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary">
+              {contactNetworkBulkUploading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : null}
+              {t("clients.contacts.bulk.label")}
+              <input
+                type="file"
+                accept=".csv"
+                className="sr-only"
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0] ?? null;
+                  void handleContactNetworkBulkUpload(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+        </form>
+
+        {/* Contact Network grid */}
+        <HubGrid
+          columns={contactNetworkColumns}
+          items={visibleContactNetwork}
+          renderRowCells={contactNetworkRowCells}
+          renderStatus={renderContactNetworkStatus}
+          renderActions={renderContactNetworkActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.contacts.table.actions")}
+          rowDensity={contactNetworkGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setContactNetworkGridDensity}
+          sortBy={contactNetworkSortBy}
+          sortDirection={contactNetworkSortDirection}
+          onSort={handleContactNetworkSort}
+          statusFilter={contactNetworkStatusFilter}
+          statusFilterOptions={contactNetworkStatusFilterOptions}
+          onStatusFilterChange={setContactNetworkStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={contactNetworkSearch}
+          onSearchChange={setContactNetworkSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={contactNetworkLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.contacts.empty")}
+          pageCaption={contactNetworkPageCaption}
+          page={contactNetworkPage}
+          totalPages={contactNetworkTotalPages}
+          pageButtons={contactNetworkPageButtons}
+          onPageChange={setContactNetworkPage}
+          pageSize={contactNetworkPageSize}
+          pageSizeOptions={CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setContactNetworkPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(contact) => contact.id}
+        />
+
+        {/* Delete confirmation dialog */}
+        <ConfirmDialog
+          open={contactNetworkDeleteConfirmOpen}
+          onOpenChange={setContactNetworkDeleteConfirmOpen}
+          onConfirm={() => void handleContactNetworkDeleteConfirm()}
+          title={t("clients.toasts.validationTitle")}
+          description={
+            contactNetworkDeleteRef.current
+              ? t("clients.contacts.confirm.delete", { name: contactNetworkDeleteRef.current.name })
+              : ""
+          }
+          confirmLabel={t("clients.actions.delete")}
+          cancelLabel={t("clients.actions.cancel")}
+        />
+      </div>
+    );
+  };
+
   /* ---------- Render: Addresses tab ---------- */
 
   const renderAddressesTab = () => {
@@ -4304,6 +4948,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                   id: "contactos",
                   label: t("clients.detail.tabs.contactsSummary"),
                   panel: renderContactsTab(),
+                },
+                {
+                  id: "contactNetwork",
+                  label: t("clients.detail.tabs.contactNetworkSummary"),
+                  panel: renderContactNetworkTab(),
                 },
                 {
                   id: "enderecos",

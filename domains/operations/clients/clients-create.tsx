@@ -886,6 +886,48 @@ export function ClientsCreatePage() {
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
 
+  /* ---------- Fiscal Data load ---------- */
+
+  const loadFiscalData = useCallback(async () => {
+    if (!createdClientId) {
+      setFiscalData([]);
+      return;
+    }
+    setFiscalDataLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(FISCAL_DATA_PAGE_SIZE),
+      SortBy: "TaxNumber",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/fiscal-data/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.fiscalData.errors.load")));
+      }
+      const parsed = parsePagedFiscalData(payload);
+      setFiscalData(parsed.items);
+    } catch (error) {
+      logError("clients.create.loadFiscalData", "Falha ao carregar dados fiscais", error, {
+        clientId: createdClientId,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.fiscalData.errors.load"),
+        variant: "destructive",
+      });
+      setFiscalData([]);
+    } finally {
+      setFiscalDataLoading(false);
+    }
+  }, [createdClientId, fetchWithAuth, t, toast]);
+
   /* ---------- Contact submit ---------- */
 
   const handleContactSubmit = useCallback(

@@ -175,6 +175,8 @@ export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   fiscalEmail: "",
 };
 
+export type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "IBAN" | "FiscalEmail";
+
 /* ---------- Client Consents ---------- */
 
 export interface ConsentTypeItem {

@@ -1987,12 +1987,17 @@ export function ClientsCreatePage() {
                           required
                         />
                         {/* Linha 4-5: País — col 1, Código postal — col 2, Observações — col 3 row-span-2 */}
-                        <FormField
+                        <SelectField
                           label={t("clients.addresses.form.country")}
                           value={addressFormState.country}
                           onChange={(v) =>
                             setAddressFormState((prev) => ({ ...prev, country: v }))
                           }
+                          options={EUROPEAN_COUNTRIES_PLUS_BR_US.map((c) => ({
+                            value: c.code,
+                            label: c.name,
+                          }))}
+                          placeholder={t("clients.form.selectOption")}
                           required
                         />
                         <FormField

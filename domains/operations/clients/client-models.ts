@@ -47,7 +47,7 @@ export const initialAddressFormState: AddressFormState = {
   city: "",
   state: "",
   postalCode: "",
-  country: "",
+  country: "PT",
   latitude: "",
   longitude: "",
   note: "",

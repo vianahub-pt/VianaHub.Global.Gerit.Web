@@ -1988,11 +1988,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       const isVatRegistered = fiscalDataFormState.isVatRegistered;
       const fiscalEmail = fiscalDataFormState.fiscalEmail.trim();
 
-      // Validate required fields
-      if (!taxNumber || !fiscalCountry || !isVatRegistered || !fiscalEmail) {
+      // Validate required fields: TaxNumber, FiscalCountry, FiscalEmail
+      if (!taxNumber || !fiscalCountry || !fiscalEmail) {
         toast({
           title: t("clients.toasts.validationTitle"),
-          description: t("clients.fiscalData.validation.requiredAll"),
+          description: t("clients.fiscalData.validation.required"),
           variant: "destructive",
         });
         return;

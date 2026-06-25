@@ -169,7 +169,7 @@ export interface ClientFiscalDataFormState {
 export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   taxNumber: "",
   vatNumber: "",
-  fiscalCountry: "",
+  fiscalCountry: "PT",
   isVatRegistered: false,
   iban: "",
   fiscalEmail: "",

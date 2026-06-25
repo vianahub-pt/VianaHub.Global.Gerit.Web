@@ -8,6 +8,8 @@ import {
   ClientHierarchyItem,
   AddressItem,
   type AddressSortColumn,
+  type ContactNetworkItem,
+  type ContactNetworkSortColumn,
 } from "./client-models";
 
 export interface ClientsPagedResponse {
@@ -41,6 +43,124 @@ export interface HierarchyPagedResponse {
 export interface AddressesPagedResponse {
   items?: unknown;
   totalItems?: unknown;
+}
+
+export interface ContactNetworkPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+/* ---------- Contact Network normalize/parse ---------- */
+
+export function normalizeContactNetwork(payload: unknown): ContactNetworkItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : typeof candidate.contactId === "number"
+          ? candidate.contactId
+          : typeof candidate.contactId === "string"
+            ? Number(candidate.contactId)
+            : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const name =
+    typeof candidate.name === "string"
+      ? candidate.name
+      : typeof candidate.fullName === "string"
+        ? candidate.fullName
+        : typeof candidate.contactName === "string"
+          ? candidate.contactName
+          : "";
+  const phoneNumber =
+    typeof candidate.phoneNumber === "string"
+      ? candidate.phoneNumber
+      : typeof candidate.phone === "string"
+        ? candidate.phone
+        : typeof candidate.mobile === "string"
+          ? candidate.mobile
+          : null;
+  const cellPhoneNumber =
+    typeof candidate.cellPhoneNumber === "string"
+      ? candidate.cellPhoneNumber
+      : typeof candidate.cellPhone === "string"
+        ? candidate.cellPhone
+        : typeof candidate.mobile === "string"
+          ? candidate.mobile
+          : null;
+  const email = typeof candidate.email === "string" ? candidate.email : null;
+  const isWhatsapp =
+    typeof candidate.isWhatsapp === "boolean"
+      ? candidate.isWhatsapp
+      : typeof candidate.isWhatsapp === "string"
+        ? candidate.isWhatsapp.toLowerCase() === "true"
+        : false;
+  const isActiveValue =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : typeof candidate.active === "boolean"
+          ? candidate.active
+          : typeof candidate.active === "string"
+            ? candidate.active.toLowerCase() === "true"
+            : typeof candidate.enabled === "boolean"
+              ? candidate.enabled
+              : typeof candidate.enabled === "string"
+                ? candidate.enabled.toLowerCase() === "true"
+                : true;
+  const isPrimaryValue =
+    typeof candidate.isPrimary === "boolean"
+      ? candidate.isPrimary
+      : typeof candidate.isPrimary === "string"
+        ? candidate.isPrimary.toLowerCase() === "true"
+        : false;
+
+  return {
+    id: rawId,
+    name,
+    email,
+    phoneNumber,
+    cellPhoneNumber,
+    isWhatsapp: Boolean(isWhatsapp),
+    isActive: Boolean(isActiveValue),
+    isPrimary: Boolean(isPrimaryValue),
+  };
+}
+
+export function parsePagedContactNetwork(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ContactNetworkItem[], totalItems: 0 };
+  const candidate = payload as ContactNetworkPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeContactNetwork)
+    .filter((item): item is ContactNetworkItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+export function getContactNetworkSortValue(item: ContactNetworkItem, column: ContactNetworkSortColumn) {
+  switch (column) {
+    case "Email":
+      return (item.email ?? "").toLowerCase();
+    case "PhoneNumber":
+      return (item.phoneNumber ?? "").toLowerCase();
+    case "CellPhoneNumber":
+      return (item.cellPhoneNumber ?? "").toLowerCase();
+    case "IsWhatsapp":
+      return item.isWhatsapp ? "1" : "0";
+    case "IsPrimary":
+      return item.isPrimary ? "1" : "0";
+    default:
+      return item.name.toLowerCase();
+  }
 }
 
 /* ---------- Address normalize/parse ---------- */

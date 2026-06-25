@@ -25,6 +25,9 @@ import {
   normalizeFiscalData,
   parsePagedFiscalData,
   getFiscalDataSortValue,
+  normalizeConsent,
+  parsePagedConsents,
+  normalizeConsentTypes,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
 import {
@@ -59,6 +62,11 @@ import {
   type ClientFiscalDataFormState,
   initialFiscalDataFormState,
   type FiscalDataSortColumn,
+  type ClientConsentItem,
+  type ConsentTypeItem,
+  type ClientConsentFormState,
+  initialConsentFormState,
+  type ConsentSortColumn,
 } from "@/domains/operations/clients/client-models";
 import { EUROPEAN_COUNTRIES_PLUS_BR_US } from "@/shared/utils/countries";
 
@@ -72,12 +80,15 @@ const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FISCAL_DATA_PAGE_SIZE = 25;
 const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
+const CONSENT_PAGE_SIZE = 25;
+const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
 
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumnLocal = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
+type ConsentSortColumnLocal = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 
 /* ---------- Pagination helper ---------- */
 
@@ -314,6 +325,28 @@ export function ClientsCreatePage() {
   const [fiscalDataPageSize, setFiscalDataPageSize] = useState<number>(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
   const [fiscalDataSortBy, setFiscalDataSortBy] = useState<FiscalDataSortColumnLocal>("TaxNumber");
   const [fiscalDataSortDirection, setFiscalDataSortDirection] = useState<"asc" | "desc">("asc");
+
+  /* ---------- Consents state ---------- */
+
+  const [consents, setConsents] = useState<ClientConsentItem[]>([]);
+  const [consentsLoading, setConsentsLoading] = useState(false);
+  const [consentFormState, setConsentFormState] = useState<ClientConsentFormState>(initialConsentFormState);
+  const [editingConsent, setEditingConsent] = useState<ClientConsentItem | null>(null);
+  const [consentSubmitting, setConsentSubmitting] = useState(false);
+  const [consentDeleteConfirmOpen, setConsentDeleteConfirmOpen] = useState(false);
+  const consentDeleteRef = useRef<ClientConsentItem | null>(null);
+  const [consentBulkUploading, setConsentBulkUploading] = useState(false);
+  const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+
+  /* ---------- Consents grid state ---------- */
+
+  const [consentGridDensity, setConsentGridDensity] = useState<RowDensity>("medium");
+  const [consentSearch, setConsentSearch] = useState("");
+  const [consentStatusFilter, setConsentStatusFilter] = useState("all");
+  const [consentPage, setConsentPage] = useState(1);
+  const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumnLocal>("ConsentType");
+  const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
 
@@ -928,6 +961,64 @@ export function ClientsCreatePage() {
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
 
+  /* ---------- Consents load ---------- */
+
+  const loadConsents = useCallback(async () => {
+    if (!createdClientId) {
+      setConsents([]);
+      return;
+    }
+    setConsentsLoading(true);
+    const query = new URLSearchParams({
+      PageNumber: "1",
+      PageSize: String(CONSENT_PAGE_SIZE),
+      SortBy: "ConsentType",
+      SortDirection: "asc",
+    });
+    try {
+      const response = await fetchWithAuth(
+        `/api/gerit/v1/clients/${createdClientId}/consents/paged?${query.toString()}`,
+        { method: "GET" },
+      );
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) {
+        throw new Error(normalizeErrorMessage(payload, t("clients.consents.errors.load")));
+      }
+      const parsed = parsePagedConsents(payload);
+      setConsents(parsed.items);
+    } catch (error) {
+      logError("clients.create.loadConsents", "Falha ao carregar consentimentos", error, {
+        clientId: createdClientId,
+      });
+      toast({
+        title: t("clients.toasts.errorTitle"),
+        description:
+          error instanceof Error ? error.message : t("clients.consents.errors.load"),
+        variant: "destructive",
+      });
+      setConsents([]);
+    } finally {
+      setConsentsLoading(false);
+    }
+  }, [createdClientId, fetchWithAuth, t, toast]);
+
+  /* ---------- Load consent types ---------- */
+
+  const loadConsentTypes = useCallback(async () => {
+    if (consentTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/consent-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeConsentTypes(payload);
+      setConsentTypes(parsed);
+    } catch {
+      // Silent fail — consent types are optional
+    }
+  }, [consentTypes.length, fetchWithAuth]);
+
   /* ---------- Contact submit ---------- */
 
   const handleContactSubmit = useCallback(
@@ -1318,6 +1409,15 @@ export function ClientsCreatePage() {
       void loadFiscalData();
     }
   }, [loadedTabs, createdClientId, fiscalData.length, fiscalDataLoading, loadFiscalData]);
+
+  /* ---------- Lazy load consents when tab becomes active ---------- */
+
+  useEffect(() => {
+    if (loadedTabs.has("consents") && createdClientId && consents.length === 0 && !consentsLoading) {
+      void loadConsents();
+      void loadConsentTypes();
+    }
+  }, [loadedTabs, createdClientId, consents.length, consentsLoading, loadConsents, loadConsentTypes]);
 
   /* ---------- Render: Contacts tab ---------- */
 

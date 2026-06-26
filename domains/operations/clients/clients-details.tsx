@@ -1078,7 +1078,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const loadConsentTypes = useCallback(async () => {
     if (consentTypes.length > 0) return;
     try {
-      const response = await fetchWithAuth("/api/gerit/v1/clients/consent-types", { method: "GET" });
+      const response = await fetchWithAuth("/api/gerit/v1/consent-types", { method: "GET" });
       if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) return;

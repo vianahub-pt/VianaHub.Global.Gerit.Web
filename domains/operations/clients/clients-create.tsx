@@ -338,6 +338,7 @@ export function ClientsCreatePage() {
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+  const consentsLoadedRef = useRef(false);
 
   /* ---------- Consents grid state ---------- */
 
@@ -1414,11 +1415,12 @@ export function ClientsCreatePage() {
   /* ---------- Lazy load consents when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("consents") && createdClientId && consents.length === 0 && !consentsLoading) {
+    if (loadedTabs.has("consents") && createdClientId && !consentsLoadedRef.current && !consentsLoading) {
+      consentsLoadedRef.current = true;
       void loadConsents();
       void loadConsentTypes();
     }
-  }, [loadedTabs, createdClientId, consents.length, consentsLoading, loadConsents, loadConsentTypes]);
+  }, [loadedTabs, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
 
   /* ---------- Consent submit ---------- */
 

@@ -599,6 +599,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+  const consentsLoadedRef = useRef(false);
 
   /* ---------- Hierarchy state ---------- */
 
@@ -1210,11 +1211,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load consents when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("consents") && client?.id && consents.length === 0 && !consentsLoading) {
+    if (loadedTabs.has("consents") && client?.id && !consentsLoadedRef.current && !consentsLoading) {
+      consentsLoadedRef.current = true;
       void loadClientConsents();
       void loadConsentTypes();
     }
-  }, [loadedTabs, client?.id, consents.length, consentsLoading, loadClientConsents, loadConsentTypes]);
+  }, [loadedTabs, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
 
   // Lazy load hierarchy when tab becomes active
   useEffect(() => {

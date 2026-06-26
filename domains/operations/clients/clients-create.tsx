@@ -27,6 +27,7 @@ import {
   getFiscalDataSortValue,
   normalizeConsent,
   parsePagedConsents,
+  getConsentSortValue,
   normalizeConsentTypes,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
@@ -1419,6 +1420,483 @@ export function ClientsCreatePage() {
     }
   }, [loadedTabs, createdClientId, consents.length, consentsLoading, loadConsents, loadConsentTypes]);
 
+  /* ---------- Consent submit ---------- */
+
+  const handleConsentSubmit = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (!createdClientId) return;
+      const consentTypeId = consentFormState.consentTypeId.trim();
+      if (!consentTypeId) {
+        toast({
+          title: t("clients.toasts.validationTitle"),
+          description: t("clients.consents.validation.required"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setConsentSubmitting(true);
+      try {
+        const payload = {
+          consentTypeId: Number(consentTypeId),
+          granted: consentFormState.granted,
+          grantedDate: consentFormState.grantedDate || null,
+          revokedDate: consentFormState.revokedDate || null,
+          origin: consentFormState.origin.trim() || null,
+          ipAddress: consentFormState.ipAddress.trim() || null,
+          userAgent: consentFormState.userAgent.trim() || null,
+        };
+        const isEditing = editingConsent !== null;
+        const endpoint = isEditing
+          ? `/api/gerit/v1/clients/${createdClientId}/consents/${editingConsent?.id}`
+          : `/api/gerit/v1/clients/${createdClientId}/consents`;
+        const response = await fetchWithAuth(endpoint, {
+          method: isEditing ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.save")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: isEditing
+            ? t("clients.consents.toasts.updated")
+            : t("clients.consents.toasts.created"),
+        });
+        resetConsentForm();
+        await loadConsents();
+      } catch (error) {
+        logError("clients.create.consentSubmit", "Falha ao salvar consentimento", error, {
+          clientId: createdClientId,
+          consentTypeId: consentFormState.consentTypeId,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.save"),
+          variant: "destructive",
+        });
+      } finally {
+        setConsentSubmitting(false);
+      }
+    },
+    [createdClientId, consentFormState, editingConsent, fetchWithAuth, loadConsents, t, toast],
+  );
+
+  const handleConsentEdit = useCallback((data: ClientConsentItem) => {
+    setEditingConsent(data);
+    setConsentFormState({
+      consentTypeId: String(data.consentTypeId),
+      granted: data.granted,
+      grantedDate: data.grantedDate ?? "",
+      revokedDate: data.revokedDate ?? "",
+      origin: data.origin ?? "",
+      ipAddress: data.ipAddress ?? "",
+      userAgent: data.userAgent ?? "",
+    });
+  }, []);
+
+  const handleConsentToggleStatus = useCallback(
+    async (data: ClientConsentItem) => {
+      if (!createdClientId) return;
+      try {
+        const endpoint = data.isActive
+          ? `/api/gerit/v1/clients/${createdClientId}/consents/${data.id}/deactivate`
+          : `/api/gerit/v1/clients/${createdClientId}/consents/${data.id}/activate`;
+        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.status")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: data.isActive
+            ? t("clients.consents.toasts.deactivated")
+            : t("clients.consents.toasts.activated"),
+        });
+        await loadConsents();
+      } catch (error) {
+        logError("clients.create.consentToggleStatus", "Falha ao alterar estado do consentimento", error, {
+          clientId: createdClientId,
+          consentId: data.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.status"),
+          variant: "destructive",
+        });
+      }
+    },
+    [createdClientId, fetchWithAuth, loadConsents, t, toast],
+  );
+
+  const handleConsentDelete = useCallback(
+    (data: ClientConsentItem) => {
+      consentDeleteRef.current = data;
+      setConsentDeleteConfirmOpen(true);
+    },
+    [],
+  );
+
+  const handleConsentDeleteConfirm = useCallback(async () => {
+    const data = consentDeleteRef.current;
+    consentDeleteRef.current = null;
+    setConsentDeleteConfirmOpen(false);
+    if (!data || !createdClientId) return;
+    try {
+        const response = await fetchWithAuth(
+          `/api/gerit/v1/clients/${createdClientId}/consents/${data.id}`,
+          { method: "DELETE" },
+        );
+        if (!response) return;
+        const responsePayload = (await response.json().catch(() => null)) as unknown;
+        if (!response.ok) {
+          throw new Error(
+            normalizeErrorMessage(responsePayload, t("clients.consents.errors.delete")),
+          );
+        }
+        toast({
+          title: t("clients.toasts.successTitle"),
+          description: t("clients.consents.toasts.deleted"),
+        });
+        await loadConsents();
+      } catch (error) {
+        logError("clients.create.consentDelete", "Falha ao eliminar consentimento", error, {
+          clientId: createdClientId,
+          consentId: data.id,
+        });
+        toast({
+          title: t("clients.toasts.errorTitle"),
+          description:
+            error instanceof Error ? error.message : t("clients.consents.errors.delete"),
+          variant: "destructive",
+        });
+      }
+    },
+    [createdClientId, fetchWithAuth, loadConsents, t, toast],
+  );
+
+  const resetConsentForm = useCallback(() => {
+    setConsentFormState(initialConsentFormState);
+    setEditingConsent(null);
+  }, []);
+
+  /* ---------- Consent grid ---------- */
+
+  const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
+    () => [
+      { key: "ConsentType", label: t("clients.consents.table.consentType") },
+      { key: "Granted", label: t("clients.consents.table.granted") },
+      { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
+      { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },
+      { key: "Origin", label: t("clients.consents.table.origin") },
+    ],
+    [t],
+  );
+
+  const consentStatusFilterOptions = useMemo(
+    () => [
+      { value: "active", label: t("clients.filters.active") },
+      { value: "inactive", label: t("clients.filters.inactive") },
+      { value: "all", label: t("clients.filters.all") },
+    ],
+    [t],
+  );
+
+  const filteredConsents = useMemo(() => {
+    const searchTerm = consentSearch.trim().toLowerCase();
+    return consents.filter((item) => {
+      if (consentStatusFilter !== "all") {
+        const expected = consentStatusFilter === "active";
+        if (item.isActive !== expected) return false;
+      }
+      if (!searchTerm) return true;
+      return (
+        (item.consentTypeName ?? "").toLowerCase().includes(searchTerm) ||
+        (item.origin ?? "").toLowerCase().includes(searchTerm)
+      );
+    });
+  }, [consentSearch, consentStatusFilter, consents]);
+
+  const sortedConsents = useMemo(() => {
+    const items = [...filteredConsents];
+    items.sort((current, next) => {
+      const a = getConsentSortValue(current, consentSortBy);
+      const b = getConsentSortValue(next, consentSortBy);
+      const comparison = a.localeCompare(b);
+      return consentSortDirection === "asc" ? comparison : -comparison;
+    });
+    return items;
+  }, [filteredConsents, consentSortBy, consentSortDirection]);
+
+  const consentTotalPages = Math.max(1, Math.ceil(sortedConsents.length / consentPageSize));
+
+  const consentPageButtons = useMemo(
+    () => buildPageButtons(consentPage, consentTotalPages),
+    [consentPage, consentTotalPages],
+  );
+
+  const visibleConsents = useMemo(() => {
+    const startIndex = (consentPage - 1) * consentPageSize;
+    return sortedConsents.slice(startIndex, startIndex + consentPageSize);
+  }, [consentPage, consentPageSize, sortedConsents]);
+
+  const consentPageCaption = useMemo(
+    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedConsents.length) }),
+    [sortedConsents.length, t],
+  );
+
+  const consentRowCells = useCallback(
+    (item: ClientConsentItem) => [
+      item.consentTypeName ?? "-",
+      item.granted ? (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+          {t("common.yes")}
+        </span>
+      ) : (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+          {t("common.no")}
+        </span>
+      ),
+      item.grantedDate ?? "-",
+      item.revokedDate ?? "-",
+      item.origin ?? "-",
+    ],
+    [t],
+  );
+
+  const renderConsentStatus = useCallback(
+    (item: ClientConsentItem) => (
+      <span
+        className={clsx(
+          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
+          "text-muted-foreground dark:text-muted-foreground",
+        )}
+      >
+        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
+      </span>
+    ),
+    [t],
+  );
+
+  const renderConsentActions = useCallback(
+    (item: ClientConsentItem) => (
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => handleConsentEdit(item)}
+          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.edit")}
+        >
+          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleConsentToggleStatus(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
+          title={
+            item.isActive
+              ? t("clients.actions.deactivate")
+              : t("clients.actions.activate")
+          }
+        >
+          {item.isActive
+            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
+            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => handleConsentDelete(item)}
+          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          title={t("clients.actions.delete")}
+        >
+          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
+        </button>
+      </div>
+    ),
+    [handleConsentDelete, handleConsentEdit, handleConsentToggleStatus, t],
+  );
+
+  const handleConsentSort = useCallback(
+    (columnKey: string) => {
+      const normalized = columnKey as ConsentSortColumnLocal;
+      if (normalized === consentSortBy) {
+        setConsentSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+        return;
+      }
+      setConsentSortDirection("asc");
+      setConsentSortBy(normalized);
+    },
+    [consentSortBy],
+  );
+
+  /* ---------- Consent page effects ---------- */
+
+  useEffect(() => {
+    setConsentPage((current) => Math.min(current, consentTotalPages));
+  }, [consentTotalPages]);
+
+  useEffect(() => {
+    setConsentPage(1);
+  }, [consentStatusFilter, consentSearch, consentSortBy, consentSortDirection, consentPageSize]);
+
+  /* ---------- Render: Consents tab ---------- */
+
+  const renderConsentsTab = () => {
+    if (!loadedTabs.has("consents")) {
+      return (
+        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+          {t("clients.detail.loadingTab")}
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {/* Consent form */}
+        <form
+          onSubmit={(e) => void handleConsentSubmit(e)}
+          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
+        >
+          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <SelectField
+              label={t("clients.consents.form.consentType")}
+              value={consentFormState.consentTypeId}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, consentTypeId: v }))
+              }
+              options={consentTypes.map((ct) => ({
+                value: String(ct.id),
+                label: ct.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
+            />
+            <FormField
+              label={t("clients.consents.form.origin")}
+              value={consentFormState.origin}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, origin: v }))
+              }
+            />
+            <FormField
+              label={t("clients.consents.form.grantedDate")}
+              value={consentFormState.grantedDate}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, grantedDate: v }))
+              }
+              type="date"
+            />
+            <FormField
+              label={t("clients.consents.form.revokedDate")}
+              value={consentFormState.revokedDate}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, revokedDate: v }))
+              }
+              type="date"
+            />
+            <FormField
+              label={t("clients.consents.form.ipAddress")}
+              value={consentFormState.ipAddress}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, ipAddress: v }))
+              }
+            />
+            <FormField
+              label={t("clients.consents.form.userAgent")}
+              value={consentFormState.userAgent}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, userAgent: v }))
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={consentSubmitting}
+              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
+            >
+              {consentSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              {editingConsent ? t("clients.actions.save") : t("clients.actions.add")}
+            </button>
+            {editingConsent && (
+              <button
+                type="button"
+                onClick={resetConsentForm}
+                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
+              >
+                {t("clients.actions.cancel")}
+              </button>
+            )}
+          </div>
+        </form>
+
+        {/* Consents grid */}
+        <HubGrid
+          columns={consentColumns}
+          items={visibleConsents}
+          renderRowCells={consentRowCells}
+          renderStatus={renderConsentStatus}
+          renderActions={renderConsentActions}
+          statusColumnLabel={t("clients.table.status")}
+          actionsColumnLabel={t("clients.consents.table.actions")}
+          rowDensity={consentGridDensity}
+          densityOptions={gridDensityOptions}
+          onDensityChange={setConsentGridDensity}
+          sortBy={consentSortBy}
+          sortDirection={consentSortDirection}
+          onSort={handleConsentSort}
+          statusFilter={consentStatusFilter}
+          statusFilterOptions={consentStatusFilterOptions}
+          onStatusFilterChange={setConsentStatusFilter}
+          statusFilterLabel={t("clients.filters.statusLabel")}
+          searchValue={consentSearch}
+          onSearchChange={setConsentSearch}
+          searchPlaceholder={t("clients.filters.search")}
+          loading={consentsLoading}
+          loadingText={t("clients.loading")}
+          emptyText={t("clients.consents.empty")}
+          pageCaption={consentPageCaption}
+          page={consentPage}
+          totalPages={consentTotalPages}
+          pageButtons={consentPageButtons}
+          onPageChange={setConsentPage}
+          pageSize={consentPageSize}
+          pageSizeOptions={CONSENT_GRID_PAGE_SIZE_OPTIONS}
+          onPageSizeChange={setConsentPageSize}
+          paginationPreviousLabel={t("clients.pagination.previous")}
+          paginationNextLabel={t("clients.pagination.next")}
+          paginationPageLabel={t("clients.pagination.page")}
+          paginationPerPageLabel={t("clients.pagination.perPage")}
+          getRowKey={(item) => item.id}
+        />
+
+        {/* Delete confirmation dialog */}
+        <ConfirmDialog
+          open={consentDeleteConfirmOpen}
+          onOpenChange={setConsentDeleteConfirmOpen}
+          onConfirm={() => void handleConsentDeleteConfirm()}
+          title={t("clients.actions.delete")}
+          description={
+            consentDeleteRef.current
+              ? t("clients.consents.confirm.delete", {
+                  consentTypeName: consentDeleteRef.current.consentTypeName ?? "",
+                })
+              : t("clients.consents.confirm.delete", { consentTypeName: "" })
+          }
+        />
+      </div>
+    );
+  };
+
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
@@ -2333,9 +2811,7 @@ export function ClientsCreatePage() {
                 id: "consents",
                 label: t("clients.detail.tabs.consentsSummary"),
                 disabled: !createdClientId,
-                panel: createdClientId ? (
-                  <div>Conteúdo de Consentimentos (placeholder por agora)</div>
-                ) : (
+                panel: createdClientId ? renderConsentsTab() : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}
                   </div>

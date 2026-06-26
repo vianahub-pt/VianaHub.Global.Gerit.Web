@@ -4622,25 +4622,18 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
-                {t("clients.consents.form.consentType")}
-              </label>
-              <select
-                value={consentFormState.consentTypeId}
-                onChange={(e) =>
-                  setConsentFormState((prev) => ({ ...prev, consentTypeId: e.target.value }))
-                }
-                className="flex h-10 w-full rounded-sm border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground"
-              >
-                <option value="">{t("clients.form.selectOption")}</option>
-                {consentTypes.map((ct) => (
-                  <option key={ct.id} value={String(ct.id)}>
-                    {ct.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SelectField
+              label={t("clients.consents.form.consentType")}
+              value={consentFormState.consentTypeId}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, consentTypeId: v }))
+              }
+              options={consentTypes.map((ct) => ({
+                value: String(ct.id),
+                label: ct.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
+            />
             <FormField
               label={t("clients.consents.form.origin")}
               value={consentFormState.origin}

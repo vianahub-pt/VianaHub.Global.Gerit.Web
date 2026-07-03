@@ -220,6 +220,8 @@ export const initialConsentFormState: ClientConsentFormState = {
   userAgent: "",
 };
 
+export type ConsentSortColumn = "ConsentTypeId" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin" | "IpAddress";
+
 /* ---------- Client Hierarchy ---------- */
 
 export interface ClientHierarchyItem {

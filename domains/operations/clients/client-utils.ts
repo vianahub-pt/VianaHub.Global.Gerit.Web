@@ -11,7 +11,17 @@ import {
   type ContactNetworkItem,
   type ContactNetworkSortColumn,
   type FiscalDataSortColumn,
+  type ConsentSortColumn,
 } from "./client-models";
+
+export interface ConsentsPagedResponse {
+  items?: unknown;
+  totalItems?: unknown;
+}
+
+export interface ConsentTypesResponse {
+  items?: unknown;
+}
 
 export interface ClientsPagedResponse {
   items?: unknown;
@@ -244,6 +254,117 @@ export function getFiscalDataSortValue(item: ClientFiscalDataItem, column: Fisca
     default:
       return (item.taxNumber ?? "").toLowerCase();
   }
+}
+
+/* ---------- Consent normalize/parse ---------- */
+
+export function normalizeConsent(payload: unknown): ClientConsentItem | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const candidate = payload as Record<string, unknown>;
+  const rawId =
+    typeof candidate.id === "number"
+      ? candidate.id
+      : typeof candidate.id === "string"
+        ? Number(candidate.id)
+        : null;
+  if (rawId === null || !Number.isFinite(rawId)) return null;
+
+  const clientId =
+    typeof candidate.clientId === "number"
+      ? candidate.clientId
+      : typeof candidate.clientId === "string"
+        ? Number(candidate.clientId)
+        : 0;
+  const consentTypeId =
+    typeof candidate.consentTypeId === "number"
+      ? candidate.consentTypeId
+      : typeof candidate.consentTypeId === "string"
+        ? Number(candidate.consentTypeId)
+        : 0;
+  const consentTypeName = typeof candidate.consentTypeName === "string" ? candidate.consentTypeName : null;
+  const granted =
+    typeof candidate.granted === "boolean"
+      ? candidate.granted
+      : typeof candidate.granted === "string"
+        ? candidate.granted.toLowerCase() === "true"
+        : false;
+  const grantedDate = typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
+  const revokedDate = typeof candidate.revokedDate === "string" ? candidate.revokedDate : null;
+  const origin = typeof candidate.origin === "string" ? candidate.origin : null;
+  const ipAddress = typeof candidate.ipAddress === "string" ? candidate.ipAddress : null;
+  const userAgent = typeof candidate.userAgent === "string" ? candidate.userAgent : null;
+  const isActive =
+    typeof candidate.isActive === "boolean"
+      ? candidate.isActive
+      : typeof candidate.isActive === "string"
+        ? candidate.isActive.toLowerCase() === "true"
+        : true;
+
+  return {
+    id: rawId,
+    clientId,
+    consentTypeId,
+    consentTypeName,
+    granted: Boolean(granted),
+    grantedDate,
+    revokedDate,
+    origin,
+    ipAddress,
+    userAgent,
+    isActive: Boolean(isActive),
+  };
+}
+
+export function parsePagedConsents(payload: unknown) {
+  if (typeof payload !== "object" || payload === null)
+    return { items: [] as ClientConsentItem[], totalItems: 0 };
+  const candidate = payload as ConsentsPagedResponse;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
+  const items = rawItems
+    .map(normalizeConsent)
+    .filter((item): item is ClientConsentItem => item !== null);
+  return {
+    items,
+    totalItems:
+      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
+  };
+}
+
+export function getConsentSortValue(item: ClientConsentItem, column: ConsentSortColumn) {
+  switch (column) {
+    case "Granted":
+      return item.granted ? "1" : "0";
+    case "GrantedDate":
+      return (item.grantedDate ?? "").toLowerCase();
+    case "RevokedDate":
+      return (item.revokedDate ?? "").toLowerCase();
+    case "Origin":
+      return (item.origin ?? "").toLowerCase();
+    case "IpAddress":
+      return (item.ipAddress ?? "").toLowerCase();
+    default:
+      return String(item.consentTypeId);
+  }
+}
+
+/* ---------- Consent Types normalize ---------- */
+
+export function normalizeConsentTypes(payload: unknown): ConsentTypeItem[] {
+  if (typeof payload !== "object" || payload === null) return [];
+  const candidate = payload as Record<string, unknown>;
+  const rawItems = Array.isArray(candidate.items) ? candidate.items : Array.isArray(payload) ? payload : [];
+  return rawItems
+    .map((item: unknown) => {
+      if (typeof item !== "object" || item === null) return null;
+      const c = item as Record<string, unknown>;
+      const id = typeof c.id === "number" ? c.id : typeof c.id === "string" ? Number(c.id) : null;
+      if (id === null || !Number.isFinite(id)) return null;
+      const name = typeof c.name === "string" ? c.name : "";
+      const description = typeof c.description === "string" ? c.description : null;
+      const isActive = typeof c.isActive === "boolean" ? c.isActive : true;
+      return { id, name, description, isActive };
+    })
+    .filter((item): item is ConsentTypeItem => item !== null);
 }
 
 /* ---------- Address normalize/parse ---------- */

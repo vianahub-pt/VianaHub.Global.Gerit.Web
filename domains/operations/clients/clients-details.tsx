@@ -599,6 +599,15 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+  const consentsLoadedRef = useRef(false);
+
+  /* ---------- Lazy loading refs ---------- */
+
+  const contactsLoadedRef = useRef(false);
+  const addressesLoadedRef = useRef(false);
+  const fiscalDataLoadedRef = useRef(false);
+  const hierarchyLoadedRef = useRef(false);
+  const contactNetworkLoadedRef = useRef(false);
 
   /* ---------- Hierarchy state ---------- */
 
@@ -1078,7 +1087,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const loadConsentTypes = useCallback(async () => {
     if (consentTypes.length > 0) return;
     try {
-      const response = await fetchWithAuth("/api/gerit/v1/clients/consent-types", { method: "GET" });
+      const response = await fetchWithAuth("/api/gerit/v1/consent-types", { method: "GET" });
       if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
       if (!response.ok) return;
@@ -1182,17 +1191,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load contacts when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && contacts.length === 0 && !contactsLoading) {
+    if (loadedTabs.has("contactos") && client?.id && !contactsLoadedRef.current && !contactsLoading) {
+      contactsLoadedRef.current = true;
       void loadClientContacts();
     }
-  }, [loadedTabs, client?.id, contacts.length, contactsLoading, loadClientContacts]);
+  }, [loadedTabs, client?.id, contactsLoading, loadClientContacts]);
 
   // Lazy load addresses when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("enderecos") && client?.id && addresses.length === 0 && !addressesLoading) {
+    if (loadedTabs.has("enderecos") && client?.id && !addressesLoadedRef.current && !addressesLoading) {
+      addressesLoadedRef.current = true;
       void loadClientAddresses();
     }
-  }, [loadedTabs, client?.id, addresses.length, addressesLoading, loadClientAddresses]);
+  }, [loadedTabs, client?.id, addressesLoading, loadClientAddresses]);
 
   // Lazy load address types when addresses tab becomes active
   useEffect(() => {
@@ -1203,32 +1214,36 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load fiscal data when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("fiscalData") && client?.id && fiscalData.length === 0 && !fiscalDataLoading) {
+    if (loadedTabs.has("fiscalData") && client?.id && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
+      fiscalDataLoadedRef.current = true;
       void loadClientFiscalData();
     }
-  }, [loadedTabs, client?.id, fiscalData.length, fiscalDataLoading, loadClientFiscalData]);
+  }, [loadedTabs, client?.id, fiscalDataLoading, loadClientFiscalData]);
 
   // Lazy load consents when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("consents") && client?.id && consents.length === 0 && !consentsLoading) {
+    if (loadedTabs.has("consents") && client?.id && !consentsLoadedRef.current && !consentsLoading) {
+      consentsLoadedRef.current = true;
       void loadClientConsents();
       void loadConsentTypes();
     }
-  }, [loadedTabs, client?.id, consents.length, consentsLoading, loadClientConsents, loadConsentTypes]);
+  }, [loadedTabs, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
 
   // Lazy load hierarchy when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("hierarchy") && client?.id && hierarchyItems.length === 0 && !hierarchyLoading) {
+    if (loadedTabs.has("hierarchy") && client?.id && !hierarchyLoadedRef.current && !hierarchyLoading) {
+      hierarchyLoadedRef.current = true;
       void loadClientHierarchy();
     }
-  }, [loadedTabs, client?.id, hierarchyItems.length, hierarchyLoading, loadClientHierarchy]);
+  }, [loadedTabs, client?.id, hierarchyLoading, loadClientHierarchy]);
 
   // Lazy load contact network when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && contactNetwork.length === 0 && !contactNetworkLoading) {
+    if (loadedTabs.has("contactos") && client?.id && !contactNetworkLoadedRef.current && !contactNetworkLoading) {
+      contactNetworkLoadedRef.current = true;
       void loadClientContactNetwork();
     }
-  }, [loadedTabs, client?.id, contactNetwork.length, contactNetworkLoading, loadClientContactNetwork]);
+  }, [loadedTabs, client?.id, contactNetworkLoading, loadClientContactNetwork]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -4622,25 +4637,18 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
         >
           <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div>
-              <label className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
-                {t("clients.consents.form.consentType")}
-              </label>
-              <select
-                value={consentFormState.consentTypeId}
-                onChange={(e) =>
-                  setConsentFormState((prev) => ({ ...prev, consentTypeId: e.target.value }))
-                }
-                className="flex h-10 w-full rounded-sm border border-border bg-background px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 dark:border-border dark:bg-card dark:text-muted-foreground"
-              >
-                <option value="">{t("clients.form.selectOption")}</option>
-                {consentTypes.map((ct) => (
-                  <option key={ct.id} value={String(ct.id)}>
-                    {ct.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SelectField
+              label={t("clients.consents.form.consentType")}
+              value={consentFormState.consentTypeId}
+              onChange={(v) =>
+                setConsentFormState((prev) => ({ ...prev, consentTypeId: v }))
+              }
+              options={consentTypes.map((ct) => ({
+                value: String(ct.id),
+                label: ct.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
+            />
             <FormField
               label={t("clients.consents.form.origin")}
               value={consentFormState.origin}

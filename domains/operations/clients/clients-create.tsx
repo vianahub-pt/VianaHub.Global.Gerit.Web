@@ -89,7 +89,7 @@ const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumnLocal = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type ConsentSortColumnLocal = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
+type ConsentSortColumnLocal = "ConsentTypeId" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 
 /* ---------- Pagination helper ---------- */
 
@@ -349,7 +349,7 @@ export function ClientsCreatePage() {
   const [consentStatusFilter, setConsentStatusFilter] = useState("all");
   const [consentPage, setConsentPage] = useState(1);
   const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumnLocal>("ConsentType");
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumnLocal>("ConsentTypeId");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
@@ -1600,7 +1600,7 @@ export function ClientsCreatePage() {
 
   const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
     () => [
-      { key: "ConsentType", label: t("clients.consents.table.consentType") },
+      { key: "ConsentTypeId", label: t("clients.consents.table.consentType") },
       { key: "Granted", label: t("clients.consents.table.granted") },
       { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
       { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },

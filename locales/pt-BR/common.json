@@ -680,165 +680,95 @@
   "roles.bulk.upload.label": "Importar CSV",
   "roles.bulk.upload.success": "Importação de {{resource}} concluída com sucesso.",
   "roles.bulk.upload.error": "Não foi possível importar {{resource}}.",
-  "auth": {
-    "login": {
-      "toggleTheme": "Alternar tema"
-    }
-  },
-  "clients": {
-    "actions": {
-      "confirm": "Confirmar"
-    },
-    "contacts": {
-      "deleteConfirm": {
-        "title": "Excluir contato",
-        "description": "Tem certeza que deseja excluir o contato \"{{name}}\"?"
-      }
-    },
-    "addresses": {
-      "form": {
-        "addressType": "Tipo de endereço",
-        "addressTypePlaceholder": "Selecione o tipo",
-        "complement": "Complemento",
-        "isPrimary": "Endereço principal",
-        "isPrimaryOff": "Não",
-        "isPrimaryOn": "Sim",
-        "latitude": "Latitude",
-        "longitude": "Longitude",
-        "neighborhood": "Bairro",
-        "note": "Observações",
-        "number": "Número"
-      }
-    },
-    "consents": {
-      "confirm": {
-        "delete": "Confirmar exclusão do consentimento {{consentTypeName}}?"
-      },
-      "empty": "Nenhum consentimento cadastrado.",
-      "errors": {
-        "delete": "Não foi possível excluir o consentimento.",
-        "load": "Não foi possível carregar os consentimentos.",
-        "save": "Não foi possível salvar o consentimento.",
-        "status": "Não foi possível atualizar o estado do consentimento."
-      },
-      "form": {
-        "consentType": "Tipo de consentimento",
-        "grantedDate": "Data de concessão",
-        "ipAddress": "Endereço IP",
-        "origin": "Origem",
-        "revokedDate": "Data de revogação",
-        "userAgent": "User Agent"
-      },
-      "table": {
-        "actions": "Ações",
-        "consentType": "Tipo de consentimento",
-        "granted": "Concedido",
-        "grantedDate": "Data de concessão",
-        "origin": "Origem",
-        "revokedDate": "Data de revogação"
-      },
-      "toasts": {
-        "activated": "Consentimento ativado com sucesso.",
-        "created": "Consentimento salvo com sucesso.",
-        "deactivated": "Consentimento desativado com sucesso.",
-        "deleted": "Consentimento excluído com sucesso.",
-        "updated": "Consentimento atualizado com sucesso."
-      },
-      "validation": {
-        "required": "Tipo de consentimento é obrigatório."
-      }
-    },
-    "create": {
-      "tabs": {
-        "saveFirst": "Salve primeiro as Informações do cliente para acessar esta aba."
-      }
-    },
-    "detail": {
-      "loadingTab": "Clique na aba para carregar..."
-    },
-    "fiscalData": {
-      "confirm": {
-        "delete": "Confirmar exclusão dos dados fiscais {{taxNumber}}?"
-      },
-      "empty": "Nenhum dado fiscal cadastrado.",
-      "errors": {
-        "delete": "Não foi possível excluir os dados fiscais.",
-        "load": "Não foi possível carregar os dados fiscais.",
-        "save": "Não foi possível salvar os dados fiscais.",
-        "status": "Não foi possível atualizar o estado dos dados fiscais."
-      },
-      "form": {
-        "fiscalCountry": "País fiscal",
-        "fiscalEmail": "E-mail fiscal",
-        "iban": "IBAN",
-        "isVatRegistered": "Registrado no IVA",
-        "taxNumber": "CPF/CNPJ",
-        "vatNumber": "Número IVA"
-      },
-      "table": {
-        "actions": "Ações",
-        "fiscalCountry": "País fiscal",
-        "fiscalEmail": "E-mail fiscal",
-        "iban": "IBAN",
-        "isVatRegistered": "IVA",
-        "taxNumber": "CPF/CNPJ",
-        "vatNumber": "Número IVA"
-      },
-      "toasts": {
-        "activated": "Dados fiscais ativados com sucesso.",
-        "created": "Dados fiscais salvos com sucesso.",
-        "deactivated": "Dados fiscais desativados com sucesso.",
-        "deleted": "Dados fiscais excluídos com sucesso.",
-        "updated": "Dados fiscais atualizados com sucesso."
-      },
-      "validation": {
-        "required": "CPF/CNPJ, País fiscal e E-mail fiscal são obrigatórios."
-      }
-    },
-    "hierarchy": {
-      "confirm": {
-        "delete": "Confirmar exclusão da relação {{parentClientName}} → {{childClientName}}?"
-      },
-      "empty": "Nenhuma relação de hierarquia cadastrada.",
-      "errors": {
-        "delete": "Não foi possível excluir a relação.",
-        "load": "Não foi possível carregar a hierarquia.",
-        "save": "Não foi possível salvar a relação.",
-        "status": "Não foi possível atualizar o estado da relação."
-      },
-      "form": {
-        "childClient": "Cliente filho",
-        "parentClient": "Cliente pai",
-        "relationshipType": "Tipo de relação"
-      },
-      "table": {
-        "actions": "Ações",
-        "childClient": "Cliente filho",
-        "parentClient": "Cliente pai",
-        "relationshipType": "Tipo de relação"
-      },
-      "toasts": {
-        "activated": "Relação ativada com sucesso.",
-        "created": "Relação salva com sucesso.",
-        "deactivated": "Relação desativada com sucesso.",
-        "deleted": "Relação excluída com sucesso.",
-        "updated": "Relação atualizada com sucesso."
-      },
-      "validation": {
-        "required": "Cliente pai e filho são obrigatórios."
-      }
-    }
-  },
-  "common": {
-    "no": "Não",
-    "yes": "Sim"
-  },
-  "workspace": {
-    "sidebar": {
-      "overview": "Visão geral",
-      "managing": "Gestão",
-      "interventions": "Intervenções",
-      "supportingData": "Dados de suporte"
-    }
-  }
+  "auth.login.toggleTheme": "Alternar tema",
+  "clients.actions.confirm": "Confirmar",
+  "clients.contacts.deleteConfirm.title": "Excluir contato",
+  "clients.contacts.deleteConfirm.description": "Tem certeza que deseja excluir o contato \"{{name}}\"?",
+  "clients.addresses.form.addressType": "Tipo de endereço",
+  "clients.addresses.form.addressTypePlaceholder": "Selecione o tipo",
+  "clients.addresses.form.complement": "Complemento",
+  "clients.addresses.form.isPrimary": "Endereço principal",
+  "clients.addresses.form.isPrimaryOff": "Não",
+  "clients.addresses.form.isPrimaryOn": "Sim",
+  "clients.addresses.form.latitude": "Latitude",
+  "clients.addresses.form.longitude": "Longitude",
+  "clients.addresses.form.neighborhood": "Bairro",
+  "clients.addresses.form.note": "Observações",
+  "clients.addresses.form.number": "Número",
+  "clients.consents.confirm.delete": "Confirmar exclusão do consentimento {{consentTypeName}}?",
+  "clients.consents.empty": "Nenhum consentimento cadastrado.",
+  "clients.consents.errors.delete": "Não foi possível excluir o consentimento.",
+  "clients.consents.errors.load": "Não foi possível carregar os consentimentos.",
+  "clients.consents.errors.save": "Não foi possível salvar o consentimento.",
+  "clients.consents.errors.status": "Não foi possível atualizar o estado do consentimento.",
+  "clients.consents.form.consentType": "Tipo de consentimento",
+  "clients.consents.form.grantedDate": "Data de concessão",
+  "clients.consents.form.ipAddress": "Endereço IP",
+  "clients.consents.form.origin": "Origem",
+  "clients.consents.form.revokedDate": "Data de revogação",
+  "clients.consents.form.userAgent": "User Agent",
+  "clients.consents.table.actions": "Ações",
+  "clients.consents.table.consentType": "Tipo de consentimento",
+  "clients.consents.table.granted": "Concedido",
+  "clients.consents.table.grantedDate": "Data de concessão",
+  "clients.consents.table.origin": "Origem",
+  "clients.consents.table.revokedDate": "Data de revogação",
+  "clients.consents.toasts.activated": "Consentimento ativado com sucesso.",
+  "clients.consents.toasts.created": "Consentimento salvo com sucesso.",
+  "clients.consents.toasts.deactivated": "Consentimento desativado com sucesso.",
+  "clients.consents.toasts.deleted": "Consentimento excluído com sucesso.",
+  "clients.consents.toasts.updated": "Consentimento atualizado com sucesso.",
+  "clients.consents.validation.required": "Tipo de consentimento é obrigatório.",
+  "clients.create.tabs.saveFirst": "Salve primeiro as Informações do cliente para acessar esta aba.",
+  "clients.detail.loadingTab": "Clique na aba para carregar...",
+  "clients.fiscalData.confirm.delete": "Confirmar exclusão dos dados fiscais {{taxNumber}}?",
+  "clients.fiscalData.empty": "Nenhum dado fiscal cadastrado.",
+  "clients.fiscalData.errors.delete": "Não foi possível excluir os dados fiscais.",
+  "clients.fiscalData.errors.load": "Não foi possível carregar os dados fiscais.",
+  "clients.fiscalData.errors.save": "Não foi possível salvar os dados fiscais.",
+  "clients.fiscalData.errors.status": "Não foi possível atualizar o estado dos dados fiscais.",
+  "clients.fiscalData.form.fiscalCountry": "País fiscal",
+  "clients.fiscalData.form.fiscalEmail": "E-mail fiscal",
+  "clients.fiscalData.form.iban": "IBAN",
+  "clients.fiscalData.form.isVatRegistered": "Registrado no IVA",
+  "clients.fiscalData.form.taxNumber": "CPF/CNPJ",
+  "clients.fiscalData.form.vatNumber": "Número IVA",
+  "clients.fiscalData.table.actions": "Ações",
+  "clients.fiscalData.table.fiscalCountry": "País fiscal",
+  "clients.fiscalData.table.fiscalEmail": "E-mail fiscal",
+  "clients.fiscalData.table.iban": "IBAN",
+  "clients.fiscalData.table.isVatRegistered": "IVA",
+  "clients.fiscalData.table.taxNumber": "CPF/CNPJ",
+  "clients.fiscalData.table.vatNumber": "Número IVA",
+  "clients.fiscalData.toasts.activated": "Dados fiscais ativados com sucesso.",
+  "clients.fiscalData.toasts.created": "Dados fiscais salvos com sucesso.",
+  "clients.fiscalData.toasts.deactivated": "Dados fiscais desativados com sucesso.",
+  "clients.fiscalData.toasts.deleted": "Dados fiscais excluídos com sucesso.",
+  "clients.fiscalData.toasts.updated": "Dados fiscais atualizados com sucesso.",
+  "clients.fiscalData.validation.required": "CPF/CNPJ, País fiscal e E-mail fiscal são obrigatórios.",
+  "clients.hierarchy.confirm.delete": "Confirmar exclusão da relação {{parentClientName}} → {{childClientName}}?",
+  "clients.hierarchy.empty": "Nenhuma relação de hierarquia cadastrada.",
+  "clients.hierarchy.errors.delete": "Não foi possível excluir a relação.",
+  "clients.hierarchy.errors.load": "Não foi possível carregar a hierarquia.",
+  "clients.hierarchy.errors.save": "Não foi possível salvar a relação.",
+  "clients.hierarchy.errors.status": "Não foi possível atualizar o estado da relação.",
+  "clients.hierarchy.form.childClient": "Cliente filho",
+  "clients.hierarchy.form.parentClient": "Cliente pai",
+  "clients.hierarchy.form.relationshipType": "Tipo de relação",
+  "clients.hierarchy.table.actions": "Ações",
+  "clients.hierarchy.table.childClient": "Cliente filho",
+  "clients.hierarchy.table.parentClient": "Cliente pai",
+  "clients.hierarchy.table.relationshipType": "Tipo de relação",
+  "clients.hierarchy.toasts.activated": "Relação ativada com sucesso.",
+  "clients.hierarchy.toasts.created": "Relação salva com sucesso.",
+  "clients.hierarchy.toasts.deactivated": "Relação desativada com sucesso.",
+  "clients.hierarchy.toasts.deleted": "Relação excluída com sucesso.",
+  "clients.hierarchy.toasts.updated": "Relação atualizada com sucesso.",
+  "clients.hierarchy.validation.required": "Cliente pai e filho são obrigatórios.",
+  "common.no": "Não",
+  "common.yes": "Sim",
+  "workspace.sidebar.overview": "Visão geral",
+  "workspace.sidebar.managing": "Gestão",
+  "workspace.sidebar.interventions": "Intervenções",
+  "workspace.sidebar.supportingData": "Dados de suporte"
 }

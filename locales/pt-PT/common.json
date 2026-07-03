@@ -365,7 +365,7 @@
   "clients.fiscalData.form.isVatRegistered": "Registado no IVA",
   "clients.fiscalData.form.iban": "IBAN",
   "clients.fiscalData.form.fiscalEmail": "E-mail fiscal",
-  "clients.fiscalData.validation.required": "NIF é obrigatório.",
+  "clients.fiscalData.validation.required": "NIF, País fiscal e E-mail fiscal são obrigatórios.",
   "clients.fiscalData.validation.requiredAll": "NIF, País fiscal, Registado no IVA e E-mail fiscal são obrigatórios.",
   "clients.fiscalData.empty": "Nenhum dado fiscal registado.",
   "clients.fiscalData.table.taxNumber": "NIF",

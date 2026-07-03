@@ -338,9 +338,6 @@ export function ClientsCreatePage() {
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-  const contactsLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
 
   /* ---------- Consents grid state ---------- */
 
@@ -353,16 +350,6 @@ export function ClientsCreatePage() {
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
-
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientCreateTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
 
   type ClientCreateTab =
     | "informacoes"
@@ -841,7 +828,7 @@ export function ClientsCreatePage() {
 
           if (createdId !== null) {
             setCreatedClientId(String(createdId));
-            handleTabChange("contactos");
+            setActiveTab("contactos");
           }
         }
       } catch (error) {
@@ -1401,30 +1388,27 @@ export function ClientsCreatePage() {
   /* ---------- Lazy load contacts when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("contactos") && createdClientId && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
+    if (activeTab === "contactos" && createdClientId && !contactsLoading) {
       void loadClientContacts();
     }
-  }, [loadedTabs, createdClientId, contactsLoading, loadClientContacts]);
+  }, [activeTab, createdClientId, contactsLoading, loadClientContacts]);
 
   /* ---------- Lazy load fiscal data when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("fiscalData") && createdClientId && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
+    if (activeTab === "fiscalData" && createdClientId && !fiscalDataLoading) {
       void loadFiscalData();
     }
-  }, [loadedTabs, createdClientId, fiscalDataLoading, loadFiscalData]);
+  }, [activeTab, createdClientId, fiscalDataLoading, loadFiscalData]);
 
   /* ---------- Lazy load consents when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("consents") && createdClientId && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
+    if (activeTab === "consents" && createdClientId && !consentsLoading) {
       void loadConsents();
       void loadConsentTypes();
     }
-  }, [loadedTabs, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
+  }, [activeTab, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
 
   /* ---------- Consent submit ---------- */
 
@@ -1758,7 +1742,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -1906,7 +1890,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -2516,7 +2500,7 @@ export function ClientsCreatePage() {
           {/* ---------- Tabs ---------- */}
           <HubTabs<ClientCreateTab>
             activeTab={activeTab}
-            onTabChange={handleTabChange}
+            onTabChange={setActiveTab}
             tabs={[
               {
                 id: "informacoes",

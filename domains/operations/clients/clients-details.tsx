@@ -599,15 +599,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-
-  /* ---------- Lazy loading refs ---------- */
-
-  const contactsLoadedRef = useRef(false);
-  const addressesLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
-  const hierarchyLoadedRef = useRef(false);
-  const contactNetworkLoadedRef = useRef(false);
 
   /* ---------- Hierarchy state ---------- */
 
@@ -634,15 +625,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
 
   /* ---------- Contact grid state ---------- */
 
@@ -756,7 +738,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
-    setLoadedTabs(new Set(["informacoes"]));
     setContactGridDensity("medium");
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
@@ -1191,59 +1172,53 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load contacts when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
+    if (activeTab === "contactos" && client?.id && !contactsLoading) {
       void loadClientContacts();
     }
-  }, [loadedTabs, client?.id, contactsLoading, loadClientContacts]);
+  }, [activeTab, client?.id, contactsLoading, loadClientContacts]);
 
   // Lazy load addresses when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("enderecos") && client?.id && !addressesLoadedRef.current && !addressesLoading) {
-      addressesLoadedRef.current = true;
+    if (activeTab === "enderecos" && client?.id && !addressesLoading) {
       void loadClientAddresses();
     }
-  }, [loadedTabs, client?.id, addressesLoading, loadClientAddresses]);
+  }, [activeTab, client?.id, addressesLoading, loadClientAddresses]);
 
   // Lazy load address types when addresses tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("enderecos")) {
+    if (activeTab === "enderecos") {
       void loadAddressTypes();
     }
-  }, [loadedTabs, loadAddressTypes]);
+  }, [activeTab, loadAddressTypes]);
 
   // Lazy load fiscal data when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("fiscalData") && client?.id && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
+    if (activeTab === "fiscalData" && client?.id && !fiscalDataLoading) {
       void loadClientFiscalData();
     }
-  }, [loadedTabs, client?.id, fiscalDataLoading, loadClientFiscalData]);
+  }, [activeTab, client?.id, fiscalDataLoading, loadClientFiscalData]);
 
   // Lazy load consents when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("consents") && client?.id && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
+    if (activeTab === "consents" && client?.id && !consentsLoading) {
       void loadClientConsents();
       void loadConsentTypes();
     }
-  }, [loadedTabs, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
+  }, [activeTab, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
 
   // Lazy load hierarchy when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("hierarchy") && client?.id && !hierarchyLoadedRef.current && !hierarchyLoading) {
-      hierarchyLoadedRef.current = true;
+    if (activeTab === "hierarchy" && client?.id && !hierarchyLoading) {
       void loadClientHierarchy();
     }
-  }, [loadedTabs, client?.id, hierarchyLoading, loadClientHierarchy]);
+  }, [activeTab, client?.id, hierarchyLoading, loadClientHierarchy]);
 
   // Lazy load contact network when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactNetworkLoadedRef.current && !contactNetworkLoading) {
-      contactNetworkLoadedRef.current = true;
+    if (activeTab === "contactos" && client?.id && !contactNetworkLoading) {
       void loadClientContactNetwork();
     }
-  }, [loadedTabs, client?.id, contactNetworkLoading, loadClientContactNetwork]);
+  }, [activeTab, client?.id, contactNetworkLoading, loadClientContactNetwork]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -3964,7 +3939,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4089,7 +4064,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contact Network tab ---------- */
 
   const renderContactNetworkTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4254,7 +4229,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Addresses tab ---------- */
 
   const renderAddressesTab = () => {
-    if (!loadedTabs.has("enderecos")) {
+    if (activeTab !== "enderecos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4484,7 +4459,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Fiscal Data tab ---------- */
 
   const renderFiscalDataTab = () => {
-    if (!loadedTabs.has("fiscalData")) {
+    if (activeTab !== "fiscalData") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4621,7 +4596,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4754,7 +4729,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Hierarchy tab ---------- */
 
   const renderHierarchyTab = () => {
-    if (!loadedTabs.has("hierarchy")) {
+    if (activeTab !== "hierarchy") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4950,7 +4925,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {!loadingClient && (
             <HubTabs<ClientTab>
               activeTab={activeTab}
-              onTabChange={handleTabChange}
+              onTabChange={setActiveTab}
               tabs={[
                 {
                   id: "informacoes",

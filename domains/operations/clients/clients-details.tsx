@@ -601,6 +601,14 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const consentsLoadedRef = useRef(false);
 
+  /* ---------- Lazy loading refs ---------- */
+
+  const contactsLoadedRef = useRef(false);
+  const addressesLoadedRef = useRef(false);
+  const fiscalDataLoadedRef = useRef(false);
+  const hierarchyLoadedRef = useRef(false);
+  const contactNetworkLoadedRef = useRef(false);
+
   /* ---------- Hierarchy state ---------- */
 
   const [hierarchyItems, setHierarchyItems] = useState<ClientHierarchyItem[]>([]);
@@ -1183,17 +1191,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load contacts when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && contacts.length === 0 && !contactsLoading) {
+    if (loadedTabs.has("contactos") && client?.id && !contactsLoadedRef.current && !contactsLoading) {
+      contactsLoadedRef.current = true;
       void loadClientContacts();
     }
-  }, [loadedTabs, client?.id, contacts.length, contactsLoading, loadClientContacts]);
+  }, [loadedTabs, client?.id, contactsLoading, loadClientContacts]);
 
   // Lazy load addresses when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("enderecos") && client?.id && addresses.length === 0 && !addressesLoading) {
+    if (loadedTabs.has("enderecos") && client?.id && !addressesLoadedRef.current && !addressesLoading) {
+      addressesLoadedRef.current = true;
       void loadClientAddresses();
     }
-  }, [loadedTabs, client?.id, addresses.length, addressesLoading, loadClientAddresses]);
+  }, [loadedTabs, client?.id, addressesLoading, loadClientAddresses]);
 
   // Lazy load address types when addresses tab becomes active
   useEffect(() => {
@@ -1204,10 +1214,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load fiscal data when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("fiscalData") && client?.id && fiscalData.length === 0 && !fiscalDataLoading) {
+    if (loadedTabs.has("fiscalData") && client?.id && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
+      fiscalDataLoadedRef.current = true;
       void loadClientFiscalData();
     }
-  }, [loadedTabs, client?.id, fiscalData.length, fiscalDataLoading, loadClientFiscalData]);
+  }, [loadedTabs, client?.id, fiscalDataLoading, loadClientFiscalData]);
 
   // Lazy load consents when tab becomes active
   useEffect(() => {
@@ -1220,17 +1231,19 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   // Lazy load hierarchy when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("hierarchy") && client?.id && hierarchyItems.length === 0 && !hierarchyLoading) {
+    if (loadedTabs.has("hierarchy") && client?.id && !hierarchyLoadedRef.current && !hierarchyLoading) {
+      hierarchyLoadedRef.current = true;
       void loadClientHierarchy();
     }
-  }, [loadedTabs, client?.id, hierarchyItems.length, hierarchyLoading, loadClientHierarchy]);
+  }, [loadedTabs, client?.id, hierarchyLoading, loadClientHierarchy]);
 
   // Lazy load contact network when tab becomes active
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && contactNetwork.length === 0 && !contactNetworkLoading) {
+    if (loadedTabs.has("contactos") && client?.id && !contactNetworkLoadedRef.current && !contactNetworkLoading) {
+      contactNetworkLoadedRef.current = true;
       void loadClientContactNetwork();
     }
-  }, [loadedTabs, client?.id, contactNetwork.length, contactNetworkLoading, loadClientContactNetwork]);
+  }, [loadedTabs, client?.id, contactNetworkLoading, loadClientContactNetwork]);
 
   /* ---------- Client type change handler ---------- */
 

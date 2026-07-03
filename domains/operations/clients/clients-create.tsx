@@ -339,6 +339,8 @@ export function ClientsCreatePage() {
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const consentsLoadedRef = useRef(false);
+  const contactsLoadedRef = useRef(false);
+  const fiscalDataLoadedRef = useRef(false);
 
   /* ---------- Consents grid state ---------- */
 
@@ -1399,18 +1401,20 @@ export function ClientsCreatePage() {
   /* ---------- Lazy load contacts when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("contactos") && createdClientId && contacts.length === 0 && !contactsLoading) {
+    if (loadedTabs.has("contactos") && createdClientId && !contactsLoadedRef.current && !contactsLoading) {
+      contactsLoadedRef.current = true;
       void loadClientContacts();
     }
-  }, [loadedTabs, createdClientId, contacts.length, contactsLoading, loadClientContacts]);
+  }, [loadedTabs, createdClientId, contactsLoading, loadClientContacts]);
 
   /* ---------- Lazy load fiscal data when tab becomes active ---------- */
 
   useEffect(() => {
-    if (loadedTabs.has("fiscalData") && createdClientId && fiscalData.length === 0 && !fiscalDataLoading) {
+    if (loadedTabs.has("fiscalData") && createdClientId && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
+      fiscalDataLoadedRef.current = true;
       void loadFiscalData();
     }
-  }, [loadedTabs, createdClientId, fiscalData.length, fiscalDataLoading, loadFiscalData]);
+  }, [loadedTabs, createdClientId, fiscalDataLoading, loadFiscalData]);
 
   /* ---------- Lazy load consents when tab becomes active ---------- */
 

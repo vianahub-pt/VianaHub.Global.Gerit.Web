@@ -361,6 +361,7 @@ export function ClientsCreatePage() {
     | "hierarchy";
 
   const [activeTab, setActiveTab] = useState<ClientCreateTab>("informacoes");
+  const lastLoadedTabRef = useRef<ClientCreateTab>("informacoes");
 
   /* ---------- Client type change handler ---------- */
 
@@ -1385,31 +1386,6 @@ export function ClientsCreatePage() {
     setContactPage(1);
   }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
 
-  /* ---------- Lazy load contacts when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (activeTab === "contactos" && createdClientId && !contactsLoading) {
-      void loadClientContacts();
-    }
-  }, [activeTab, createdClientId, contactsLoading, loadClientContacts]);
-
-  /* ---------- Lazy load fiscal data when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (activeTab === "fiscalData" && createdClientId && !fiscalDataLoading) {
-      void loadFiscalData();
-    }
-  }, [activeTab, createdClientId, fiscalDataLoading, loadFiscalData]);
-
-  /* ---------- Lazy load consents when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (activeTab === "consents" && createdClientId && !consentsLoading) {
-      void loadConsents();
-      void loadConsentTypes();
-    }
-  }, [activeTab, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
-
   /* ---------- Consent submit ---------- */
 
   const handleConsentSubmit = useCallback(
@@ -2106,14 +2082,6 @@ export function ClientsCreatePage() {
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
 
-  /* ---------- Addresses: load on tab activate ---------- */
-
-  useEffect(() => {
-    if (createdClientId && activeTab === "enderecos") {
-      void loadAddresses();
-    }
-  }, [createdClientId, activeTab, loadAddresses]);
-
   /* ---------- Addresses: submit (create/update) ---------- */
 
   const handleAddressSubmit = useCallback(
@@ -2454,6 +2422,39 @@ export function ClientsCreatePage() {
     },
     [addressSortBy],
   );
+
+  /* ---------- Lazy load tab data when tab changes ---------- */
+
+  useEffect(() => {
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
+
+    if (!createdClientId) return;
+
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        break;
+      case "enderecos":
+        void loadAddresses();
+        break;
+      case "fiscalData":
+        void loadFiscalData();
+        break;
+      case "consents":
+        void loadConsents();
+        void loadConsentTypes();
+        break;
+    }
+  }, [
+    activeTab,
+    createdClientId,
+    loadClientContacts,
+    loadAddresses,
+    loadFiscalData,
+    loadConsents,
+    loadConsentTypes,
+  ]);
 
   /* ==========================
      RENDER

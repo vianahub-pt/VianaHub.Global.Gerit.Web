@@ -625,6 +625,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
+  const lastLoadedTabRef = useRef<ClientTab>("informacoes");
 
   /* ---------- Contact grid state ---------- */
 
@@ -738,6 +739,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
+    lastLoadedTabRef.current = "informacoes";
     setContactGridDensity("medium");
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
@@ -1170,55 +1172,45 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientViewState]);
 
-  // Lazy load contacts when tab becomes active
+  // Lazy load tab data when tab changes
   useEffect(() => {
-    if (activeTab === "contactos" && client?.id && !contactsLoading) {
-      void loadClientContacts();
-    }
-  }, [activeTab, client?.id, contactsLoading, loadClientContacts]);
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
 
-  // Lazy load addresses when tab becomes active
-  useEffect(() => {
-    if (activeTab === "enderecos" && client?.id && !addressesLoading) {
-      void loadClientAddresses();
-    }
-  }, [activeTab, client?.id, addressesLoading, loadClientAddresses]);
+    if (!client?.id) return;
 
-  // Lazy load address types when addresses tab becomes active
-  useEffect(() => {
-    if (activeTab === "enderecos") {
-      void loadAddressTypes();
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        void loadClientContactNetwork();
+        break;
+      case "enderecos":
+        void loadClientAddresses();
+        void loadAddressTypes();
+        break;
+      case "fiscalData":
+        void loadClientFiscalData();
+        break;
+      case "consents":
+        void loadClientConsents();
+        void loadConsentTypes();
+        break;
+      case "hierarchy":
+        void loadClientHierarchy();
+        break;
     }
-  }, [activeTab, loadAddressTypes]);
-
-  // Lazy load fiscal data when tab becomes active
-  useEffect(() => {
-    if (activeTab === "fiscalData" && client?.id && !fiscalDataLoading) {
-      void loadClientFiscalData();
-    }
-  }, [activeTab, client?.id, fiscalDataLoading, loadClientFiscalData]);
-
-  // Lazy load consents when tab becomes active
-  useEffect(() => {
-    if (activeTab === "consents" && client?.id && !consentsLoading) {
-      void loadClientConsents();
-      void loadConsentTypes();
-    }
-  }, [activeTab, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
-
-  // Lazy load hierarchy when tab becomes active
-  useEffect(() => {
-    if (activeTab === "hierarchy" && client?.id && !hierarchyLoading) {
-      void loadClientHierarchy();
-    }
-  }, [activeTab, client?.id, hierarchyLoading, loadClientHierarchy]);
-
-  // Lazy load contact network when tab becomes active
-  useEffect(() => {
-    if (activeTab === "contactos" && client?.id && !contactNetworkLoading) {
-      void loadClientContactNetwork();
-    }
-  }, [activeTab, client?.id, contactNetworkLoading, loadClientContactNetwork]);
+  }, [
+    activeTab,
+    client?.id,
+    loadClientContacts,
+    loadClientContactNetwork,
+    loadClientAddresses,
+    loadAddressTypes,
+    loadClientFiscalData,
+    loadClientConsents,
+    loadConsentTypes,
+    loadClientHierarchy,
+  ]);
 
   /* ---------- Client type change handler ---------- */
 

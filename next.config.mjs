@@ -6,20 +6,8 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  async headers() {
-    return [
-      {
-        source: "/login/:path*",
-        headers: [
-          {
-            key: "Link",
-            value:
-              "</gerit-login-light.jpg>; rel=preload; as=image; type=image/jpeg; fetchpriority=high",
-          },
-        ],
-      },
-    ];
-  },
+  // Preload removido: a imagem gerit-login-light.jpg já é carregada com loading="eager" e fetchPriority="high"
+  // no componente LoginVisualPanel, tornando o preload via Link header redundante.
 };
 
 export default nextConfig;

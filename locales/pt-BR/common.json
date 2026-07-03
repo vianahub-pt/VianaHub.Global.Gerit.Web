@@ -679,5 +679,166 @@
   "roles.detail.helper": "Selecione uma função ou inicie um novo cadastro para continuar.",
   "roles.bulk.upload.label": "Importar CSV",
   "roles.bulk.upload.success": "Importação de {{resource}} concluída com sucesso.",
-  "roles.bulk.upload.error": "Não foi possível importar {{resource}}."
+  "roles.bulk.upload.error": "Não foi possível importar {{resource}}.",
+  "auth": {
+    "login": {
+      "toggleTheme": "Alternar tema"
+    }
+  },
+  "clients": {
+    "actions": {
+      "confirm": "Confirmar"
+    },
+    "contacts": {
+      "deleteConfirm": {
+        "title": "Excluir contato",
+        "description": "Tem certeza que deseja excluir o contato \"{{name}}\"?"
+      }
+    },
+    "addresses": {
+      "form": {
+        "addressType": "Tipo de endereço",
+        "addressTypePlaceholder": "Selecione o tipo",
+        "complement": "Complemento",
+        "isPrimary": "Endereço principal",
+        "isPrimaryOff": "Não",
+        "isPrimaryOn": "Sim",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "neighborhood": "Bairro",
+        "note": "Observações",
+        "number": "Número"
+      }
+    },
+    "consents": {
+      "confirm": {
+        "delete": "Confirmar exclusão do consentimento {{consentTypeName}}?"
+      },
+      "empty": "Nenhum consentimento cadastrado.",
+      "errors": {
+        "delete": "Não foi possível excluir o consentimento.",
+        "load": "Não foi possível carregar os consentimentos.",
+        "save": "Não foi possível salvar o consentimento.",
+        "status": "Não foi possível atualizar o estado do consentimento."
+      },
+      "form": {
+        "consentType": "Tipo de consentimento",
+        "grantedDate": "Data de concessão",
+        "ipAddress": "Endereço IP",
+        "origin": "Origem",
+        "revokedDate": "Data de revogação",
+        "userAgent": "User Agent"
+      },
+      "table": {
+        "actions": "Ações",
+        "consentType": "Tipo de consentimento",
+        "granted": "Concedido",
+        "grantedDate": "Data de concessão",
+        "origin": "Origem",
+        "revokedDate": "Data de revogação"
+      },
+      "toasts": {
+        "activated": "Consentimento ativado com sucesso.",
+        "created": "Consentimento salvo com sucesso.",
+        "deactivated": "Consentimento desativado com sucesso.",
+        "deleted": "Consentimento excluído com sucesso.",
+        "updated": "Consentimento atualizado com sucesso."
+      },
+      "validation": {
+        "required": "Tipo de consentimento é obrigatório."
+      }
+    },
+    "create": {
+      "tabs": {
+        "saveFirst": "Salve primeiro as Informações do cliente para acessar esta aba."
+      }
+    },
+    "detail": {
+      "loadingTab": "Clique na aba para carregar..."
+    },
+    "fiscalData": {
+      "confirm": {
+        "delete": "Confirmar exclusão dos dados fiscais {{taxNumber}}?"
+      },
+      "empty": "Nenhum dado fiscal cadastrado.",
+      "errors": {
+        "delete": "Não foi possível excluir os dados fiscais.",
+        "load": "Não foi possível carregar os dados fiscais.",
+        "save": "Não foi possível salvar os dados fiscais.",
+        "status": "Não foi possível atualizar o estado dos dados fiscais."
+      },
+      "form": {
+        "fiscalCountry": "País fiscal",
+        "fiscalEmail": "E-mail fiscal",
+        "iban": "IBAN",
+        "isVatRegistered": "Registrado no IVA",
+        "taxNumber": "CPF/CNPJ",
+        "vatNumber": "Número IVA"
+      },
+      "table": {
+        "actions": "Ações",
+        "fiscalCountry": "País fiscal",
+        "fiscalEmail": "E-mail fiscal",
+        "iban": "IBAN",
+        "isVatRegistered": "IVA",
+        "taxNumber": "CPF/CNPJ",
+        "vatNumber": "Número IVA"
+      },
+      "toasts": {
+        "activated": "Dados fiscais ativados com sucesso.",
+        "created": "Dados fiscais salvos com sucesso.",
+        "deactivated": "Dados fiscais desativados com sucesso.",
+        "deleted": "Dados fiscais excluídos com sucesso.",
+        "updated": "Dados fiscais atualizados com sucesso."
+      },
+      "validation": {
+        "required": "CPF/CNPJ, País fiscal e E-mail fiscal são obrigatórios."
+      }
+    },
+    "hierarchy": {
+      "confirm": {
+        "delete": "Confirmar exclusão da relação {{parentClientName}} → {{childClientName}}?"
+      },
+      "empty": "Nenhuma relação de hierarquia cadastrada.",
+      "errors": {
+        "delete": "Não foi possível excluir a relação.",
+        "load": "Não foi possível carregar a hierarquia.",
+        "save": "Não foi possível salvar a relação.",
+        "status": "Não foi possível atualizar o estado da relação."
+      },
+      "form": {
+        "childClient": "Cliente filho",
+        "parentClient": "Cliente pai",
+        "relationshipType": "Tipo de relação"
+      },
+      "table": {
+        "actions": "Ações",
+        "childClient": "Cliente filho",
+        "parentClient": "Cliente pai",
+        "relationshipType": "Tipo de relação"
+      },
+      "toasts": {
+        "activated": "Relação ativada com sucesso.",
+        "created": "Relação salva com sucesso.",
+        "deactivated": "Relação desativada com sucesso.",
+        "deleted": "Relação excluída com sucesso.",
+        "updated": "Relação atualizada com sucesso."
+      },
+      "validation": {
+        "required": "Cliente pai e filho são obrigatórios."
+      }
+    }
+  },
+  "common": {
+    "no": "Não",
+    "yes": "Sim"
+  },
+  "workspace": {
+    "sidebar": {
+      "overview": "Visão geral",
+      "managing": "Gestão",
+      "interventions": "Intervenções",
+      "supportingData": "Dados de suporte"
+    }
+  }
 }

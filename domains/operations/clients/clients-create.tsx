@@ -338,9 +338,6 @@ export function ClientsCreatePage() {
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-  const contactsLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
 
   /* ---------- Consents grid state ---------- */
 
@@ -354,16 +351,6 @@ export function ClientsCreatePage() {
 
   /* ---------- Tab lazy loading state ---------- */
 
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientCreateTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
-
   type ClientCreateTab =
     | "informacoes"
     | "contactos"
@@ -374,6 +361,7 @@ export function ClientsCreatePage() {
     | "hierarchy";
 
   const [activeTab, setActiveTab] = useState<ClientCreateTab>("informacoes");
+  const lastLoadedTabRef = useRef<ClientCreateTab>("informacoes");
 
   /* ---------- Client type change handler ---------- */
 
@@ -841,7 +829,7 @@ export function ClientsCreatePage() {
 
           if (createdId !== null) {
             setCreatedClientId(String(createdId));
-            handleTabChange("contactos");
+            setActiveTab("contactos");
           }
         }
       } catch (error) {
@@ -1398,34 +1386,6 @@ export function ClientsCreatePage() {
     setContactPage(1);
   }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
 
-  /* ---------- Lazy load contacts when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("contactos") && createdClientId && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
-      void loadClientContacts();
-    }
-  }, [loadedTabs, createdClientId, contactsLoading, loadClientContacts]);
-
-  /* ---------- Lazy load fiscal data when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("fiscalData") && createdClientId && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
-      void loadFiscalData();
-    }
-  }, [loadedTabs, createdClientId, fiscalDataLoading, loadFiscalData]);
-
-  /* ---------- Lazy load consents when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("consents") && createdClientId && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
-      void loadConsents();
-      void loadConsentTypes();
-    }
-  }, [loadedTabs, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
-
   /* ---------- Consent submit ---------- */
 
   const handleConsentSubmit = useCallback(
@@ -1758,7 +1718,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -1906,7 +1866,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -2121,14 +2081,6 @@ export function ClientsCreatePage() {
       setAddressesLoading(false);
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
-
-  /* ---------- Addresses: load on tab activate ---------- */
-
-  useEffect(() => {
-    if (createdClientId && activeTab === "enderecos") {
-      void loadAddresses();
-    }
-  }, [createdClientId, activeTab, loadAddresses]);
 
   /* ---------- Addresses: submit (create/update) ---------- */
 
@@ -2471,6 +2423,39 @@ export function ClientsCreatePage() {
     [addressSortBy],
   );
 
+  /* ---------- Lazy load tab data when tab changes ---------- */
+
+  useEffect(() => {
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
+
+    if (!createdClientId) return;
+
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        break;
+      case "enderecos":
+        void loadAddresses();
+        break;
+      case "fiscalData":
+        void loadFiscalData();
+        break;
+      case "consents":
+        void loadConsents();
+        void loadConsentTypes();
+        break;
+    }
+  }, [
+    activeTab,
+    createdClientId,
+    loadClientContacts,
+    loadAddresses,
+    loadFiscalData,
+    loadConsents,
+    loadConsentTypes,
+  ]);
+
   /* ==========================
      RENDER
      ========================== */
@@ -2516,7 +2501,7 @@ export function ClientsCreatePage() {
           {/* ---------- Tabs ---------- */}
           <HubTabs<ClientCreateTab>
             activeTab={activeTab}
-            onTabChange={handleTabChange}
+            onTabChange={setActiveTab}
             tabs={[
               {
                 id: "informacoes",

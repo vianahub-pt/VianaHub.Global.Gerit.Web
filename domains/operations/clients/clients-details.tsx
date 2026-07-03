@@ -599,15 +599,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-
-  /* ---------- Lazy loading refs ---------- */
-
-  const contactsLoadedRef = useRef(false);
-  const addressesLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
-  const hierarchyLoadedRef = useRef(false);
-  const contactNetworkLoadedRef = useRef(false);
 
   /* ---------- Hierarchy state ---------- */
 
@@ -634,15 +625,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
+  const lastLoadedTabRef = useRef<ClientTab>("informacoes");
 
   /* ---------- Contact grid state ---------- */
 
@@ -756,7 +739,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
-    setLoadedTabs(new Set(["informacoes"]));
+    lastLoadedTabRef.current = "informacoes";
     setContactGridDensity("medium");
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
@@ -1189,61 +1172,45 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientViewState]);
 
-  // Lazy load contacts when tab becomes active
+  // Lazy load tab data when tab changes
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
-      void loadClientContacts();
-    }
-  }, [loadedTabs, client?.id, contactsLoading, loadClientContacts]);
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
 
-  // Lazy load addresses when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("enderecos") && client?.id && !addressesLoadedRef.current && !addressesLoading) {
-      addressesLoadedRef.current = true;
-      void loadClientAddresses();
-    }
-  }, [loadedTabs, client?.id, addressesLoading, loadClientAddresses]);
+    if (!client?.id) return;
 
-  // Lazy load address types when addresses tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("enderecos")) {
-      void loadAddressTypes();
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        void loadClientContactNetwork();
+        break;
+      case "enderecos":
+        void loadClientAddresses();
+        void loadAddressTypes();
+        break;
+      case "fiscalData":
+        void loadClientFiscalData();
+        break;
+      case "consents":
+        void loadClientConsents();
+        void loadConsentTypes();
+        break;
+      case "hierarchy":
+        void loadClientHierarchy();
+        break;
     }
-  }, [loadedTabs, loadAddressTypes]);
-
-  // Lazy load fiscal data when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("fiscalData") && client?.id && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
-      void loadClientFiscalData();
-    }
-  }, [loadedTabs, client?.id, fiscalDataLoading, loadClientFiscalData]);
-
-  // Lazy load consents when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("consents") && client?.id && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
-      void loadClientConsents();
-      void loadConsentTypes();
-    }
-  }, [loadedTabs, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
-
-  // Lazy load hierarchy when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("hierarchy") && client?.id && !hierarchyLoadedRef.current && !hierarchyLoading) {
-      hierarchyLoadedRef.current = true;
-      void loadClientHierarchy();
-    }
-  }, [loadedTabs, client?.id, hierarchyLoading, loadClientHierarchy]);
-
-  // Lazy load contact network when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactNetworkLoadedRef.current && !contactNetworkLoading) {
-      contactNetworkLoadedRef.current = true;
-      void loadClientContactNetwork();
-    }
-  }, [loadedTabs, client?.id, contactNetworkLoading, loadClientContactNetwork]);
+  }, [
+    activeTab,
+    client?.id,
+    loadClientContacts,
+    loadClientContactNetwork,
+    loadClientAddresses,
+    loadAddressTypes,
+    loadClientFiscalData,
+    loadClientConsents,
+    loadConsentTypes,
+    loadClientHierarchy,
+  ]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -3964,7 +3931,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4089,7 +4056,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contact Network tab ---------- */
 
   const renderContactNetworkTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4254,7 +4221,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Addresses tab ---------- */
 
   const renderAddressesTab = () => {
-    if (!loadedTabs.has("enderecos")) {
+    if (activeTab !== "enderecos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4484,7 +4451,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Fiscal Data tab ---------- */
 
   const renderFiscalDataTab = () => {
-    if (!loadedTabs.has("fiscalData")) {
+    if (activeTab !== "fiscalData") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4621,7 +4588,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4754,7 +4721,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Hierarchy tab ---------- */
 
   const renderHierarchyTab = () => {
-    if (!loadedTabs.has("hierarchy")) {
+    if (activeTab !== "hierarchy") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4950,7 +4917,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {!loadingClient && (
             <HubTabs<ClientTab>
               activeTab={activeTab}
-              onTabChange={handleTabChange}
+              onTabChange={setActiveTab}
               tabs={[
                 {
                   id: "informacoes",

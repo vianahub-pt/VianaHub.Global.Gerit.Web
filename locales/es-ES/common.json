@@ -773,5 +773,29 @@
   "roles.detail.helper": "Selecciona una función o inicia un nuevo registro para continuar.",
   "roles.bulk.upload.label": "Importar CSV",
   "roles.bulk.upload.success": "La importación de {{resource}} se completó con éxito.",
-  "roles.bulk.upload.error": "No se pudo importar {{resource}}."
+  "roles.bulk.upload.error": "No se pudo importar {{resource}}.",
+  "auth": {
+    "login": {
+      "toggleTheme": "Cambiar tema"
+    }
+  },
+  "clients": {
+    "actions": {
+      "confirm": "Confirmar"
+    },
+    "contacts": {
+      "deleteConfirm": {
+        "title": "Eliminar contacto",
+        "description": "¿Está seguro de que desea eliminar el contacto \"{{name}}\"?"
+      }
+    }
+  },
+  "workspace": {
+    "sidebar": {
+      "overview": "Resumen",
+      "managing": "Gestión",
+      "interventions": "Intervenciones",
+      "supportingData": "Datos de soporte"
+    }
+  }
 }

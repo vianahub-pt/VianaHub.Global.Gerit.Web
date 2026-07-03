@@ -773,5 +773,29 @@
   "roles.detail.helper": "Select a role or start a new registration to continue.",
   "roles.bulk.upload.label": "Import CSV",
   "roles.bulk.upload.success": "{{resource}} import completed successfully.",
-  "roles.bulk.upload.error": "Unable to import {{resource}}."
+  "roles.bulk.upload.error": "Unable to import {{resource}}.",
+  "auth": {
+    "login": {
+      "toggleTheme": "Toggle theme"
+    }
+  },
+  "clients": {
+    "actions": {
+      "confirm": "Confirm"
+    },
+    "contacts": {
+      "deleteConfirm": {
+        "title": "Delete contact",
+        "description": "Are you sure you want to delete the contact \"{{name}}\"?"
+      }
+    }
+  },
+  "workspace": {
+    "sidebar": {
+      "overview": "Overview",
+      "managing": "Managing",
+      "interventions": "Interventions",
+      "supportingData": "Supporting data"
+    }
+  }
 }

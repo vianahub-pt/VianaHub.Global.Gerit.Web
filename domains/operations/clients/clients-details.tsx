@@ -27,6 +27,7 @@ import {
   normalizeContactNetwork,
   parsePagedContactNetwork,
   getContactNetworkSortValue,
+  normalizeConsentOriginTypes,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -53,8 +54,10 @@ import {
   initialFiscalDataFormState,
   type ClientConsentItem,
   type ConsentTypeItem,
+  type ConsentOriginTypeItem,
   type ClientConsentFormState,
   initialConsentFormState,
+  type ConsentSortColumn,
   type ClientHierarchyItem,
   type ClientHierarchyFormState,
   initialHierarchyFormState,
@@ -89,7 +92,6 @@ const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
 type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
 
 /* ---------- Pagination helper ---------- */
@@ -374,12 +376,26 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
   if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const consentTypeId = typeof candidate.consentTypeId === "number" ? candidate.consentTypeId : typeof candidate.consentTypeId === "string" ? Number(candidate.consentTypeId) : 0;
-  const consentTypeName =
-    typeof candidate.consentTypeName === "string"
-      ? candidate.consentTypeName
-      : typeof candidate.consentType === "string"
-        ? candidate.consentType
-        : null;
+  const consentType =
+    typeof candidate.consentType === "string"
+      ? candidate.consentType
+      : typeof candidate.consentTypeName === "string"
+        ? candidate.consentTypeName
+        : "";
+  const consentOriginTypeId =
+    typeof candidate.consentOriginTypeId === "number"
+      ? candidate.consentOriginTypeId
+      : typeof candidate.consentOriginTypeId === "string"
+        ? Number(candidate.consentOriginTypeId)
+        : 0;
+  const consentOriginType =
+    typeof candidate.consOriginType === "string"
+      ? candidate.consOriginType
+      : typeof candidate.consentOriginType === "string"
+        ? candidate.consentOriginType
+        : typeof candidate.origin === "string"
+          ? candidate.origin
+          : "";
   const granted =
     typeof candidate.granted === "boolean"
       ? candidate.granted
@@ -387,15 +403,13 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
         ? candidate.granted.toLowerCase() === "true"
         : false;
   const grantedDate =
-    typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
+    typeof candidate.grantedDate === "string" ? candidate.grantedDate : "";
   const revokedDate =
-    typeof candidate.revokedDate === "string" ? candidate.revokedDate : null;
-  const origin =
-    typeof candidate.origin === "string" ? candidate.origin : null;
+    typeof candidate.revokedDate === "string" ? candidate.revokedDate : undefined;
   const ipAddress =
-    typeof candidate.ipAddress === "string" ? candidate.ipAddress : null;
+    typeof candidate.ipAddress === "string" ? candidate.ipAddress : undefined;
   const userAgent =
-    typeof candidate.userAgent === "string" ? candidate.userAgent : null;
+    typeof candidate.userAgent === "string" ? candidate.userAgent : undefined;
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
@@ -413,13 +427,16 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
 
   return {
     id: rawId,
+    tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : 0,
     clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
+    client: typeof candidate.client === "string" ? candidate.client : "",
     consentTypeId,
-    consentTypeName,
+    consentType,
+    consentOriginTypeId,
+    consentOriginType,
     granted,
     grantedDate,
     revokedDate,
-    origin,
     ipAddress,
     userAgent,
     isActive: Boolean(isActiveValue),
@@ -599,6 +616,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
+  const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
 
   /* ---------- Hierarchy state ---------- */
 
@@ -664,7 +682,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentStatusFilter, setConsentStatusFilter] = useState("all");
   const [consentPage, setConsentPage] = useState(1);
   const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("ConsentType");
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("consentType");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Hierarchy grid state ---------- */
@@ -776,7 +794,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setAddressSortDirection("asc");
     setFiscalDataSortBy("TaxNumber");
     setFiscalDataSortDirection("asc");
-    setConsentSortBy("ConsentType");
+    setConsentSortBy("consentType");
     setConsentSortDirection("asc");
     setHierarchySortBy("ParentClient");
     setHierarchySortDirection("asc");
@@ -1081,6 +1099,22 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [consentTypes.length, fetchWithAuth]);
 
+  /* ---------- Load consent origin types ---------- */
+
+  const loadConsentOriginTypes = useCallback(async () => {
+    if (consentOriginTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/consent-origin-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeConsentOriginTypes(payload);
+      setConsentOriginTypes(parsed);
+    } catch {
+      // Silent fail — consent origin types are optional
+    }
+  }, [consentOriginTypes.length, fetchWithAuth]);
+
   /* ---------- Load hierarchy ---------- */
 
   const loadClientHierarchy = useCallback(async () => {
@@ -1194,6 +1228,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       case "consents":
         void loadClientConsents();
         void loadConsentTypes();
+        void loadConsentOriginTypes();
         break;
       case "hierarchy":
         void loadClientHierarchy();
@@ -1209,6 +1244,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     loadClientFiscalData,
     loadClientConsents,
     loadConsentTypes,
+    loadConsentOriginTypes,
     loadClientHierarchy,
   ]);
 
@@ -2147,10 +2183,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       try {
         const payload = {
           consentTypeId: Number(consentTypeId),
+          consentOriginTypeId: consentFormState.consentOriginTypeId ? Number(consentFormState.consentOriginTypeId) : null,
           granted: consentFormState.granted,
           grantedDate: consentFormState.grantedDate || null,
           revokedDate: consentFormState.revokedDate || null,
-          origin: consentFormState.origin.trim() || null,
           ipAddress: consentFormState.ipAddress.trim() || null,
           userAgent: consentFormState.userAgent.trim() || null,
         };
@@ -2200,10 +2236,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setEditingConsent(data);
     setConsentFormState({
       consentTypeId: String(data.consentTypeId),
+      consentOriginTypeId: String(data.consentOriginTypeId),
       granted: data.granted,
       grantedDate: data.grantedDate ?? "",
       revokedDate: data.revokedDate ?? "",
-      origin: data.origin ?? "",
       ipAddress: data.ipAddress ?? "",
       userAgent: data.userAgent ?? "",
     });
@@ -2281,7 +2317,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         logError("clients.details.consentDelete", "Falha ao eliminar consentimento", error, {
           clientId: client?.id,
           consentId: data.id,
-          consentTypeName: data.consentTypeName,
+          consentTypeName: data.consentType,
         });
         toast({
           title: t("clients.toasts.errorTitle"),
@@ -3254,11 +3290,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
     () => [
-      { key: "ConsentType", label: t("clients.consents.table.consentType") },
-      { key: "Granted", label: t("clients.consents.table.granted") },
-      { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
-      { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },
-      { key: "Origin", label: t("clients.consents.table.origin") },
+      { key: "consentType", label: t("clients.consents.table.consentType") },
+      { key: "consentOriginType", label: t("clients.consents.table.consentOriginType") },
+      { key: "granted", label: t("clients.consents.table.granted") },
+      { key: "grantedDate", label: t("clients.consents.table.grantedDate") },
     ],
     [t],
   );
@@ -3281,8 +3316,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       }
       if (!searchTerm) return true;
       return (
-        (item.consentTypeName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.origin ?? "").toLowerCase().includes(searchTerm)
+        (item.consentType ?? "").toLowerCase().includes(searchTerm) ||
+        (item.consentOriginType ?? "").toLowerCase().includes(searchTerm)
       );
     });
   }, [consentSearch, consentStatusFilter, consents]);
@@ -3293,25 +3328,25 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       let a = "";
       let b = "";
       switch (consentSortBy) {
-        case "ConsentType":
-          a = (current.consentTypeName ?? "").toLowerCase();
-          b = (next.consentTypeName ?? "").toLowerCase();
+        case "consentType":
+          a = (current.consentType ?? "").toLowerCase();
+          b = (next.consentType ?? "").toLowerCase();
           break;
-        case "Granted":
+        case "consentOriginType":
+          a = (current.consentOriginType ?? "").toLowerCase();
+          b = (next.consentOriginType ?? "").toLowerCase();
+          break;
+        case "granted":
           a = current.granted ? "1" : "0";
           b = next.granted ? "1" : "0";
           break;
-        case "GrantedDate":
+        case "grantedDate":
           a = (current.grantedDate ?? "").toLowerCase();
           b = (next.grantedDate ?? "").toLowerCase();
           break;
-        case "RevokedDate":
-          a = (current.revokedDate ?? "").toLowerCase();
-          b = (next.revokedDate ?? "").toLowerCase();
-          break;
-        case "Origin":
-          a = (current.origin ?? "").toLowerCase();
-          b = (next.origin ?? "").toLowerCase();
+        case "isActive":
+          a = current.isActive ? "1" : "0";
+          b = next.isActive ? "1" : "0";
           break;
       }
       const comparison = a.localeCompare(b);
@@ -3347,7 +3382,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   const consentRowCells = useCallback(
     (item: ClientConsentItem) => [
-      item.consentTypeName ?? "-",
+      item.consentType ?? "-",
+      item.consentOriginType ?? "-",
       item.granted ? (
         <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
           {t("common.yes")}
@@ -3358,8 +3394,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         </span>
       ),
       item.grantedDate ?? "-",
-      item.revokedDate ?? "-",
-      item.origin ?? "-",
     ],
     [t],
   );
@@ -4616,12 +4650,17 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               }))}
               placeholder={t("clients.form.selectOption")}
             />
-            <FormField
-              label={t("clients.consents.form.origin")}
-              value={consentFormState.origin}
+            <SelectField
+              label={t("clients.consents.form.consentOriginType")}
+              value={consentFormState.consentOriginTypeId}
               onChange={(v) =>
-                setConsentFormState((prev) => ({ ...prev, origin: v }))
+                setConsentFormState((prev) => ({ ...prev, consentOriginTypeId: v }))
               }
+              options={consentOriginTypes.map((cot) => ({
+                value: String(cot.id),
+                label: cot.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
             />
             <FormField
               label={t("clients.consents.form.grantedDate")}
@@ -4999,7 +5038,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         title={t("clients.toasts.validationTitle")}
         description={
           consentDeleteRef.current
-            ? t("clients.consents.confirm.delete", { consentTypeName: consentDeleteRef.current.consentTypeName ?? t("clients.consents.table.consentType") })
+            ? t("clients.consents.confirm.delete", { consentTypeName: consentDeleteRef.current.consentType ?? t("clients.consents.table.consentType") })
             : ""
         }
         confirmLabel={t("clients.actions.delete")}

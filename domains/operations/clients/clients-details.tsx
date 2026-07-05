@@ -176,7 +176,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -1230,9 +1230,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         void loadConsentTypes();
         void loadConsentOriginTypes();
         break;
-      case "hierarchy":
-        void loadClientHierarchy();
-        break;
     }
   }, [
     activeTab,
@@ -1245,7 +1242,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     loadClientConsents,
     loadConsentTypes,
     loadConsentOriginTypes,
-    loadClientHierarchy,
   ]);
 
   /* ---------- Client type change handler ---------- */
@@ -4983,11 +4979,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                   label: t("clients.detail.tabs.consentsSummary"),
                   panel: renderConsentsTab(),
                 },
-                {
-                  id: "hierarchy",
-                  label: t("clients.detail.tabs.hierarchySummary"),
-                  panel: renderHierarchyTab(),
-                },
+
               ]}
             />
           )}

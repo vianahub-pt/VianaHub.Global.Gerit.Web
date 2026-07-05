@@ -186,41 +186,51 @@ export interface ConsentTypeItem {
   isActive: boolean;
 }
 
+export interface ConsentOriginTypeItem {
+  id: number;
+  name: string;
+  description: string;
+  isActive: boolean;
+}
+
 export interface ClientConsentItem {
   id: number;
+  tenantId: number;
   clientId: number;
+  client: string;
   consentTypeId: number;
-  consentTypeName: string | null;
+  consentType: string;
+  consentOriginTypeId: number;
+  consentOriginType: string;
   granted: boolean;
-  grantedDate: string | null;
-  revokedDate: string | null;
-  origin: string | null;
-  ipAddress: string | null;
-  userAgent: string | null;
+  grantedDate: string;
+  revokedDate?: string;
+  ipAddress?: string;
+  userAgent?: string;
   isActive: boolean;
 }
 
 export interface ClientConsentFormState {
   consentTypeId: string;
+  consentOriginTypeId: string;
   granted: boolean;
   grantedDate: string;
   revokedDate: string;
-  origin: string;
   ipAddress: string;
   userAgent: string;
 }
 
 export const initialConsentFormState: ClientConsentFormState = {
   consentTypeId: "",
+  consentOriginTypeId: "",
   granted: false,
   grantedDate: "",
   revokedDate: "",
-  origin: "",
   ipAddress: "",
   userAgent: "",
 };
 
-export type ConsentSortColumn = "ConsentTypeId" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin" | "IpAddress";
+export type ConsentSortColumn = "consentType" | "consentOriginType" | "granted" | "grantedDate" | "isActive";
 
 /* ---------- Client Hierarchy ---------- */
 

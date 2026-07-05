@@ -31,6 +31,7 @@ import {
   normalizeConsentTypes,
   normalizeConsentOriginTypes,
 } from "@/domains/operations/clients/client-utils";
+import { useAcquisitionSourceTypes } from "./useAcquisitionSourceTypes";
 import { Textarea } from "@/shared/ui/textarea";
 import {
   FormField,
@@ -39,7 +40,6 @@ import {
   isIndividualType,
   isCompanyType,
   CLIENT_TYPE_OPTIONS,
-  ORIGIN_OPTIONS,
   GENDER_OPTIONS,
   GENDER_OPTIONS_KEYS,
   DOCUMENT_TYPE_OPTIONS,
@@ -235,6 +235,8 @@ export function ClientsCreatePage() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
+
+  const { acquisitionSourceTypes, isLoading: isLoadingOrigins } = useAcquisitionSourceTypes();
 
   const [clientFormState, setClientFormState] = useState<ClientFormState>(
     initialClientFormState,
@@ -449,10 +451,12 @@ export function ClientsCreatePage() {
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 3: E-mail — 3 colunas */}
@@ -634,10 +638,12 @@ export function ClientsCreatePage() {
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 6: Estado */}

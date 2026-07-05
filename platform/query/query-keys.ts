@@ -8,5 +8,7 @@ export const queryKeys = {
     ["interventions", tenantId, filters ?? {}] as const,
   clients: (tenantId: number, filters?: Record<string, unknown>) =>
     ["clients", tenantId, filters ?? {}] as const,
+  acquisitionSourceTypes: (tenantId: number) =>
+    ["acquisitionSourceTypes", tenantId] as const,
 } as const;
 

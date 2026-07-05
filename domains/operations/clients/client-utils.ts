@@ -7,6 +7,7 @@ import {
   ConsentTypeItem,
   ConsentOriginTypeItem,
   AddressItem,
+  AcquisitionSourceType,
   type AddressSortColumn,
   type ContactNetworkItem,
   type ContactNetworkSortColumn,
@@ -370,6 +371,26 @@ export function normalizeConsentOriginTypes(payload: unknown): ConsentOriginType
             ? candidate.active
             : true,
     }));
+}
+
+/* ---------- Acquisition Source Types normalize ---------- */
+
+export function normalizeAcquisitionSourceTypes(payload: unknown): AcquisitionSourceType[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((candidate) => ({
+      id: typeof candidate.id === "number" ? candidate.id : 0,
+      name: typeof candidate.name === "string" ? candidate.name : "",
+      description: typeof candidate.description === "string" ? candidate.description : "",
+      isActive:
+        typeof candidate.isActive === "boolean"
+          ? candidate.isActive
+          : typeof candidate.active === "boolean"
+            ? candidate.active
+            : true,
+    }))
+    .filter((item) => item.isActive);
 }
 
 /* ---------- Consent Types normalize ---------- */

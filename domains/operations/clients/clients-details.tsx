@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 
+import { useAcquisitionSourceTypes } from "./useAcquisitionSourceTypes";
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
 import { ClientItem } from "@/domains/operations/clients/client-models";
@@ -36,7 +37,6 @@ import {
   isIndividualType,
   isCompanyType,
   CLIENT_TYPE_OPTIONS,
-  ORIGIN_OPTIONS,
   GENDER_OPTIONS,
   GENDER_OPTIONS_KEYS,
   DOCUMENT_TYPE_OPTIONS,
@@ -481,6 +481,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const { toast } = useToast();
   const router = useRouter();
   const clientLoadRequestRef = useRef(0);
+
+  const { acquisitionSourceTypes, isLoading: isLoadingOrigins } = useAcquisitionSourceTypes();
 
   const clientId = useMemo(() => {
     if (!clientIdProp) return null;
@@ -3226,10 +3228,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 3: E-mail — 3 colunas */}
@@ -3411,10 +3415,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 6: Estado */}

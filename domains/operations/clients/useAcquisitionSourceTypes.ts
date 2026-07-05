@@ -1,36 +1,39 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useState, useCallback, useEffect } from "react";
 import { useAuth } from "@/platform/auth";
-import { queryKeys } from "@/platform/query";
 import { normalizeAcquisitionSourceTypes } from "./client-utils";
 import type { AcquisitionSourceType } from "./client-models";
 
 export function useAcquisitionSourceTypes() {
-  const { fetchWithAuth, tenantId } = useAuth();
+  const { fetchWithAuth, tenantId, isAuthenticated, isHydrating } = useAuth();
+  const [acquisitionSourceTypes, setAcquisitionSourceTypes] = useState<AcquisitionSourceType[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
-  const { data, isLoading, isError, error, refetch } = useQuery({
-    queryKey: queryKeys.acquisitionSourceTypes(tenantId ?? 0),
-    queryFn: async () => {
-      const response = await fetchWithAuth("/api/gerit/v1/acquisition-source-types", {
-        method: "GET",
-      });
-      if (!response) return [];
+  const loadAcquisitionSourceTypes = useCallback(async () => {
+    if (acquisitionSourceTypes.length > 0) return;
+    setIsLoading(true);
+    setIsError(false);
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/acquisition-source-types", { method: "GET" });
+      if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
-      if (!response.ok) {
-        throw new Error("Failed to fetch acquisition source types");
-      }
-      return normalizeAcquisitionSourceTypes(payload);
-    },
-    enabled: typeof tenantId === "number" && tenantId > 0,
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
+      if (!response.ok) return;
+      const parsed = normalizeAcquisitionSourceTypes(payload);
+      setAcquisitionSourceTypes(parsed);
+    } catch {
+      setIsError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [acquisitionSourceTypes.length, fetchWithAuth]);
 
-  return {
-    acquisitionSourceTypes: (data as AcquisitionSourceType[]) ?? [],
-    isLoading,
-    isError,
-    error,
-    refetch,
-  };
+  useEffect(() => {
+    if (!isHydrating && isAuthenticated && tenantId) {
+      void loadAcquisitionSourceTypes();
+    }
+  }, [isHydrating, isAuthenticated, tenantId, loadAcquisitionSourceTypes]);
+
+  return { acquisitionSourceTypes, isLoading, isError };
 }

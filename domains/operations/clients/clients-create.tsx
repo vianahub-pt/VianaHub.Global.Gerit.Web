@@ -30,8 +30,9 @@ import {
   getConsentSortValue,
   normalizeConsentTypes,
   normalizeConsentOriginTypes,
+  normalizeAcquisitionSourceTypes,
 } from "@/domains/operations/clients/client-utils";
-import { useAcquisitionSourceTypes } from "./useAcquisitionSourceTypes";
+import type { AcquisitionSourceType } from "./client-models";
 import { Textarea } from "@/shared/ui/textarea";
 import {
   FormField,
@@ -236,8 +237,6 @@ export function ClientsCreatePage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const { acquisitionSourceTypes, isLoading: isLoadingOrigins } = useAcquisitionSourceTypes();
-
   const [clientFormState, setClientFormState] = useState<ClientFormState>(
     initialClientFormState,
   );
@@ -343,6 +342,7 @@ export function ClientsCreatePage() {
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
+  const [acquisitionSourceTypes, setAcquisitionSourceTypes] = useState<AcquisitionSourceType[]>([]);
 
   /* ---------- Consents grid state ---------- */
 
@@ -1034,6 +1034,22 @@ export function ClientsCreatePage() {
       // Silent fail — consent origin types are optional
     }
   }, [consentOriginTypes.length, fetchWithAuth]);
+
+  /* ---------- Load acquisition source types ---------- */
+
+  const loadAcquisitionSourceTypes = useCallback(async () => {
+    if (acquisitionSourceTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/acquisition-source-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeAcquisitionSourceTypes(payload);
+      setAcquisitionSourceTypes(parsed);
+    } catch {
+      // Silent fail — acquisition source types are optional
+    }
+  }, [acquisitionSourceTypes.length, fetchWithAuth]);
 
   /* ---------- Contact submit ---------- */
 
@@ -2484,6 +2500,12 @@ export function ClientsCreatePage() {
     loadConsentTypes,
     loadConsentOriginTypes,
   ]);
+
+  /* ---------- Load acquisition source types on mount ---------- */
+
+  useEffect(() => {
+    void loadAcquisitionSourceTypes();
+  }, [loadAcquisitionSourceTypes]);
 
   /* ==========================
      RENDER

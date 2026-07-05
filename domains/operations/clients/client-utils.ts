@@ -6,7 +6,6 @@ import {
   ClientConsentItem,
   ConsentTypeItem,
   ConsentOriginTypeItem,
-  ClientHierarchyItem,
   AddressItem,
   type AddressSortColumn,
   type ContactNetworkItem,

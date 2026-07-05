@@ -232,26 +232,4 @@ export const initialConsentFormState: ClientConsentFormState = {
 
 export type ConsentSortColumn = "consentType" | "consentOriginType" | "granted" | "grantedDate" | "isActive";
 
-/* ---------- Client Hierarchy ---------- */
 
-export interface ClientHierarchyItem {
-  id: number;
-  parentClientId: number;
-  parentClientName: string | null;
-  childClientId: number;
-  childClientName: string | null;
-  relationshipType: string | null;
-  isActive: boolean;
-}
-
-export interface ClientHierarchyFormState {
-  parentClientId: string;
-  childClientId: string;
-  relationshipType: string;
-}
-
-export const initialHierarchyFormState: ClientHierarchyFormState = {
-  parentClientId: "",
-  childClientId: "",
-  relationshipType: "",
-};

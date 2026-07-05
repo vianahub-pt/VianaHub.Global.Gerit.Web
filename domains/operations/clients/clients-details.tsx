@@ -58,9 +58,6 @@ import {
   type ClientConsentFormState,
   initialConsentFormState,
   type ConsentSortColumn,
-  type ClientHierarchyItem,
-  type ClientHierarchyFormState,
-  initialHierarchyFormState,
   type AddressItem,
   type AddressFormState,
   type AddressSortColumn,
@@ -78,13 +75,11 @@ const CONTACT_PAGE_SIZE = 25;
 const ADDRESS_PAGE_SIZE = 25;
 const FISCAL_DATA_PAGE_SIZE = 25;
 const CONSENT_PAGE_SIZE = 25;
-const HIERARCHY_PAGE_SIZE = 25;
 const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
-const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
@@ -92,7 +87,6 @@ const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
 
 /* ---------- Pagination helper ---------- */
 
@@ -176,7 +170,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -618,17 +612,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
 
-  /* ---------- Hierarchy state ---------- */
-
-  const [hierarchyItems, setHierarchyItems] = useState<ClientHierarchyItem[]>([]);
-  const [hierarchyLoading, setHierarchyLoading] = useState(false);
-  const [hierarchyFormState, setHierarchyFormState] = useState<ClientHierarchyFormState>(initialHierarchyFormState);
-  const [editingHierarchy, setEditingHierarchy] = useState<ClientHierarchyItem | null>(null);
-  const [hierarchySubmitting, setHierarchySubmitting] = useState(false);
-  const [hierarchyDeleteConfirmOpen, setHierarchyDeleteConfirmOpen] = useState(false);
-  const hierarchyDeleteRef = useRef<ClientHierarchyItem | null>(null);
-  const [hierarchyBulkUploading, setHierarchyBulkUploading] = useState(false);
-
   /* ---------- Contact Network state ---------- */
 
   const [contactNetwork, setContactNetwork] = useState<ContactNetworkItem[]>([]);
@@ -685,16 +668,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("consentType");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
-  /* ---------- Hierarchy grid state ---------- */
-
-  const [hierarchyGridDensity, setHierarchyGridDensity] = useState<RowDensity>("medium");
-  const [hierarchySearch, setHierarchySearch] = useState("");
-  const [hierarchyStatusFilter, setHierarchyStatusFilter] = useState("all");
-  const [hierarchyPage, setHierarchyPage] = useState(1);
-  const [hierarchyPageSize, setHierarchyPageSize] = useState<number>(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [hierarchySortBy, setHierarchySortBy] = useState<HierarchySortColumn>("ParentClient");
-  const [hierarchySortDirection, setHierarchySortDirection] = useState<"asc" | "desc">("asc");
-
   /* ---------- Contact Network grid state ---------- */
 
   const [contactNetworkGridDensity, setContactNetworkGridDensity] = useState<RowDensity>("medium");
@@ -727,11 +700,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setConsentFormState(initialConsentFormState);
   }, []);
 
-  const resetHierarchyForm = useCallback(() => {
-    setEditingHierarchy(null);
-    setHierarchyFormState(initialHierarchyFormState);
-  }, []);
-
   const resetContactNetworkForm = useCallback(() => {
     setEditingContactNetwork(null);
     setContactNetworkFormState(initialContactNetworkFormState);
@@ -748,13 +716,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     resetAddressForm();
     resetFiscalDataForm();
     resetConsentForm();
-    resetHierarchyForm();
     resetContactNetworkForm();
     setContacts([]);
     setAddresses([]);
     setFiscalData([]);
     setConsents([]);
-    setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
     lastLoadedTabRef.current = "informacoes";
@@ -762,31 +728,26 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
     setConsentGridDensity("medium");
-    setHierarchyGridDensity("medium");
     setContactNetworkGridDensity("medium");
     setContactSearch("");
     setAddressSearch("");
     setFiscalDataSearch("");
     setConsentSearch("");
-    setHierarchySearch("");
     setContactNetworkSearch("");
     setContactStatusFilter("all");
     setAddressStatusFilter("all");
     setFiscalDataStatusFilter("all");
     setConsentStatusFilter("all");
-    setHierarchyStatusFilter("all");
     setContactNetworkStatusFilter("all");
     setContactPage(1);
     setAddressPage(1);
     setFiscalDataPage(1);
     setConsentPage(1);
-    setHierarchyPage(1);
     setContactNetworkPage(1);
     setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
     setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
     setFiscalDataPageSize(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
     setConsentPageSize(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-    setHierarchyPageSize(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactNetworkPageSize(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactSortBy("Name");
     setContactSortDirection("asc");
@@ -796,11 +757,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setFiscalDataSortDirection("asc");
     setConsentSortBy("consentType");
     setConsentSortDirection("asc");
-    setHierarchySortBy("ParentClient");
-    setHierarchySortDirection("asc");
     setContactNetworkSortBy("Name");
     setContactNetworkSortDirection("asc");
-  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm, resetContactNetworkForm]);
+  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetContactNetworkForm]);
 
   /* ---------- Load client ---------- */
 

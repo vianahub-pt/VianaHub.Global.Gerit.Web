@@ -360,8 +360,7 @@ export function ClientsCreatePage() {
     | "contactNetwork"
     | "enderecos"
     | "fiscalData"
-    | "consents"
-    | "hierarchy";
+    | "consents";
 
   const [activeTab, setActiveTab] = useState<ClientCreateTab>("informacoes");
   const lastLoadedTabRef = useRef<ClientCreateTab>("informacoes");
@@ -2827,18 +2826,6 @@ export function ClientsCreatePage() {
                 label: t("clients.detail.tabs.consentsSummary"),
                 disabled: !createdClientId,
                 panel: createdClientId ? renderConsentsTab() : (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    {t("clients.create.tabs.saveFirst")}
-                  </div>
-                ),
-              },
-              {
-                id: "hierarchy",
-                label: t("clients.detail.tabs.hierarchySummary"),
-                disabled: !createdClientId,
-                panel: createdClientId ? (
-                  <div>Conteúdo de Hierarquia (placeholder por agora)</div>
-                ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}
                   </div>

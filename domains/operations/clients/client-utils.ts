@@ -6,7 +6,6 @@ import {
   ClientConsentItem,
   ConsentTypeItem,
   ConsentOriginTypeItem,
-  ClientHierarchyItem,
   AddressItem,
   type AddressSortColumn,
   type ContactNetworkItem,
@@ -38,11 +37,6 @@ export interface ClientsPagedResponse {
 }
 
 export interface FiscalDataPagedResponse {
-  items?: unknown;
-  totalItems?: unknown;
-}
-
-export interface HierarchyPagedResponse {
   items?: unknown;
   totalItems?: unknown;
 }

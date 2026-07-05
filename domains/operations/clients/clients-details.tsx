@@ -58,9 +58,6 @@ import {
   type ClientConsentFormState,
   initialConsentFormState,
   type ConsentSortColumn,
-  type ClientHierarchyItem,
-  type ClientHierarchyFormState,
-  initialHierarchyFormState,
   type AddressItem,
   type AddressFormState,
   type AddressSortColumn,
@@ -78,13 +75,11 @@ const CONTACT_PAGE_SIZE = 25;
 const ADDRESS_PAGE_SIZE = 25;
 const FISCAL_DATA_PAGE_SIZE = 25;
 const CONSENT_PAGE_SIZE = 25;
-const HIERARCHY_PAGE_SIZE = 25;
 const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
-const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
@@ -92,7 +87,6 @@ const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
 
 /* ---------- Pagination helper ---------- */
 
@@ -176,7 +170,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -458,76 +452,6 @@ function parsePagedConsents(payload: unknown) {
   };
 }
 
-/* ---------- Hierarchy normalize/parse ---------- */
-
-function normalizeHierarchy(payload: unknown): ClientHierarchyItem | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const candidate = payload as Record<string, unknown>;
-  const rawId =
-    typeof candidate.id === "number"
-      ? candidate.id
-      : typeof candidate.id === "string"
-        ? Number(candidate.id)
-        : typeof candidate.hierarchyId === "number"
-          ? candidate.hierarchyId
-          : typeof candidate.hierarchyId === "string"
-            ? Number(candidate.hierarchyId)
-            : null;
-  if (rawId === null || !Number.isFinite(rawId)) return null;
-
-  const parentClientId = typeof candidate.parentClientId === "number" ? candidate.parentClientId : typeof candidate.parentClientId === "string" ? Number(candidate.parentClientId) : 0;
-  const parentClientName =
-    typeof candidate.parentClientName === "string"
-      ? candidate.parentClientName
-      : null;
-  const childClientId = typeof candidate.childClientId === "number" ? candidate.childClientId : typeof candidate.childClientId === "string" ? Number(candidate.childClientId) : 0;
-  const childClientName =
-    typeof candidate.childClientName === "string"
-      ? candidate.childClientName
-      : null;
-  const relationshipType =
-    typeof candidate.relationshipType === "string" ? candidate.relationshipType : null;
-  const isActiveValue =
-    typeof candidate.isActive === "boolean"
-      ? candidate.isActive
-      : typeof candidate.isActive === "string"
-        ? candidate.isActive.toLowerCase() === "true"
-        : typeof candidate.active === "boolean"
-          ? candidate.active
-          : typeof candidate.active === "string"
-            ? candidate.active.toLowerCase() === "true"
-            : typeof candidate.enabled === "boolean"
-              ? candidate.enabled
-              : typeof candidate.enabled === "string"
-                ? candidate.enabled.toLowerCase() === "true"
-                : true;
-
-  return {
-    id: rawId,
-    parentClientId,
-    parentClientName,
-    childClientId,
-    childClientName,
-    relationshipType,
-    isActive: Boolean(isActiveValue),
-  };
-}
-
-function parsePagedHierarchy(payload: unknown) {
-  if (typeof payload !== "object" || payload === null)
-    return { items: [] as ClientHierarchyItem[], totalItems: 0 };
-  const candidate = payload as { items?: unknown; totalItems?: unknown };
-  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
-  const items = rawItems
-    .map(normalizeHierarchy)
-    .filter((item): item is ClientHierarchyItem => item !== null);
-  return {
-    items,
-    totalItems:
-      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
-  };
-}
-
 /* ---------- Consent Types normalize ---------- */
 
 function normalizeConsentTypes(payload: unknown): ConsentTypeItem[] {
@@ -618,17 +542,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
 
-  /* ---------- Hierarchy state ---------- */
-
-  const [hierarchyItems, setHierarchyItems] = useState<ClientHierarchyItem[]>([]);
-  const [hierarchyLoading, setHierarchyLoading] = useState(false);
-  const [hierarchyFormState, setHierarchyFormState] = useState<ClientHierarchyFormState>(initialHierarchyFormState);
-  const [editingHierarchy, setEditingHierarchy] = useState<ClientHierarchyItem | null>(null);
-  const [hierarchySubmitting, setHierarchySubmitting] = useState(false);
-  const [hierarchyDeleteConfirmOpen, setHierarchyDeleteConfirmOpen] = useState(false);
-  const hierarchyDeleteRef = useRef<ClientHierarchyItem | null>(null);
-  const [hierarchyBulkUploading, setHierarchyBulkUploading] = useState(false);
-
   /* ---------- Contact Network state ---------- */
 
   const [contactNetwork, setContactNetwork] = useState<ContactNetworkItem[]>([]);
@@ -685,16 +598,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("consentType");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
-  /* ---------- Hierarchy grid state ---------- */
-
-  const [hierarchyGridDensity, setHierarchyGridDensity] = useState<RowDensity>("medium");
-  const [hierarchySearch, setHierarchySearch] = useState("");
-  const [hierarchyStatusFilter, setHierarchyStatusFilter] = useState("all");
-  const [hierarchyPage, setHierarchyPage] = useState(1);
-  const [hierarchyPageSize, setHierarchyPageSize] = useState<number>(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [hierarchySortBy, setHierarchySortBy] = useState<HierarchySortColumn>("ParentClient");
-  const [hierarchySortDirection, setHierarchySortDirection] = useState<"asc" | "desc">("asc");
-
   /* ---------- Contact Network grid state ---------- */
 
   const [contactNetworkGridDensity, setContactNetworkGridDensity] = useState<RowDensity>("medium");
@@ -727,11 +630,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setConsentFormState(initialConsentFormState);
   }, []);
 
-  const resetHierarchyForm = useCallback(() => {
-    setEditingHierarchy(null);
-    setHierarchyFormState(initialHierarchyFormState);
-  }, []);
-
   const resetContactNetworkForm = useCallback(() => {
     setEditingContactNetwork(null);
     setContactNetworkFormState(initialContactNetworkFormState);
@@ -748,13 +646,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     resetAddressForm();
     resetFiscalDataForm();
     resetConsentForm();
-    resetHierarchyForm();
     resetContactNetworkForm();
     setContacts([]);
     setAddresses([]);
     setFiscalData([]);
     setConsents([]);
-    setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
     lastLoadedTabRef.current = "informacoes";
@@ -762,31 +658,26 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
     setConsentGridDensity("medium");
-    setHierarchyGridDensity("medium");
     setContactNetworkGridDensity("medium");
     setContactSearch("");
     setAddressSearch("");
     setFiscalDataSearch("");
     setConsentSearch("");
-    setHierarchySearch("");
     setContactNetworkSearch("");
     setContactStatusFilter("all");
     setAddressStatusFilter("all");
     setFiscalDataStatusFilter("all");
     setConsentStatusFilter("all");
-    setHierarchyStatusFilter("all");
     setContactNetworkStatusFilter("all");
     setContactPage(1);
     setAddressPage(1);
     setFiscalDataPage(1);
     setConsentPage(1);
-    setHierarchyPage(1);
     setContactNetworkPage(1);
     setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
     setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
     setFiscalDataPageSize(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
     setConsentPageSize(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-    setHierarchyPageSize(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactNetworkPageSize(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactSortBy("Name");
     setContactSortDirection("asc");
@@ -796,11 +687,9 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setFiscalDataSortDirection("asc");
     setConsentSortBy("consentType");
     setConsentSortDirection("asc");
-    setHierarchySortBy("ParentClient");
-    setHierarchySortDirection("asc");
     setContactNetworkSortBy("Name");
     setContactNetworkSortDirection("asc");
-  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm, resetContactNetworkForm]);
+  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetContactNetworkForm]);
 
   /* ---------- Load client ---------- */
 
@@ -1115,42 +1004,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [consentOriginTypes.length, fetchWithAuth]);
 
-  /* ---------- Load hierarchy ---------- */
-
-  const loadClientHierarchy = useCallback(async () => {
-    if (!client?.id) {
-      setHierarchyItems([]);
-      return;
-    }
-    setHierarchyLoading(true);
-    try {
-      const response = await fetchWithAuth(
-        `/api/gerit/v1/clients/hierarchies/by-parent/${client.id}`,
-        { method: "GET" },
-      );
-      if (!response) return;
-      const payload = (await response.json().catch(() => null)) as unknown;
-      if (!response.ok) {
-        throw new Error(normalizeErrorMessage(payload, t("clients.hierarchy.errors.load")));
-      }
-      const parsed = parsePagedHierarchy(payload);
-      setHierarchyItems(parsed.items);
-    } catch (error) {
-      logError("clients.details.loadHierarchy", "Falha ao carregar hierarquia", error, {
-        clientId: client?.id,
-      });
-      toast({
-        title: t("clients.toasts.errorTitle"),
-        description:
-          error instanceof Error ? error.message : t("clients.hierarchy.errors.load"),
-        variant: "destructive",
-      });
-      setHierarchyItems([]);
-    } finally {
-      setHierarchyLoading(false);
-    }
-  }, [client, fetchWithAuth, t, toast]);
-
   /* ---------- Load contact network ---------- */
 
   const loadClientContactNetwork = useCallback(async () => {
@@ -1230,9 +1083,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         void loadConsentTypes();
         void loadConsentOriginTypes();
         break;
-      case "hierarchy":
-        void loadClientHierarchy();
-        break;
     }
   }, [
     activeTab,
@@ -1245,7 +1095,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     loadClientConsents,
     loadConsentTypes,
     loadConsentOriginTypes,
-    loadClientHierarchy,
   ]);
 
   /* ---------- Client type change handler ---------- */
@@ -2330,165 +2179,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     [client, fetchWithAuth, loadClientConsents, t, toast],
   );
 
-  /* ---------- Hierarchy submit ---------- */
-
-  const handleHierarchySubmit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!client) return;
-      const parentClientId = hierarchyFormState.parentClientId.trim();
-      const childClientId = hierarchyFormState.childClientId.trim();
-      if (!parentClientId || !childClientId) {
-        toast({
-          title: t("clients.toasts.validationTitle"),
-          description: t("clients.hierarchy.validation.required"),
-          variant: "destructive",
-        });
-        return;
-      }
-      setHierarchySubmitting(true);
-      try {
-        const payload = {
-          parentClientId: Number(parentClientId),
-          childClientId: Number(childClientId),
-          relationshipType: hierarchyFormState.relationshipType.trim() || null,
-        };
-        const isEditing = editingHierarchy !== null;
-        const endpoint = isEditing
-          ? `/api/gerit/v1/clients/hierarchies/${editingHierarchy?.id}`
-          : `/api/gerit/v1/clients/hierarchies`;
-        const response = await fetchWithAuth(endpoint, {
-          method: isEditing ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.save")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: isEditing
-            ? t("clients.hierarchy.toasts.updated")
-            : t("clients.hierarchy.toasts.created"),
-        });
-        resetHierarchyForm();
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchySubmit", "Falha ao salvar hierarquia", error, {
-          clientId: client?.id,
-          parentClientId: hierarchyFormState.parentClientId,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.save"),
-          variant: "destructive",
-        });
-      } finally {
-        setHierarchySubmitting(false);
-      }
-    },
-    [client, hierarchyFormState, editingHierarchy, fetchWithAuth, loadClientHierarchy, resetHierarchyForm, t, toast],
-  );
-
-  const handleHierarchyEdit = useCallback((data: ClientHierarchyItem) => {
-    setEditingHierarchy(data);
-    setHierarchyFormState({
-      parentClientId: String(data.parentClientId),
-      childClientId: String(data.childClientId),
-      relationshipType: data.relationshipType ?? "",
-    });
-  }, []);
-
-  const handleHierarchyToggleStatus = useCallback(
-    async (data: ClientHierarchyItem) => {
-      if (!client?.id) return;
-      try {
-        const endpoint = data.isActive
-          ? `/api/gerit/v1/clients/hierarchies/${data.id}/deactivate`
-          : `/api/gerit/v1/clients/hierarchies/${data.id}/activate`;
-        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.status")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: data.isActive
-            ? t("clients.hierarchy.toasts.deactivated")
-            : t("clients.hierarchy.toasts.activated"),
-        });
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchyToggleStatus", "Falha ao alterar estado da relação", error, {
-          clientId: client?.id,
-          hierarchyId: data.id,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.status"),
-          variant: "destructive",
-        });
-      }
-    },
-    [client, fetchWithAuth, loadClientHierarchy, t, toast],
-  );
-
-  const handleHierarchyDelete = useCallback(
-    (data: ClientHierarchyItem) => {
-      hierarchyDeleteRef.current = data;
-      setHierarchyDeleteConfirmOpen(true);
-    },
-    [],
-  );
-
-  const handleHierarchyDeleteConfirm = useCallback(async () => {
-    const data = hierarchyDeleteRef.current;
-    hierarchyDeleteRef.current = null;
-    setHierarchyDeleteConfirmOpen(false);
-    if (!data || !client?.id) return;
-    try {
-        const response = await fetchWithAuth(
-          `/api/gerit/v1/clients/hierarchies/${data.id}`,
-          { method: "DELETE" },
-        );
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.delete")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: t("clients.hierarchy.toasts.deleted"),
-        });
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchyDelete", "Falha ao eliminar relação", error, {
-          clientId: client?.id,
-          hierarchyId: data.id,
-          parentClientName: data.parentClientName,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.delete"),
-          variant: "destructive",
-        });
-      }
-    },
-    [client, fetchWithAuth, loadClientHierarchy, t, toast],
-  );
-
   /* ---------- Bulk upload handlers ---------- */
 
   const handleContactsBulkUpload = useCallback(
@@ -3461,166 +3151,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       setConsentSortBy(normalized);
     },
     [consentSortBy],
-  );
-
-  /* ---------- Hierarchy grid ---------- */
-
-  const hierarchyColumns = useMemo<HubGridColumn<ClientHierarchyItem>[]>(
-    () => [
-      { key: "ParentClient", label: t("clients.hierarchy.table.parentClient") },
-      { key: "ChildClient", label: t("clients.hierarchy.table.childClient") },
-      { key: "RelationshipType", label: t("clients.hierarchy.table.relationshipType") },
-    ],
-    [t],
-  );
-
-  const hierarchyStatusFilterOptions = useMemo(
-    () => [
-      { value: "active", label: t("clients.filters.active") },
-      { value: "inactive", label: t("clients.filters.inactive") },
-      { value: "all", label: t("clients.filters.all") },
-    ],
-    [t],
-  );
-
-  const filteredHierarchy = useMemo(() => {
-    const searchTerm = hierarchySearch.trim().toLowerCase();
-    return hierarchyItems.filter((item) => {
-      if (hierarchyStatusFilter !== "all") {
-        const expected = hierarchyStatusFilter === "active";
-        if (item.isActive !== expected) return false;
-      }
-      if (!searchTerm) return true;
-      return (
-        (item.parentClientName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.childClientName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.relationshipType ?? "").toLowerCase().includes(searchTerm)
-      );
-    });
-  }, [hierarchySearch, hierarchyStatusFilter, hierarchyItems]);
-
-  const sortedHierarchy = useMemo(() => {
-    const items = [...filteredHierarchy];
-    items.sort((current, next) => {
-      let a = "";
-      let b = "";
-      switch (hierarchySortBy) {
-        case "ParentClient":
-          a = (current.parentClientName ?? "").toLowerCase();
-          b = (next.parentClientName ?? "").toLowerCase();
-          break;
-        case "ChildClient":
-          a = (current.childClientName ?? "").toLowerCase();
-          b = (next.childClientName ?? "").toLowerCase();
-          break;
-        case "RelationshipType":
-          a = (current.relationshipType ?? "").toLowerCase();
-          b = (next.relationshipType ?? "").toLowerCase();
-          break;
-      }
-      const comparison = a.localeCompare(b);
-      return hierarchySortDirection === "asc" ? comparison : -comparison;
-    });
-    return items;
-  }, [filteredHierarchy, hierarchySortBy, hierarchySortDirection]);
-
-  const hierarchyTotalPages = Math.max(1, Math.ceil(sortedHierarchy.length / hierarchyPageSize));
-
-  useEffect(() => {
-    setHierarchyPage((current) => Math.min(current, hierarchyTotalPages));
-  }, [hierarchyTotalPages]);
-
-  const hierarchyPageButtons = useMemo(
-    () => buildPageButtons(hierarchyPage, hierarchyTotalPages),
-    [hierarchyPage, hierarchyTotalPages],
-  );
-
-  const visibleHierarchy = useMemo(() => {
-    const startIndex = (hierarchyPage - 1) * hierarchyPageSize;
-    return sortedHierarchy.slice(startIndex, startIndex + hierarchyPageSize);
-  }, [hierarchyPage, hierarchyPageSize, sortedHierarchy]);
-
-  const hierarchyPageCaption = useMemo(
-    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedHierarchy.length) }),
-    [sortedHierarchy.length, t],
-  );
-
-  useEffect(() => {
-    setHierarchyPage(1);
-  }, [hierarchyStatusFilter, hierarchySearch, hierarchySortBy, hierarchySortDirection, hierarchyPageSize]);
-
-  const hierarchyRowCells = useCallback(
-    (item: ClientHierarchyItem) => [
-      item.parentClientName ?? "-",
-      item.childClientName ?? "-",
-      item.relationshipType ?? "-",
-    ],
-    [],
-  );
-
-  const renderHierarchyStatus = useCallback(
-    (item: ClientHierarchyItem) => (
-      <span
-        className={clsx(
-          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-muted-foreground dark:text-muted-foreground",
-        )}
-      >
-        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
-      </span>
-    ),
-    [t],
-  );
-
-  const renderHierarchyActions = useCallback(
-    (item: ClientHierarchyItem) => (
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => handleHierarchyEdit(item)}
-          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-          title={t("clients.actions.edit")}
-        >
-          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleHierarchyToggleStatus(item)}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-          title={
-            item.isActive
-              ? t("clients.actions.deactivate")
-              : t("clients.actions.activate")
-          }
-        >
-          {item.isActive
-            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
-            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleHierarchyDelete(item)}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
-          title={t("clients.actions.delete")}
-        >
-          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-        </button>
-      </div>
-    ),
-    [handleHierarchyDelete, handleHierarchyEdit, handleHierarchyToggleStatus, t],
-  );
-
-  const handleHierarchySort = useCallback(
-    (columnKey: string) => {
-      const normalized = columnKey as HierarchySortColumn;
-      if (normalized === hierarchySortBy) {
-        setHierarchySortDirection((current) => (current === "asc" ? "desc" : "asc"));
-        return;
-      }
-      setHierarchySortDirection("asc");
-      setHierarchySortBy(normalized);
-    },
-    [hierarchySortBy],
   );
 
   /* ---------- Derived values ---------- */
@@ -4757,113 +4287,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     );
   };
 
-  /* ---------- Render: Hierarchy tab ---------- */
-
-  const renderHierarchyTab = () => {
-    if (activeTab !== "hierarchy") {
-      return (
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          {t("clients.detail.loadingTab")}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {/* Hierarchy form */}
-        <form
-          onSubmit={(e) => void handleHierarchySubmit(e)}
-          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
-        >
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <FormField
-              label={t("clients.hierarchy.form.parentClient")}
-              value={hierarchyFormState.parentClientId}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, parentClientId: v }))
-              }
-              required
-            />
-            <FormField
-              label={t("clients.hierarchy.form.childClient")}
-              value={hierarchyFormState.childClientId}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, childClientId: v }))
-              }
-              required
-            />
-            <FormField
-              label={t("clients.hierarchy.form.relationshipType")}
-              value={hierarchyFormState.relationshipType}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, relationshipType: v }))
-              }
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={hierarchySubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
-            >
-              {hierarchySubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {editingHierarchy ? t("clients.actions.save") : t("clients.actions.add")}
-            </button>
-            {editingHierarchy && (
-              <button
-                type="button"
-                onClick={resetHierarchyForm}
-                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
-              >
-                {t("clients.actions.cancel")}
-              </button>
-            )}
-          </div>
-        </form>
-
-        {/* Hierarchy grid */}
-        <HubGrid
-          columns={hierarchyColumns}
-          items={visibleHierarchy}
-          renderRowCells={hierarchyRowCells}
-          renderStatus={renderHierarchyStatus}
-          renderActions={renderHierarchyActions}
-          statusColumnLabel={t("clients.table.status")}
-          actionsColumnLabel={t("clients.hierarchy.table.actions")}
-          rowDensity={hierarchyGridDensity}
-          densityOptions={gridDensityOptions}
-          onDensityChange={setHierarchyGridDensity}
-          sortBy={hierarchySortBy}
-          sortDirection={hierarchySortDirection}
-          onSort={handleHierarchySort}
-          statusFilter={hierarchyStatusFilter}
-          statusFilterOptions={hierarchyStatusFilterOptions}
-          onStatusFilterChange={setHierarchyStatusFilter}
-          statusFilterLabel={t("clients.filters.statusLabel")}
-          searchValue={hierarchySearch}
-          onSearchChange={setHierarchySearch}
-          searchPlaceholder={t("clients.filters.search")}
-          loading={hierarchyLoading}
-          loadingText={t("clients.loading")}
-          emptyText={t("clients.hierarchy.empty")}
-          pageCaption={hierarchyPageCaption}
-          page={hierarchyPage}
-          totalPages={hierarchyTotalPages}
-          pageButtons={hierarchyPageButtons}
-          onPageChange={setHierarchyPage}
-          pageSize={hierarchyPageSize}
-          pageSizeOptions={HIERARCHY_GRID_PAGE_SIZE_OPTIONS}
-          onPageSizeChange={setHierarchyPageSize}
-          paginationPreviousLabel={t("clients.pagination.previous")}
-          paginationNextLabel={t("clients.pagination.next")}
-          paginationPageLabel={t("clients.pagination.page")}
-          paginationPerPageLabel={t("clients.pagination.perPage")}
-          getRowKey={(item) => item.id}
-        />
-      </div>
-    );
-  };
-
   /* ==========================
      RENDER
      ========================== */
@@ -4983,11 +4406,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                   label: t("clients.detail.tabs.consentsSummary"),
                   panel: renderConsentsTab(),
                 },
-                {
-                  id: "hierarchy",
-                  label: t("clients.detail.tabs.hierarchySummary"),
-                  panel: renderHierarchyTab(),
-                },
               ]}
             />
           )}
@@ -5044,19 +4462,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         confirmLabel={t("clients.actions.delete")}
         cancelLabel={t("clients.actions.cancel")}
         onConfirm={() => void handleConsentDeleteConfirm()}
-      />
-      <ConfirmDialog
-        open={hierarchyDeleteConfirmOpen}
-        onOpenChange={setHierarchyDeleteConfirmOpen}
-        title={t("clients.toasts.validationTitle")}
-        description={
-          hierarchyDeleteRef.current
-            ? t("clients.hierarchy.confirm.delete", { parentClientName: hierarchyDeleteRef.current.parentClientName ?? t("clients.hierarchy.table.parentClient"), childClientName: hierarchyDeleteRef.current.childClientName ?? t("clients.hierarchy.table.childClient") })
-            : ""
-        }
-        confirmLabel={t("clients.actions.delete")}
-        cancelLabel={t("clients.actions.cancel")}
-        onConfirm={() => void handleHierarchyDeleteConfirm()}
       />
     </>
   );

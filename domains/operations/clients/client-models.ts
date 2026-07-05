@@ -1,7 +1,5 @@
 "use client";
-
 /* ---------- Client Addresses ---------- */
-
 export interface AddressItem {
   id: number;
   addressTypeId: number | null;
@@ -19,7 +17,6 @@ export interface AddressItem {
   isActive: boolean;
   isPrimary: boolean;
 }
-
 export interface AddressFormState {
   addressTypeId: string;
   street: string;
@@ -35,9 +32,7 @@ export interface AddressFormState {
   note: string;
   isPrimary: boolean;
 }
-
 export type AddressSortColumn = "Street" | "City" | "State" | "PostalCode" | "Country";
-
 export const initialAddressFormState: AddressFormState = {
   addressTypeId: "",
   street: "",
@@ -53,9 +48,7 @@ export const initialAddressFormState: AddressFormState = {
   note: "",
   isPrimary: false,
 };
-
 /* ---------- Client Contact Network ---------- */
-
 export interface ContactNetworkItem {
   id: number;
   name: string;
@@ -66,7 +59,6 @@ export interface ContactNetworkItem {
   isPrimary: boolean;
   isActive: boolean;
 }
-
 export interface ContactNetworkFormState {
   name: string;
   email: string;
@@ -75,9 +67,7 @@ export interface ContactNetworkFormState {
   isWhatsapp: boolean;
   isPrimary: boolean;
 }
-
 export type ContactNetworkSortColumn = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
-
 export const initialContactNetworkFormState: ContactNetworkFormState = {
   name: "",
   email: "",
@@ -86,9 +76,7 @@ export const initialContactNetworkFormState: ContactNetworkFormState = {
   isWhatsapp: false,
   isPrimary: false,
 };
-
 /* ---------- Client Individual ---------- */
-
 export interface ClientIndividual {
   id?: number;
   tenantId?: number;
@@ -107,7 +95,6 @@ export interface ClientIndividual {
   nationality?: string;
   isActive?: boolean;
 }
-
 export interface ClientCompany {
   id?: number;
   tenantId?: number;
@@ -125,7 +112,6 @@ export interface ClientCompany {
   legalRepresentative?: string;
   isActive?: boolean;
 }
-
 export interface ClientItem {
   id: number;
   tenantId?: number;
@@ -142,9 +128,7 @@ export interface ClientItem {
   individual?: ClientIndividual;
   company?: ClientCompany;
 }
-
 /* ---------- Client Fiscal Data ---------- */
-
 export interface ClientFiscalDataItem {
   id: number;
   clientId: number;
@@ -156,7 +140,6 @@ export interface ClientFiscalDataItem {
   fiscalEmail: string | null;
   isActive: boolean;
 }
-
 export interface ClientFiscalDataFormState {
   taxNumber: string;
   vatNumber: string;
@@ -165,7 +148,6 @@ export interface ClientFiscalDataFormState {
   iban: string;
   fiscalEmail: string;
 }
-
 export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   taxNumber: "",
   vatNumber: "",
@@ -174,25 +156,20 @@ export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   iban: "",
   fiscalEmail: "",
 };
-
 export type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "IBAN" | "FiscalEmail";
-
 /* ---------- Client Consents ---------- */
-
 export interface ConsentTypeItem {
   id: number;
   name: string;
   description: string | null;
   isActive: boolean;
 }
-
 export interface ConsentOriginTypeItem {
   id: number;
   name: string;
   description: string;
   isActive: boolean;
 }
-
 export interface ClientConsentItem {
   id: number;
   tenantId: number;
@@ -209,7 +186,6 @@ export interface ClientConsentItem {
   userAgent?: string;
   isActive: boolean;
 }
-
 export interface ClientConsentFormState {
   consentTypeId: string;
   consentOriginTypeId: string;
@@ -219,7 +195,6 @@ export interface ClientConsentFormState {
   ipAddress: string;
   userAgent: string;
 }
-
 export const initialConsentFormState: ClientConsentFormState = {
   consentTypeId: "",
   consentOriginTypeId: "",
@@ -229,29 +204,4 @@ export const initialConsentFormState: ClientConsentFormState = {
   ipAddress: "",
   userAgent: "",
 };
-
 export type ConsentSortColumn = "consentType" | "consentOriginType" | "granted" | "grantedDate" | "isActive";
-
-/* ---------- Client Hierarchy ---------- */
-
-export interface ClientHierarchyItem {
-  id: number;
-  parentClientId: number;
-  parentClientName: string | null;
-  childClientId: number;
-  childClientName: string | null;
-  relationshipType: string | null;
-  isActive: boolean;
-}
-
-export interface ClientHierarchyFormState {
-  parentClientId: string;
-  childClientId: string;
-  relationshipType: string;
-}
-
-export const initialHierarchyFormState: ClientHierarchyFormState = {
-  parentClientId: "",
-  childClientId: "",
-  relationshipType: "",
-};

@@ -736,7 +736,7 @@ export function ClientsCreatePage() {
 
         const payload: Record<string, unknown> = {
           clientType: clientTypeNumber,
-          originType: originNumber,
+          acquisitionSourceTypeId: originNumber,
           isActive: clientFormState.isActive,
           note: noteValue.length > 0 ? noteValue : null,
         };

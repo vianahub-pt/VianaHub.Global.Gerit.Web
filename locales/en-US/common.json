@@ -251,6 +251,8 @@
   "clients.enums.origin.Radio": "Radio",
   "clients.enums.origin.Jornal": "Newspaper",
   "clients.enums.origin.Revista": "Magazine",
+  "clients.acquisitionSource.loading": "Loading sources...",
+  "clients.acquisitionSource.error": "Unable to load acquisition sources.",
   "clients.switch.on": "On",
   "clients.switch.off": "Off",
   "clients.switch.status": "Status",

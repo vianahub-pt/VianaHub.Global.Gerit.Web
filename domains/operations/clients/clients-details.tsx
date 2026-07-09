@@ -11,7 +11,7 @@ import { useTranslation } from "@/platform/i18n";
 
 import { useToast } from "@/shared/feedback";
 import { logError } from "@/core/logger/client-logger";
-import { ClientItem } from "@/domains/operations/clients/client-models";
+import { ClientItem, type AcquisitionSourceType } from "@/domains/operations/clients/client-models";
 import {
   HubGrid,
   type HubGridColumn,
@@ -28,6 +28,7 @@ import {
   parsePagedContactNetwork,
   getContactNetworkSortValue,
   normalizeConsentOriginTypes,
+  normalizeAcquisitionSourceTypes,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -36,7 +37,6 @@ import {
   isIndividualType,
   isCompanyType,
   CLIENT_TYPE_OPTIONS,
-  ORIGIN_OPTIONS,
   GENDER_OPTIONS,
   GENDER_OPTIONS_KEYS,
   DOCUMENT_TYPE_OPTIONS,
@@ -541,6 +541,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
   const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
+  const [acquisitionSourceTypes, setAcquisitionSourceTypes] = useState<AcquisitionSourceType[]>([]);
 
   /* ---------- Contact Network state ---------- */
 
@@ -1004,6 +1005,22 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [consentOriginTypes.length, fetchWithAuth]);
 
+  /* ---------- Load acquisition source types ---------- */
+
+  const loadAcquisitionSourceTypes = useCallback(async () => {
+    if (acquisitionSourceTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/acquisition-source-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeAcquisitionSourceTypes(payload);
+      setAcquisitionSourceTypes(parsed);
+    } catch {
+      // Silent fail — acquisition source types are optional
+    }
+  }, [acquisitionSourceTypes.length, fetchWithAuth]);
+
   /* ---------- Load contact network ---------- */
 
   const loadClientContactNetwork = useCallback(async () => {
@@ -1096,6 +1113,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     loadConsentTypes,
     loadConsentOriginTypes,
   ]);
+
+  // Load acquisition source types on mount
+  useEffect(() => {
+    void loadAcquisitionSourceTypes();
+  }, [loadAcquisitionSourceTypes]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -3226,10 +3248,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 3: E-mail — 3 colunas */}
@@ -3411,10 +3435,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
             onChange={(v) =>
               setClientFormState((prev) => ({ ...prev, originType: v }))
             }
-            options={ORIGIN_OPTIONS.map((opt) => ({
-              value: opt.value,
-              label: t(opt.labelKey),
-            }))}
+            options={acquisitionSourceTypes
+              .filter((item) => item.isActive)
+              .map((item) => ({
+                value: String(item.id),
+                label: item.name,
+              }))}
             placeholder={t("clients.form.selectOption")}
           />
           {/* Line 6: Estado */}

@@ -5,7 +5,7 @@ import {
   ClientFiscalDataItem,
   ClientConsentItem,
   ConsentTypeItem,
-  ClientHierarchyItem,
+  ConsentOriginTypeItem,
   AddressItem,
   type AddressSortColumn,
   type ContactNetworkItem,
@@ -23,6 +23,10 @@ export interface ConsentTypesResponse {
   items?: unknown;
 }
 
+export interface ConsentOriginTypesResponse {
+  items?: unknown;
+}
+
 export interface ClientsPagedResponse {
   items?: unknown;
   data?: unknown;
@@ -33,20 +37,6 @@ export interface ClientsPagedResponse {
 }
 
 export interface FiscalDataPagedResponse {
-  items?: unknown;
-  totalItems?: unknown;
-}
-
-export interface ConsentsPagedResponse {
-  items?: unknown;
-  totalItems?: unknown;
-}
-
-export interface ConsentTypesResponse {
-  items?: unknown;
-}
-
-export interface HierarchyPagedResponse {
   items?: unknown;
   totalItems?: unknown;
 }
@@ -269,30 +259,43 @@ export function normalizeConsent(payload: unknown): ClientConsentItem | null {
         : null;
   if (rawId === null || !Number.isFinite(rawId)) return null;
 
+  const tenantId =
+    typeof candidate.tenantId === "number"
+      ? candidate.tenantId
+      : typeof candidate.tenantId === "string"
+        ? Number(candidate.tenantId)
+        : 0;
   const clientId =
     typeof candidate.clientId === "number"
       ? candidate.clientId
       : typeof candidate.clientId === "string"
         ? Number(candidate.clientId)
         : 0;
+  const client = typeof candidate.client === "string" ? candidate.client : "";
   const consentTypeId =
     typeof candidate.consentTypeId === "number"
       ? candidate.consentTypeId
       : typeof candidate.consentTypeId === "string"
         ? Number(candidate.consentTypeId)
         : 0;
-  const consentTypeName = typeof candidate.consentTypeName === "string" ? candidate.consentTypeName : null;
+  const consentType = typeof candidate.consentType === "string" ? candidate.consentType : "";
+  const consentOriginTypeId =
+    typeof candidate.consentOriginTypeId === "number"
+      ? candidate.consentOriginTypeId
+      : typeof candidate.consentOriginTypeId === "string"
+        ? Number(candidate.consentOriginTypeId)
+        : 0;
+  const consentOriginType = typeof candidate.consentOriginType === "string" ? candidate.consentOriginType : "";
   const granted =
     typeof candidate.granted === "boolean"
       ? candidate.granted
       : typeof candidate.granted === "string"
         ? candidate.granted.toLowerCase() === "true"
         : false;
-  const grantedDate = typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
-  const revokedDate = typeof candidate.revokedDate === "string" ? candidate.revokedDate : null;
-  const origin = typeof candidate.origin === "string" ? candidate.origin : null;
-  const ipAddress = typeof candidate.ipAddress === "string" ? candidate.ipAddress : null;
-  const userAgent = typeof candidate.userAgent === "string" ? candidate.userAgent : null;
+  const grantedDate = typeof candidate.grantedDate === "string" ? candidate.grantedDate : "";
+  const revokedDate = typeof candidate.revokedDate === "string" ? candidate.revokedDate : undefined;
+  const ipAddress = typeof candidate.ipAddress === "string" ? candidate.ipAddress : undefined;
+  const userAgent = typeof candidate.userAgent === "string" ? candidate.userAgent : undefined;
   const isActive =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
@@ -302,13 +305,16 @@ export function normalizeConsent(payload: unknown): ClientConsentItem | null {
 
   return {
     id: rawId,
+    tenantId,
     clientId,
+    client,
     consentTypeId,
-    consentTypeName,
+    consentType,
+    consentOriginTypeId,
+    consentOriginType,
     granted: Boolean(granted),
     grantedDate,
     revokedDate,
-    origin,
     ipAddress,
     userAgent,
     isActive: Boolean(isActive),
@@ -332,19 +338,38 @@ export function parsePagedConsents(payload: unknown) {
 
 export function getConsentSortValue(item: ClientConsentItem, column: ConsentSortColumn) {
   switch (column) {
-    case "Granted":
+    case "consentType":
+      return item.consentType.toLowerCase();
+    case "consentOriginType":
+      return item.consentOriginType.toLowerCase();
+    case "granted":
       return item.granted ? "1" : "0";
-    case "GrantedDate":
+    case "grantedDate":
       return (item.grantedDate ?? "").toLowerCase();
-    case "RevokedDate":
-      return (item.revokedDate ?? "").toLowerCase();
-    case "Origin":
-      return (item.origin ?? "").toLowerCase();
-    case "IpAddress":
-      return (item.ipAddress ?? "").toLowerCase();
+    case "isActive":
+      return item.isActive ? "1" : "0";
     default:
-      return String(item.consentTypeId);
+      return item.consentType.toLowerCase();
   }
+}
+
+/* ---------- Consent Origin Types normalize ---------- */
+
+export function normalizeConsentOriginTypes(payload: unknown): ConsentOriginTypeItem[] {
+  if (!Array.isArray(payload)) return [];
+  return payload
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((candidate) => ({
+      id: typeof candidate.id === "number" ? candidate.id : 0,
+      name: typeof candidate.name === "string" ? candidate.name : "",
+      description: typeof candidate.description === "string" ? candidate.description : "",
+      isActive:
+        typeof candidate.isActive === "boolean"
+          ? candidate.isActive
+          : typeof candidate.active === "boolean"
+            ? candidate.active
+            : true,
+    }));
 }
 
 /* ---------- Consent Types normalize ---------- */

@@ -29,6 +29,7 @@ import {
   parsePagedConsents,
   getConsentSortValue,
   normalizeConsentTypes,
+  normalizeConsentOriginTypes,
 } from "@/domains/operations/clients/client-utils";
 import { Textarea } from "@/shared/ui/textarea";
 import {
@@ -65,6 +66,7 @@ import {
   type FiscalDataSortColumn,
   type ClientConsentItem,
   type ConsentTypeItem,
+  type ConsentOriginTypeItem,
   type ClientConsentFormState,
   initialConsentFormState,
   type ConsentSortColumn,
@@ -89,7 +91,7 @@ const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumnLocal = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type ConsentSortColumnLocal = "ConsentTypeId" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
+type ConsentSortColumnLocal = "consentType" | "consentOriginType" | "granted" | "grantedDate" | "isActive";
 
 /* ---------- Pagination helper ---------- */
 
@@ -338,9 +340,7 @@ export function ClientsCreatePage() {
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-  const contactsLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
+  const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
 
   /* ---------- Consents grid state ---------- */
 
@@ -349,20 +349,10 @@ export function ClientsCreatePage() {
   const [consentStatusFilter, setConsentStatusFilter] = useState("all");
   const [consentPage, setConsentPage] = useState(1);
   const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumnLocal>("ConsentTypeId");
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumnLocal>("consentType");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Tab lazy loading state ---------- */
-
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientCreateTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
 
   type ClientCreateTab =
     | "informacoes"
@@ -370,10 +360,10 @@ export function ClientsCreatePage() {
     | "contactNetwork"
     | "enderecos"
     | "fiscalData"
-    | "consents"
-    | "hierarchy";
+    | "consents";
 
   const [activeTab, setActiveTab] = useState<ClientCreateTab>("informacoes");
+  const lastLoadedTabRef = useRef<ClientCreateTab>("informacoes");
 
   /* ---------- Client type change handler ---------- */
 
@@ -841,7 +831,7 @@ export function ClientsCreatePage() {
 
           if (createdId !== null) {
             setCreatedClientId(String(createdId));
-            handleTabChange("contactos");
+            setActiveTab("contactos");
           }
         }
       } catch (error) {
@@ -1022,6 +1012,22 @@ export function ClientsCreatePage() {
       // Silent fail — consent types are optional
     }
   }, [consentTypes.length, fetchWithAuth]);
+
+  /* ---------- Load consent origin types ---------- */
+
+  const loadConsentOriginTypes = useCallback(async () => {
+    if (consentOriginTypes.length > 0) return;
+    try {
+      const response = await fetchWithAuth("/api/gerit/v1/consent-origin-types", { method: "GET" });
+      if (!response) return;
+      const payload = (await response.json().catch(() => null)) as unknown;
+      if (!response.ok) return;
+      const parsed = normalizeConsentOriginTypes(payload);
+      setConsentOriginTypes(parsed);
+    } catch {
+      // Silent fail — consent origin types are optional
+    }
+  }, [consentOriginTypes.length, fetchWithAuth]);
 
   /* ---------- Contact submit ---------- */
 
@@ -1398,34 +1404,6 @@ export function ClientsCreatePage() {
     setContactPage(1);
   }, [contactStatusFilter, contactSearch, contactSortBy, contactSortDirection, contactPageSize]);
 
-  /* ---------- Lazy load contacts when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("contactos") && createdClientId && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
-      void loadClientContacts();
-    }
-  }, [loadedTabs, createdClientId, contactsLoading, loadClientContacts]);
-
-  /* ---------- Lazy load fiscal data when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("fiscalData") && createdClientId && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
-      void loadFiscalData();
-    }
-  }, [loadedTabs, createdClientId, fiscalDataLoading, loadFiscalData]);
-
-  /* ---------- Lazy load consents when tab becomes active ---------- */
-
-  useEffect(() => {
-    if (loadedTabs.has("consents") && createdClientId && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
-      void loadConsents();
-      void loadConsentTypes();
-    }
-  }, [loadedTabs, createdClientId, consentsLoading, loadConsents, loadConsentTypes]);
-
   /* ---------- Consent submit ---------- */
 
   const handleConsentSubmit = useCallback(
@@ -1445,10 +1423,10 @@ export function ClientsCreatePage() {
       try {
         const payload = {
           consentTypeId: Number(consentTypeId),
+          consentOriginTypeId: consentFormState.consentOriginTypeId ? Number(consentFormState.consentOriginTypeId) : null,
           granted: consentFormState.granted,
           grantedDate: consentFormState.grantedDate || null,
           revokedDate: consentFormState.revokedDate || null,
-          origin: consentFormState.origin.trim() || null,
           ipAddress: consentFormState.ipAddress.trim() || null,
           userAgent: consentFormState.userAgent.trim() || null,
         };
@@ -1498,10 +1476,10 @@ export function ClientsCreatePage() {
     setEditingConsent(data);
     setConsentFormState({
       consentTypeId: String(data.consentTypeId),
+      consentOriginTypeId: String(data.consentOriginTypeId),
       granted: data.granted,
       grantedDate: data.grantedDate ?? "",
       revokedDate: data.revokedDate ?? "",
-      origin: data.origin ?? "",
       ipAddress: data.ipAddress ?? "",
       userAgent: data.userAgent ?? "",
     });
@@ -1600,11 +1578,10 @@ export function ClientsCreatePage() {
 
   const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
     () => [
-      { key: "ConsentTypeId", label: t("clients.consents.table.consentType") },
-      { key: "Granted", label: t("clients.consents.table.granted") },
-      { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
-      { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },
-      { key: "Origin", label: t("clients.consents.table.origin") },
+      { key: "consentType", label: t("clients.consents.table.consentType") },
+      { key: "consentOriginType", label: t("clients.consents.table.consentOriginType") },
+      { key: "granted", label: t("clients.consents.table.granted") },
+      { key: "grantedDate", label: t("clients.consents.table.grantedDate") },
     ],
     [t],
   );
@@ -1627,8 +1604,8 @@ export function ClientsCreatePage() {
       }
       if (!searchTerm) return true;
       return (
-        (item.consentTypeName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.origin ?? "").toLowerCase().includes(searchTerm)
+        (item.consentType ?? "").toLowerCase().includes(searchTerm) ||
+        (item.consentOriginType ?? "").toLowerCase().includes(searchTerm)
       );
     });
   }, [consentSearch, consentStatusFilter, consents]);
@@ -1663,7 +1640,8 @@ export function ClientsCreatePage() {
 
   const consentRowCells = useCallback(
     (item: ClientConsentItem) => [
-      item.consentTypeName ?? "-",
+      item.consentType ?? "-",
+      item.consentOriginType ?? "-",
       item.granted ? (
         <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
           {t("common.yes")}
@@ -1674,8 +1652,6 @@ export function ClientsCreatePage() {
         </span>
       ),
       item.grantedDate ?? "-",
-      item.revokedDate ?? "-",
-      item.origin ?? "-",
     ],
     [t],
   );
@@ -1758,7 +1734,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -1786,12 +1762,17 @@ export function ClientsCreatePage() {
               }))}
               placeholder={t("clients.form.selectOption")}
             />
-            <FormField
-              label={t("clients.consents.form.origin")}
-              value={consentFormState.origin}
+            <SelectField
+              label={t("clients.consents.form.consentOriginType")}
+              value={consentFormState.consentOriginTypeId}
               onChange={(v) =>
-                setConsentFormState((prev) => ({ ...prev, origin: v }))
+                setConsentFormState((prev) => ({ ...prev, consentOriginTypeId: v }))
               }
+              options={consentOriginTypes.map((cot) => ({
+                value: String(cot.id),
+                label: cot.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
             />
             <FormField
               label={t("clients.consents.form.grantedDate")}
@@ -1894,7 +1875,7 @@ export function ClientsCreatePage() {
           description={
             consentDeleteRef.current
               ? t("clients.consents.confirm.delete", {
-                  consentTypeName: consentDeleteRef.current.consentTypeName ?? "",
+                  consentTypeName: consentDeleteRef.current.consentType ?? "",
                 })
               : t("clients.consents.confirm.delete", { consentTypeName: "" })
           }
@@ -1906,7 +1887,7 @@ export function ClientsCreatePage() {
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -2121,14 +2102,6 @@ export function ClientsCreatePage() {
       setAddressesLoading(false);
     }
   }, [createdClientId, fetchWithAuth, t, toast]);
-
-  /* ---------- Addresses: load on tab activate ---------- */
-
-  useEffect(() => {
-    if (createdClientId && activeTab === "enderecos") {
-      void loadAddresses();
-    }
-  }, [createdClientId, activeTab, loadAddresses]);
 
   /* ---------- Addresses: submit (create/update) ---------- */
 
@@ -2471,6 +2444,41 @@ export function ClientsCreatePage() {
     [addressSortBy],
   );
 
+  /* ---------- Lazy load tab data when tab changes ---------- */
+
+  useEffect(() => {
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
+
+    if (!createdClientId) return;
+
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        break;
+      case "enderecos":
+        void loadAddresses();
+        break;
+      case "fiscalData":
+        void loadFiscalData();
+        break;
+      case "consents":
+        void loadConsents();
+        void loadConsentTypes();
+        void loadConsentOriginTypes();
+        break;
+    }
+  }, [
+    activeTab,
+    createdClientId,
+    loadClientContacts,
+    loadAddresses,
+    loadFiscalData,
+    loadConsents,
+    loadConsentTypes,
+    loadConsentOriginTypes,
+  ]);
+
   /* ==========================
      RENDER
      ========================== */
@@ -2516,7 +2524,7 @@ export function ClientsCreatePage() {
           {/* ---------- Tabs ---------- */}
           <HubTabs<ClientCreateTab>
             activeTab={activeTab}
-            onTabChange={handleTabChange}
+            onTabChange={setActiveTab}
             tabs={[
               {
                 id: "informacoes",
@@ -2818,18 +2826,6 @@ export function ClientsCreatePage() {
                 label: t("clients.detail.tabs.consentsSummary"),
                 disabled: !createdClientId,
                 panel: createdClientId ? renderConsentsTab() : (
-                  <div className="py-8 text-center text-sm text-muted-foreground">
-                    {t("clients.create.tabs.saveFirst")}
-                  </div>
-                ),
-              },
-              {
-                id: "hierarchy",
-                label: t("clients.detail.tabs.hierarchySummary"),
-                disabled: !createdClientId,
-                panel: createdClientId ? (
-                  <div>Conteúdo de Hierarquia (placeholder por agora)</div>
-                ) : (
                   <div className="py-8 text-center text-sm text-muted-foreground">
                     {t("clients.create.tabs.saveFirst")}
                   </div>

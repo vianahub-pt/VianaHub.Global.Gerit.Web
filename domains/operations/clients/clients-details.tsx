@@ -27,6 +27,7 @@ import {
   normalizeContactNetwork,
   parsePagedContactNetwork,
   getContactNetworkSortValue,
+  normalizeConsentOriginTypes,
 } from "@/domains/operations/clients/client-utils";
 import {
   FormField,
@@ -53,11 +54,10 @@ import {
   initialFiscalDataFormState,
   type ClientConsentItem,
   type ConsentTypeItem,
+  type ConsentOriginTypeItem,
   type ClientConsentFormState,
   initialConsentFormState,
-  type ClientHierarchyItem,
-  type ClientHierarchyFormState,
-  initialHierarchyFormState,
+  type ConsentSortColumn,
   type AddressItem,
   type AddressFormState,
   type AddressSortColumn,
@@ -75,13 +75,11 @@ const CONTACT_PAGE_SIZE = 25;
 const ADDRESS_PAGE_SIZE = 25;
 const FISCAL_DATA_PAGE_SIZE = 25;
 const CONSENT_PAGE_SIZE = 25;
-const HIERARCHY_PAGE_SIZE = 25;
 const CONTACT_NETWORK_PAGE_SIZE = 25;
 const CONTACT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const ADDRESS_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONSENT_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
-const HIERARCHY_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 
 /* ---------- Sort column types ---------- */
@@ -89,8 +87,6 @@ const CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS = [10, 25, 50];
 type ContactSortColumn = "Name" | "Email" | "Phone";
 type ContactNetworkSortColumnLocal = "Name" | "Email" | "PhoneNumber" | "CellPhoneNumber" | "IsWhatsapp" | "IsPrimary";
 type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "Iban" | "FiscalEmail";
-type ConsentSortColumn = "ConsentType" | "Granted" | "GrantedDate" | "RevokedDate" | "Origin";
-type HierarchySortColumn = "ParentClient" | "ChildClient" | "RelationshipType";
 
 /* ---------- Pagination helper ---------- */
 
@@ -174,7 +170,7 @@ interface FiscalDataPagedResponse {
   totalItems?: unknown;
 }
 
-type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents" | "hierarchy";
+type ClientTab = "informacoes" | "contactos" | "enderecos" | "fiscalData" | "consents";
 
 const initialContactFormState: ContactFormState = {
   name: "",
@@ -374,12 +370,26 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
   if (rawId === null || !Number.isFinite(rawId)) return null;
 
   const consentTypeId = typeof candidate.consentTypeId === "number" ? candidate.consentTypeId : typeof candidate.consentTypeId === "string" ? Number(candidate.consentTypeId) : 0;
-  const consentTypeName =
-    typeof candidate.consentTypeName === "string"
-      ? candidate.consentTypeName
-      : typeof candidate.consentType === "string"
-        ? candidate.consentType
-        : null;
+  const consentType =
+    typeof candidate.consentType === "string"
+      ? candidate.consentType
+      : typeof candidate.consentTypeName === "string"
+        ? candidate.consentTypeName
+        : "";
+  const consentOriginTypeId =
+    typeof candidate.consentOriginTypeId === "number"
+      ? candidate.consentOriginTypeId
+      : typeof candidate.consentOriginTypeId === "string"
+        ? Number(candidate.consentOriginTypeId)
+        : 0;
+  const consentOriginType =
+    typeof candidate.consOriginType === "string"
+      ? candidate.consOriginType
+      : typeof candidate.consentOriginType === "string"
+        ? candidate.consentOriginType
+        : typeof candidate.origin === "string"
+          ? candidate.origin
+          : "";
   const granted =
     typeof candidate.granted === "boolean"
       ? candidate.granted
@@ -387,15 +397,13 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
         ? candidate.granted.toLowerCase() === "true"
         : false;
   const grantedDate =
-    typeof candidate.grantedDate === "string" ? candidate.grantedDate : null;
+    typeof candidate.grantedDate === "string" ? candidate.grantedDate : "";
   const revokedDate =
-    typeof candidate.revokedDate === "string" ? candidate.revokedDate : null;
-  const origin =
-    typeof candidate.origin === "string" ? candidate.origin : null;
+    typeof candidate.revokedDate === "string" ? candidate.revokedDate : undefined;
   const ipAddress =
-    typeof candidate.ipAddress === "string" ? candidate.ipAddress : null;
+    typeof candidate.ipAddress === "string" ? candidate.ipAddress : undefined;
   const userAgent =
-    typeof candidate.userAgent === "string" ? candidate.userAgent : null;
+    typeof candidate.userAgent === "string" ? candidate.userAgent : undefined;
   const isActiveValue =
     typeof candidate.isActive === "boolean"
       ? candidate.isActive
@@ -413,13 +421,16 @@ function normalizeConsent(payload: unknown): ClientConsentItem | null {
 
   return {
     id: rawId,
+    tenantId: typeof candidate.tenantId === "number" ? candidate.tenantId : 0,
     clientId: typeof candidate.clientId === "number" ? candidate.clientId : typeof candidate.clientId === "string" ? Number(candidate.clientId) : 0,
+    client: typeof candidate.client === "string" ? candidate.client : "",
     consentTypeId,
-    consentTypeName,
+    consentType,
+    consentOriginTypeId,
+    consentOriginType,
     granted,
     grantedDate,
     revokedDate,
-    origin,
     ipAddress,
     userAgent,
     isActive: Boolean(isActiveValue),
@@ -434,76 +445,6 @@ function parsePagedConsents(payload: unknown) {
   const items = rawItems
     .map(normalizeConsent)
     .filter((item): item is ClientConsentItem => item !== null);
-  return {
-    items,
-    totalItems:
-      typeof candidate.totalItems === "number" ? candidate.totalItems : items.length,
-  };
-}
-
-/* ---------- Hierarchy normalize/parse ---------- */
-
-function normalizeHierarchy(payload: unknown): ClientHierarchyItem | null {
-  if (typeof payload !== "object" || payload === null) return null;
-  const candidate = payload as Record<string, unknown>;
-  const rawId =
-    typeof candidate.id === "number"
-      ? candidate.id
-      : typeof candidate.id === "string"
-        ? Number(candidate.id)
-        : typeof candidate.hierarchyId === "number"
-          ? candidate.hierarchyId
-          : typeof candidate.hierarchyId === "string"
-            ? Number(candidate.hierarchyId)
-            : null;
-  if (rawId === null || !Number.isFinite(rawId)) return null;
-
-  const parentClientId = typeof candidate.parentClientId === "number" ? candidate.parentClientId : typeof candidate.parentClientId === "string" ? Number(candidate.parentClientId) : 0;
-  const parentClientName =
-    typeof candidate.parentClientName === "string"
-      ? candidate.parentClientName
-      : null;
-  const childClientId = typeof candidate.childClientId === "number" ? candidate.childClientId : typeof candidate.childClientId === "string" ? Number(candidate.childClientId) : 0;
-  const childClientName =
-    typeof candidate.childClientName === "string"
-      ? candidate.childClientName
-      : null;
-  const relationshipType =
-    typeof candidate.relationshipType === "string" ? candidate.relationshipType : null;
-  const isActiveValue =
-    typeof candidate.isActive === "boolean"
-      ? candidate.isActive
-      : typeof candidate.isActive === "string"
-        ? candidate.isActive.toLowerCase() === "true"
-        : typeof candidate.active === "boolean"
-          ? candidate.active
-          : typeof candidate.active === "string"
-            ? candidate.active.toLowerCase() === "true"
-            : typeof candidate.enabled === "boolean"
-              ? candidate.enabled
-              : typeof candidate.enabled === "string"
-                ? candidate.enabled.toLowerCase() === "true"
-                : true;
-
-  return {
-    id: rawId,
-    parentClientId,
-    parentClientName,
-    childClientId,
-    childClientName,
-    relationshipType,
-    isActive: Boolean(isActiveValue),
-  };
-}
-
-function parsePagedHierarchy(payload: unknown) {
-  if (typeof payload !== "object" || payload === null)
-    return { items: [] as ClientHierarchyItem[], totalItems: 0 };
-  const candidate = payload as { items?: unknown; totalItems?: unknown };
-  const rawItems = Array.isArray(candidate.items) ? candidate.items : [];
-  const items = rawItems
-    .map(normalizeHierarchy)
-    .filter((item): item is ClientHierarchyItem => item !== null);
   return {
     items,
     totalItems:
@@ -599,26 +540,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const consentDeleteRef = useRef<ClientConsentItem | null>(null);
   const [consentBulkUploading, setConsentBulkUploading] = useState(false);
   const [consentTypes, setConsentTypes] = useState<ConsentTypeItem[]>([]);
-  const consentsLoadedRef = useRef(false);
-
-  /* ---------- Lazy loading refs ---------- */
-
-  const contactsLoadedRef = useRef(false);
-  const addressesLoadedRef = useRef(false);
-  const fiscalDataLoadedRef = useRef(false);
-  const hierarchyLoadedRef = useRef(false);
-  const contactNetworkLoadedRef = useRef(false);
-
-  /* ---------- Hierarchy state ---------- */
-
-  const [hierarchyItems, setHierarchyItems] = useState<ClientHierarchyItem[]>([]);
-  const [hierarchyLoading, setHierarchyLoading] = useState(false);
-  const [hierarchyFormState, setHierarchyFormState] = useState<ClientHierarchyFormState>(initialHierarchyFormState);
-  const [editingHierarchy, setEditingHierarchy] = useState<ClientHierarchyItem | null>(null);
-  const [hierarchySubmitting, setHierarchySubmitting] = useState(false);
-  const [hierarchyDeleteConfirmOpen, setHierarchyDeleteConfirmOpen] = useState(false);
-  const hierarchyDeleteRef = useRef<ClientHierarchyItem | null>(null);
-  const [hierarchyBulkUploading, setHierarchyBulkUploading] = useState(false);
+  const [consentOriginTypes, setConsentOriginTypes] = useState<ConsentOriginTypeItem[]>([]);
 
   /* ---------- Contact Network state ---------- */
 
@@ -634,15 +556,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Tab & lazy loading state ---------- */
 
   const [activeTab, setActiveTab] = useState<ClientTab>("informacoes");
-  const [loadedTabs, setLoadedTabs] = useState<Set<string>>(new Set(["informacoes"]));
-
-  const handleTabChange = useCallback((tab: ClientTab) => {
-    setActiveTab(tab);
-    setLoadedTabs((prev) => {
-      if (prev.has(tab)) return prev;
-      return new Set(prev).add(tab);
-    });
-  }, []);
+  const lastLoadedTabRef = useRef<ClientTab>("informacoes");
 
   /* ---------- Contact grid state ---------- */
 
@@ -681,18 +595,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   const [consentStatusFilter, setConsentStatusFilter] = useState("all");
   const [consentPage, setConsentPage] = useState(1);
   const [consentPageSize, setConsentPageSize] = useState<number>(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("ConsentType");
+  const [consentSortBy, setConsentSortBy] = useState<ConsentSortColumn>("consentType");
   const [consentSortDirection, setConsentSortDirection] = useState<"asc" | "desc">("asc");
-
-  /* ---------- Hierarchy grid state ---------- */
-
-  const [hierarchyGridDensity, setHierarchyGridDensity] = useState<RowDensity>("medium");
-  const [hierarchySearch, setHierarchySearch] = useState("");
-  const [hierarchyStatusFilter, setHierarchyStatusFilter] = useState("all");
-  const [hierarchyPage, setHierarchyPage] = useState(1);
-  const [hierarchyPageSize, setHierarchyPageSize] = useState<number>(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
-  const [hierarchySortBy, setHierarchySortBy] = useState<HierarchySortColumn>("ParentClient");
-  const [hierarchySortDirection, setHierarchySortDirection] = useState<"asc" | "desc">("asc");
 
   /* ---------- Contact Network grid state ---------- */
 
@@ -726,11 +630,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setConsentFormState(initialConsentFormState);
   }, []);
 
-  const resetHierarchyForm = useCallback(() => {
-    setEditingHierarchy(null);
-    setHierarchyFormState(initialHierarchyFormState);
-  }, []);
-
   const resetContactNetworkForm = useCallback(() => {
     setEditingContactNetwork(null);
     setContactNetworkFormState(initialContactNetworkFormState);
@@ -747,45 +646,38 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     resetAddressForm();
     resetFiscalDataForm();
     resetConsentForm();
-    resetHierarchyForm();
     resetContactNetworkForm();
     setContacts([]);
     setAddresses([]);
     setFiscalData([]);
     setConsents([]);
-    setHierarchyItems([]);
     setContactNetwork([]);
     setActiveTab("informacoes");
-    setLoadedTabs(new Set(["informacoes"]));
+    lastLoadedTabRef.current = "informacoes";
     setContactGridDensity("medium");
     setAddressGridDensity("medium");
     setFiscalDataGridDensity("medium");
     setConsentGridDensity("medium");
-    setHierarchyGridDensity("medium");
     setContactNetworkGridDensity("medium");
     setContactSearch("");
     setAddressSearch("");
     setFiscalDataSearch("");
     setConsentSearch("");
-    setHierarchySearch("");
     setContactNetworkSearch("");
     setContactStatusFilter("all");
     setAddressStatusFilter("all");
     setFiscalDataStatusFilter("all");
     setConsentStatusFilter("all");
-    setHierarchyStatusFilter("all");
     setContactNetworkStatusFilter("all");
     setContactPage(1);
     setAddressPage(1);
     setFiscalDataPage(1);
     setConsentPage(1);
-    setHierarchyPage(1);
     setContactNetworkPage(1);
     setContactPageSize(CONTACT_GRID_PAGE_SIZE_OPTIONS[1]);
     setAddressPageSize(ADDRESS_GRID_PAGE_SIZE_OPTIONS[1]);
     setFiscalDataPageSize(FISCAL_DATA_GRID_PAGE_SIZE_OPTIONS[1]);
     setConsentPageSize(CONSENT_GRID_PAGE_SIZE_OPTIONS[1]);
-    setHierarchyPageSize(HIERARCHY_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactNetworkPageSize(CONTACT_NETWORK_GRID_PAGE_SIZE_OPTIONS[1]);
     setContactSortBy("Name");
     setContactSortDirection("asc");
@@ -793,13 +685,11 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setAddressSortDirection("asc");
     setFiscalDataSortBy("TaxNumber");
     setFiscalDataSortDirection("asc");
-    setConsentSortBy("ConsentType");
+    setConsentSortBy("consentType");
     setConsentSortDirection("asc");
-    setHierarchySortBy("ParentClient");
-    setHierarchySortDirection("asc");
     setContactNetworkSortBy("Name");
     setContactNetworkSortDirection("asc");
-  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetHierarchyForm, resetContactNetworkForm]);
+  }, [resetAddressForm, resetClientForm, resetContactForm, resetFiscalDataForm, resetConsentForm, resetContactNetworkForm]);
 
   /* ---------- Load client ---------- */
 
@@ -1098,41 +988,21 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [consentTypes.length, fetchWithAuth]);
 
-  /* ---------- Load hierarchy ---------- */
+  /* ---------- Load consent origin types ---------- */
 
-  const loadClientHierarchy = useCallback(async () => {
-    if (!client?.id) {
-      setHierarchyItems([]);
-      return;
-    }
-    setHierarchyLoading(true);
+  const loadConsentOriginTypes = useCallback(async () => {
+    if (consentOriginTypes.length > 0) return;
     try {
-      const response = await fetchWithAuth(
-        `/api/gerit/v1/clients/hierarchies/by-parent/${client.id}`,
-        { method: "GET" },
-      );
+      const response = await fetchWithAuth("/api/gerit/v1/consent-origin-types", { method: "GET" });
       if (!response) return;
       const payload = (await response.json().catch(() => null)) as unknown;
-      if (!response.ok) {
-        throw new Error(normalizeErrorMessage(payload, t("clients.hierarchy.errors.load")));
-      }
-      const parsed = parsePagedHierarchy(payload);
-      setHierarchyItems(parsed.items);
-    } catch (error) {
-      logError("clients.details.loadHierarchy", "Falha ao carregar hierarquia", error, {
-        clientId: client?.id,
-      });
-      toast({
-        title: t("clients.toasts.errorTitle"),
-        description:
-          error instanceof Error ? error.message : t("clients.hierarchy.errors.load"),
-        variant: "destructive",
-      });
-      setHierarchyItems([]);
-    } finally {
-      setHierarchyLoading(false);
+      if (!response.ok) return;
+      const parsed = normalizeConsentOriginTypes(payload);
+      setConsentOriginTypes(parsed);
+    } catch {
+      // Silent fail — consent origin types are optional
     }
-  }, [client, fetchWithAuth, t, toast]);
+  }, [consentOriginTypes.length, fetchWithAuth]);
 
   /* ---------- Load contact network ---------- */
 
@@ -1189,61 +1059,43 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     }
   }, [clientId, isAuthenticated, isHydrating, loadClient, resetClientViewState]);
 
-  // Lazy load contacts when tab becomes active
+  // Lazy load tab data when tab changes
   useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactsLoadedRef.current && !contactsLoading) {
-      contactsLoadedRef.current = true;
-      void loadClientContacts();
-    }
-  }, [loadedTabs, client?.id, contactsLoading, loadClientContacts]);
+    if (activeTab === lastLoadedTabRef.current) return;
+    lastLoadedTabRef.current = activeTab;
 
-  // Lazy load addresses when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("enderecos") && client?.id && !addressesLoadedRef.current && !addressesLoading) {
-      addressesLoadedRef.current = true;
-      void loadClientAddresses();
-    }
-  }, [loadedTabs, client?.id, addressesLoading, loadClientAddresses]);
+    if (!client?.id) return;
 
-  // Lazy load address types when addresses tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("enderecos")) {
-      void loadAddressTypes();
+    switch (activeTab) {
+      case "contactos":
+        void loadClientContacts();
+        void loadClientContactNetwork();
+        break;
+      case "enderecos":
+        void loadClientAddresses();
+        void loadAddressTypes();
+        break;
+      case "fiscalData":
+        void loadClientFiscalData();
+        break;
+      case "consents":
+        void loadClientConsents();
+        void loadConsentTypes();
+        void loadConsentOriginTypes();
+        break;
     }
-  }, [loadedTabs, loadAddressTypes]);
-
-  // Lazy load fiscal data when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("fiscalData") && client?.id && !fiscalDataLoadedRef.current && !fiscalDataLoading) {
-      fiscalDataLoadedRef.current = true;
-      void loadClientFiscalData();
-    }
-  }, [loadedTabs, client?.id, fiscalDataLoading, loadClientFiscalData]);
-
-  // Lazy load consents when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("consents") && client?.id && !consentsLoadedRef.current && !consentsLoading) {
-      consentsLoadedRef.current = true;
-      void loadClientConsents();
-      void loadConsentTypes();
-    }
-  }, [loadedTabs, client?.id, consentsLoading, loadClientConsents, loadConsentTypes]);
-
-  // Lazy load hierarchy when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("hierarchy") && client?.id && !hierarchyLoadedRef.current && !hierarchyLoading) {
-      hierarchyLoadedRef.current = true;
-      void loadClientHierarchy();
-    }
-  }, [loadedTabs, client?.id, hierarchyLoading, loadClientHierarchy]);
-
-  // Lazy load contact network when tab becomes active
-  useEffect(() => {
-    if (loadedTabs.has("contactos") && client?.id && !contactNetworkLoadedRef.current && !contactNetworkLoading) {
-      contactNetworkLoadedRef.current = true;
-      void loadClientContactNetwork();
-    }
-  }, [loadedTabs, client?.id, contactNetworkLoading, loadClientContactNetwork]);
+  }, [
+    activeTab,
+    client?.id,
+    loadClientContacts,
+    loadClientContactNetwork,
+    loadClientAddresses,
+    loadAddressTypes,
+    loadClientFiscalData,
+    loadClientConsents,
+    loadConsentTypes,
+    loadConsentOriginTypes,
+  ]);
 
   /* ---------- Client type change handler ---------- */
 
@@ -2180,10 +2032,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       try {
         const payload = {
           consentTypeId: Number(consentTypeId),
+          consentOriginTypeId: consentFormState.consentOriginTypeId ? Number(consentFormState.consentOriginTypeId) : null,
           granted: consentFormState.granted,
           grantedDate: consentFormState.grantedDate || null,
           revokedDate: consentFormState.revokedDate || null,
-          origin: consentFormState.origin.trim() || null,
           ipAddress: consentFormState.ipAddress.trim() || null,
           userAgent: consentFormState.userAgent.trim() || null,
         };
@@ -2233,10 +2085,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
     setEditingConsent(data);
     setConsentFormState({
       consentTypeId: String(data.consentTypeId),
+      consentOriginTypeId: String(data.consentOriginTypeId),
       granted: data.granted,
       grantedDate: data.grantedDate ?? "",
       revokedDate: data.revokedDate ?? "",
-      origin: data.origin ?? "",
       ipAddress: data.ipAddress ?? "",
       userAgent: data.userAgent ?? "",
     });
@@ -2314,7 +2166,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         logError("clients.details.consentDelete", "Falha ao eliminar consentimento", error, {
           clientId: client?.id,
           consentId: data.id,
-          consentTypeName: data.consentTypeName,
+          consentTypeName: data.consentType,
         });
         toast({
           title: t("clients.toasts.errorTitle"),
@@ -2325,165 +2177,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       }
     },
     [client, fetchWithAuth, loadClientConsents, t, toast],
-  );
-
-  /* ---------- Hierarchy submit ---------- */
-
-  const handleHierarchySubmit = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (!client) return;
-      const parentClientId = hierarchyFormState.parentClientId.trim();
-      const childClientId = hierarchyFormState.childClientId.trim();
-      if (!parentClientId || !childClientId) {
-        toast({
-          title: t("clients.toasts.validationTitle"),
-          description: t("clients.hierarchy.validation.required"),
-          variant: "destructive",
-        });
-        return;
-      }
-      setHierarchySubmitting(true);
-      try {
-        const payload = {
-          parentClientId: Number(parentClientId),
-          childClientId: Number(childClientId),
-          relationshipType: hierarchyFormState.relationshipType.trim() || null,
-        };
-        const isEditing = editingHierarchy !== null;
-        const endpoint = isEditing
-          ? `/api/gerit/v1/clients/hierarchies/${editingHierarchy?.id}`
-          : `/api/gerit/v1/clients/hierarchies`;
-        const response = await fetchWithAuth(endpoint, {
-          method: isEditing ? "PUT" : "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.save")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: isEditing
-            ? t("clients.hierarchy.toasts.updated")
-            : t("clients.hierarchy.toasts.created"),
-        });
-        resetHierarchyForm();
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchySubmit", "Falha ao salvar hierarquia", error, {
-          clientId: client?.id,
-          parentClientId: hierarchyFormState.parentClientId,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.save"),
-          variant: "destructive",
-        });
-      } finally {
-        setHierarchySubmitting(false);
-      }
-    },
-    [client, hierarchyFormState, editingHierarchy, fetchWithAuth, loadClientHierarchy, resetHierarchyForm, t, toast],
-  );
-
-  const handleHierarchyEdit = useCallback((data: ClientHierarchyItem) => {
-    setEditingHierarchy(data);
-    setHierarchyFormState({
-      parentClientId: String(data.parentClientId),
-      childClientId: String(data.childClientId),
-      relationshipType: data.relationshipType ?? "",
-    });
-  }, []);
-
-  const handleHierarchyToggleStatus = useCallback(
-    async (data: ClientHierarchyItem) => {
-      if (!client?.id) return;
-      try {
-        const endpoint = data.isActive
-          ? `/api/gerit/v1/clients/hierarchies/${data.id}/deactivate`
-          : `/api/gerit/v1/clients/hierarchies/${data.id}/activate`;
-        const response = await fetchWithAuth(endpoint, { method: "PATCH" });
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.status")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: data.isActive
-            ? t("clients.hierarchy.toasts.deactivated")
-            : t("clients.hierarchy.toasts.activated"),
-        });
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchyToggleStatus", "Falha ao alterar estado da relação", error, {
-          clientId: client?.id,
-          hierarchyId: data.id,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.status"),
-          variant: "destructive",
-        });
-      }
-    },
-    [client, fetchWithAuth, loadClientHierarchy, t, toast],
-  );
-
-  const handleHierarchyDelete = useCallback(
-    (data: ClientHierarchyItem) => {
-      hierarchyDeleteRef.current = data;
-      setHierarchyDeleteConfirmOpen(true);
-    },
-    [],
-  );
-
-  const handleHierarchyDeleteConfirm = useCallback(async () => {
-    const data = hierarchyDeleteRef.current;
-    hierarchyDeleteRef.current = null;
-    setHierarchyDeleteConfirmOpen(false);
-    if (!data || !client?.id) return;
-    try {
-        const response = await fetchWithAuth(
-          `/api/gerit/v1/clients/hierarchies/${data.id}`,
-          { method: "DELETE" },
-        );
-        if (!response) return;
-        const responsePayload = (await response.json().catch(() => null)) as unknown;
-        if (!response.ok) {
-          throw new Error(
-            normalizeErrorMessage(responsePayload, t("clients.hierarchy.errors.delete")),
-          );
-        }
-        toast({
-          title: t("clients.toasts.successTitle"),
-          description: t("clients.hierarchy.toasts.deleted"),
-        });
-        await loadClientHierarchy();
-      } catch (error) {
-        logError("clients.details.hierarchyDelete", "Falha ao eliminar relação", error, {
-          clientId: client?.id,
-          hierarchyId: data.id,
-          parentClientName: data.parentClientName,
-        });
-        toast({
-          title: t("clients.toasts.errorTitle"),
-          description:
-            error instanceof Error ? error.message : t("clients.hierarchy.errors.delete"),
-          variant: "destructive",
-        });
-      }
-    },
-    [client, fetchWithAuth, loadClientHierarchy, t, toast],
   );
 
   /* ---------- Bulk upload handlers ---------- */
@@ -3287,11 +2980,10 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   const consentColumns = useMemo<HubGridColumn<ClientConsentItem>[]>(
     () => [
-      { key: "ConsentType", label: t("clients.consents.table.consentType") },
-      { key: "Granted", label: t("clients.consents.table.granted") },
-      { key: "GrantedDate", label: t("clients.consents.table.grantedDate") },
-      { key: "RevokedDate", label: t("clients.consents.table.revokedDate") },
-      { key: "Origin", label: t("clients.consents.table.origin") },
+      { key: "consentType", label: t("clients.consents.table.consentType") },
+      { key: "consentOriginType", label: t("clients.consents.table.consentOriginType") },
+      { key: "granted", label: t("clients.consents.table.granted") },
+      { key: "grantedDate", label: t("clients.consents.table.grantedDate") },
     ],
     [t],
   );
@@ -3314,8 +3006,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       }
       if (!searchTerm) return true;
       return (
-        (item.consentTypeName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.origin ?? "").toLowerCase().includes(searchTerm)
+        (item.consentType ?? "").toLowerCase().includes(searchTerm) ||
+        (item.consentOriginType ?? "").toLowerCase().includes(searchTerm)
       );
     });
   }, [consentSearch, consentStatusFilter, consents]);
@@ -3326,25 +3018,25 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       let a = "";
       let b = "";
       switch (consentSortBy) {
-        case "ConsentType":
-          a = (current.consentTypeName ?? "").toLowerCase();
-          b = (next.consentTypeName ?? "").toLowerCase();
+        case "consentType":
+          a = (current.consentType ?? "").toLowerCase();
+          b = (next.consentType ?? "").toLowerCase();
           break;
-        case "Granted":
+        case "consentOriginType":
+          a = (current.consentOriginType ?? "").toLowerCase();
+          b = (next.consentOriginType ?? "").toLowerCase();
+          break;
+        case "granted":
           a = current.granted ? "1" : "0";
           b = next.granted ? "1" : "0";
           break;
-        case "GrantedDate":
+        case "grantedDate":
           a = (current.grantedDate ?? "").toLowerCase();
           b = (next.grantedDate ?? "").toLowerCase();
           break;
-        case "RevokedDate":
-          a = (current.revokedDate ?? "").toLowerCase();
-          b = (next.revokedDate ?? "").toLowerCase();
-          break;
-        case "Origin":
-          a = (current.origin ?? "").toLowerCase();
-          b = (next.origin ?? "").toLowerCase();
+        case "isActive":
+          a = current.isActive ? "1" : "0";
+          b = next.isActive ? "1" : "0";
           break;
       }
       const comparison = a.localeCompare(b);
@@ -3380,7 +3072,8 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
 
   const consentRowCells = useCallback(
     (item: ClientConsentItem) => [
-      item.consentTypeName ?? "-",
+      item.consentType ?? "-",
+      item.consentOriginType ?? "-",
       item.granted ? (
         <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
           {t("common.yes")}
@@ -3391,8 +3084,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         </span>
       ),
       item.grantedDate ?? "-",
-      item.revokedDate ?? "-",
-      item.origin ?? "-",
     ],
     [t],
   );
@@ -3460,166 +3151,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
       setConsentSortBy(normalized);
     },
     [consentSortBy],
-  );
-
-  /* ---------- Hierarchy grid ---------- */
-
-  const hierarchyColumns = useMemo<HubGridColumn<ClientHierarchyItem>[]>(
-    () => [
-      { key: "ParentClient", label: t("clients.hierarchy.table.parentClient") },
-      { key: "ChildClient", label: t("clients.hierarchy.table.childClient") },
-      { key: "RelationshipType", label: t("clients.hierarchy.table.relationshipType") },
-    ],
-    [t],
-  );
-
-  const hierarchyStatusFilterOptions = useMemo(
-    () => [
-      { value: "active", label: t("clients.filters.active") },
-      { value: "inactive", label: t("clients.filters.inactive") },
-      { value: "all", label: t("clients.filters.all") },
-    ],
-    [t],
-  );
-
-  const filteredHierarchy = useMemo(() => {
-    const searchTerm = hierarchySearch.trim().toLowerCase();
-    return hierarchyItems.filter((item) => {
-      if (hierarchyStatusFilter !== "all") {
-        const expected = hierarchyStatusFilter === "active";
-        if (item.isActive !== expected) return false;
-      }
-      if (!searchTerm) return true;
-      return (
-        (item.parentClientName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.childClientName ?? "").toLowerCase().includes(searchTerm) ||
-        (item.relationshipType ?? "").toLowerCase().includes(searchTerm)
-      );
-    });
-  }, [hierarchySearch, hierarchyStatusFilter, hierarchyItems]);
-
-  const sortedHierarchy = useMemo(() => {
-    const items = [...filteredHierarchy];
-    items.sort((current, next) => {
-      let a = "";
-      let b = "";
-      switch (hierarchySortBy) {
-        case "ParentClient":
-          a = (current.parentClientName ?? "").toLowerCase();
-          b = (next.parentClientName ?? "").toLowerCase();
-          break;
-        case "ChildClient":
-          a = (current.childClientName ?? "").toLowerCase();
-          b = (next.childClientName ?? "").toLowerCase();
-          break;
-        case "RelationshipType":
-          a = (current.relationshipType ?? "").toLowerCase();
-          b = (next.relationshipType ?? "").toLowerCase();
-          break;
-      }
-      const comparison = a.localeCompare(b);
-      return hierarchySortDirection === "asc" ? comparison : -comparison;
-    });
-    return items;
-  }, [filteredHierarchy, hierarchySortBy, hierarchySortDirection]);
-
-  const hierarchyTotalPages = Math.max(1, Math.ceil(sortedHierarchy.length / hierarchyPageSize));
-
-  useEffect(() => {
-    setHierarchyPage((current) => Math.min(current, hierarchyTotalPages));
-  }, [hierarchyTotalPages]);
-
-  const hierarchyPageButtons = useMemo(
-    () => buildPageButtons(hierarchyPage, hierarchyTotalPages),
-    [hierarchyPage, hierarchyTotalPages],
-  );
-
-  const visibleHierarchy = useMemo(() => {
-    const startIndex = (hierarchyPage - 1) * hierarchyPageSize;
-    return sortedHierarchy.slice(startIndex, startIndex + hierarchyPageSize);
-  }, [hierarchyPage, hierarchyPageSize, sortedHierarchy]);
-
-  const hierarchyPageCaption = useMemo(
-    () => t("hubgrid.itemsLabel", { count: Math.max(0, sortedHierarchy.length) }),
-    [sortedHierarchy.length, t],
-  );
-
-  useEffect(() => {
-    setHierarchyPage(1);
-  }, [hierarchyStatusFilter, hierarchySearch, hierarchySortBy, hierarchySortDirection, hierarchyPageSize]);
-
-  const hierarchyRowCells = useCallback(
-    (item: ClientHierarchyItem) => [
-      item.parentClientName ?? "-",
-      item.childClientName ?? "-",
-      item.relationshipType ?? "-",
-    ],
-    [],
-  );
-
-  const renderHierarchyStatus = useCallback(
-    (item: ClientHierarchyItem) => (
-      <span
-        className={clsx(
-          "inline-flex rounded-full px-2.5 py-1 text-xs font-semibold",
-          "text-muted-foreground dark:text-muted-foreground",
-        )}
-      >
-        {item.isActive ? t("clients.status.active") : t("clients.status.inactive")}
-      </span>
-    ),
-    [t],
-  );
-
-  const renderHierarchyActions = useCallback(
-    (item: ClientHierarchyItem) => (
-      <div className="flex items-center justify-end gap-2">
-        <button
-          type="button"
-          onClick={() => handleHierarchyEdit(item)}
-          className="inline-flex h-10 w-10 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-          title={t("clients.actions.edit")}
-        >
-          <SquarePen className="h-4 w-4 text-muted-foreground dark:text-muted-foreground" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleHierarchyToggleStatus(item)}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
-          title={
-            item.isActive
-              ? t("clients.actions.deactivate")
-              : t("clients.actions.activate")
-          }
-        >
-          {item.isActive
-            ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
-            : <Power className="h-4 w-4 text-green-500 dark:text-green-400" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => handleHierarchyDelete(item)}
-          className="inline-flex h-10 w-10 items-center justify-center transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
-          title={t("clients.actions.delete")}
-        >
-          <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
-        </button>
-      </div>
-    ),
-    [handleHierarchyDelete, handleHierarchyEdit, handleHierarchyToggleStatus, t],
-  );
-
-  const handleHierarchySort = useCallback(
-    (columnKey: string) => {
-      const normalized = columnKey as HierarchySortColumn;
-      if (normalized === hierarchySortBy) {
-        setHierarchySortDirection((current) => (current === "asc" ? "desc" : "asc"));
-        return;
-      }
-      setHierarchySortDirection("asc");
-      setHierarchySortBy(normalized);
-    },
-    [hierarchySortBy],
   );
 
   /* ---------- Derived values ---------- */
@@ -3964,7 +3495,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contacts tab ---------- */
 
   const renderContactsTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4089,7 +3620,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Contact Network tab ---------- */
 
   const renderContactNetworkTab = () => {
-    if (!loadedTabs.has("contactos")) {
+    if (activeTab !== "contactos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4254,7 +3785,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Addresses tab ---------- */
 
   const renderAddressesTab = () => {
-    if (!loadedTabs.has("enderecos")) {
+    if (activeTab !== "enderecos") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4484,7 +4015,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Fiscal Data tab ---------- */
 
   const renderFiscalDataTab = () => {
-    if (!loadedTabs.has("fiscalData")) {
+    if (activeTab !== "fiscalData") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4621,7 +4152,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
   /* ---------- Render: Consents tab ---------- */
 
   const renderConsentsTab = () => {
-    if (!loadedTabs.has("consents")) {
+    if (activeTab !== "consents") {
       return (
         <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
           {t("clients.detail.loadingTab")}
@@ -4649,12 +4180,17 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
               }))}
               placeholder={t("clients.form.selectOption")}
             />
-            <FormField
-              label={t("clients.consents.form.origin")}
-              value={consentFormState.origin}
+            <SelectField
+              label={t("clients.consents.form.consentOriginType")}
+              value={consentFormState.consentOriginTypeId}
               onChange={(v) =>
-                setConsentFormState((prev) => ({ ...prev, origin: v }))
+                setConsentFormState((prev) => ({ ...prev, consentOriginTypeId: v }))
               }
+              options={consentOriginTypes.map((cot) => ({
+                value: String(cot.id),
+                label: cot.name,
+              }))}
+              placeholder={t("clients.form.selectOption")}
             />
             <FormField
               label={t("clients.consents.form.grantedDate")}
@@ -4741,113 +4277,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           pageSize={consentPageSize}
           pageSizeOptions={CONSENT_GRID_PAGE_SIZE_OPTIONS}
           onPageSizeChange={setConsentPageSize}
-          paginationPreviousLabel={t("clients.pagination.previous")}
-          paginationNextLabel={t("clients.pagination.next")}
-          paginationPageLabel={t("clients.pagination.page")}
-          paginationPerPageLabel={t("clients.pagination.perPage")}
-          getRowKey={(item) => item.id}
-        />
-      </div>
-    );
-  };
-
-  /* ---------- Render: Hierarchy tab ---------- */
-
-  const renderHierarchyTab = () => {
-    if (!loadedTabs.has("hierarchy")) {
-      return (
-        <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-          {t("clients.detail.loadingTab")}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {/* Hierarchy form */}
-        <form
-          onSubmit={(e) => void handleHierarchySubmit(e)}
-          className="rounded-sm border border-border bg-surface p-4 dark:border-border dark:bg-surface"
-        >
-          <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <FormField
-              label={t("clients.hierarchy.form.parentClient")}
-              value={hierarchyFormState.parentClientId}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, parentClientId: v }))
-              }
-              required
-            />
-            <FormField
-              label={t("clients.hierarchy.form.childClient")}
-              value={hierarchyFormState.childClientId}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, childClientId: v }))
-              }
-              required
-            />
-            <FormField
-              label={t("clients.hierarchy.form.relationshipType")}
-              value={hierarchyFormState.relationshipType}
-              onChange={(v) =>
-                setHierarchyFormState((prev) => ({ ...prev, relationshipType: v }))
-              }
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="submit"
-              disabled={hierarchySubmitting}
-              className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50 dark:bg-primary dark:hover:bg-primary/90"
-            >
-              {hierarchySubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
-              {editingHierarchy ? t("clients.actions.save") : t("clients.actions.add")}
-            </button>
-            {editingHierarchy && (
-              <button
-                type="button"
-                onClick={resetHierarchyForm}
-                className="rounded-sm border border-border bg-background px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:border-primary dark:hover:text-primary"
-              >
-                {t("clients.actions.cancel")}
-              </button>
-            )}
-          </div>
-        </form>
-
-        {/* Hierarchy grid */}
-        <HubGrid
-          columns={hierarchyColumns}
-          items={visibleHierarchy}
-          renderRowCells={hierarchyRowCells}
-          renderStatus={renderHierarchyStatus}
-          renderActions={renderHierarchyActions}
-          statusColumnLabel={t("clients.table.status")}
-          actionsColumnLabel={t("clients.hierarchy.table.actions")}
-          rowDensity={hierarchyGridDensity}
-          densityOptions={gridDensityOptions}
-          onDensityChange={setHierarchyGridDensity}
-          sortBy={hierarchySortBy}
-          sortDirection={hierarchySortDirection}
-          onSort={handleHierarchySort}
-          statusFilter={hierarchyStatusFilter}
-          statusFilterOptions={hierarchyStatusFilterOptions}
-          onStatusFilterChange={setHierarchyStatusFilter}
-          statusFilterLabel={t("clients.filters.statusLabel")}
-          searchValue={hierarchySearch}
-          onSearchChange={setHierarchySearch}
-          searchPlaceholder={t("clients.filters.search")}
-          loading={hierarchyLoading}
-          loadingText={t("clients.loading")}
-          emptyText={t("clients.hierarchy.empty")}
-          pageCaption={hierarchyPageCaption}
-          page={hierarchyPage}
-          totalPages={hierarchyTotalPages}
-          pageButtons={hierarchyPageButtons}
-          onPageChange={setHierarchyPage}
-          pageSize={hierarchyPageSize}
-          pageSizeOptions={HIERARCHY_GRID_PAGE_SIZE_OPTIONS}
-          onPageSizeChange={setHierarchyPageSize}
           paginationPreviousLabel={t("clients.pagination.previous")}
           paginationNextLabel={t("clients.pagination.next")}
           paginationPageLabel={t("clients.pagination.page")}
@@ -4950,7 +4379,7 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
           {!loadingClient && (
             <HubTabs<ClientTab>
               activeTab={activeTab}
-              onTabChange={handleTabChange}
+              onTabChange={setActiveTab}
               tabs={[
                 {
                   id: "informacoes",
@@ -4976,11 +4405,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                   id: "consents",
                   label: t("clients.detail.tabs.consentsSummary"),
                   panel: renderConsentsTab(),
-                },
-                {
-                  id: "hierarchy",
-                  label: t("clients.detail.tabs.hierarchySummary"),
-                  panel: renderHierarchyTab(),
                 },
               ]}
             />
@@ -5032,25 +4456,12 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
         title={t("clients.toasts.validationTitle")}
         description={
           consentDeleteRef.current
-            ? t("clients.consents.confirm.delete", { consentTypeName: consentDeleteRef.current.consentTypeName ?? t("clients.consents.table.consentType") })
+            ? t("clients.consents.confirm.delete", { consentTypeName: consentDeleteRef.current.consentType ?? t("clients.consents.table.consentType") })
             : ""
         }
         confirmLabel={t("clients.actions.delete")}
         cancelLabel={t("clients.actions.cancel")}
         onConfirm={() => void handleConsentDeleteConfirm()}
-      />
-      <ConfirmDialog
-        open={hierarchyDeleteConfirmOpen}
-        onOpenChange={setHierarchyDeleteConfirmOpen}
-        title={t("clients.toasts.validationTitle")}
-        description={
-          hierarchyDeleteRef.current
-            ? t("clients.hierarchy.confirm.delete", { parentClientName: hierarchyDeleteRef.current.parentClientName ?? t("clients.hierarchy.table.parentClient"), childClientName: hierarchyDeleteRef.current.childClientName ?? t("clients.hierarchy.table.childClient") })
-            : ""
-        }
-        confirmLabel={t("clients.actions.delete")}
-        cancelLabel={t("clients.actions.cancel")}
-        onConfirm={() => void handleHierarchyDeleteConfirm()}
       />
     </>
   );

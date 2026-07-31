@@ -43,10 +43,7 @@ Para tarefas triviais: ajuste de texto, i18n, visual localizado, label, placehol
 **Validações obrigatórias:**
 - `git diff --check` (sempre)
 - `npm run lint` (se tocar arquivos TS/TSX relevantes)
-
-**Validações NÃO obrigatórias (apenas se explicitly solicitado pelo coordinator ou se houver alteração de rota/import/export/tipo compartilhado):**
-- `npm run build`
-- `npx tsc --project tsconfig.typecheck.json --noEmit`
+- `npm run build` (sempre — obrigatório antes de push)
 
 ### Timebox FAST_PATH
 
@@ -56,10 +53,9 @@ Para `FAST_PATH`, seguir limite operacional:
 2. Se em até **3 minutos** não localizar o arquivo, **parar** e reportar bloqueio objetivo.
 3. Não fazer investigação ampla do projeto.
 4. Não fazer análise arquitetural.
-5. Não executar build completo, salvo justificativa explícita.
-6. Alterar o **mínimo** possível.
-7. **Máximo esperado:** 1 a 3 arquivos alterados.
-8. Se precisar alterar mais de 3 arquivos, **parar** e pedir reclassificação para `STANDARD_PATH`.
+5. Alterar o **mínimo** possível.
+6. **Máximo esperado:** 1 a 3 arquivos alterados.
+7. Se precisar alterar mais de 3 arquivos, **parar** e pedir reclassificação para `STANDARD_PATH`.
 
 ## STANDARD_PATH
 
@@ -68,6 +64,7 @@ Para tarefas com múltiplos arquivos ou impacto moderado.
 **Validações obrigatórias:**
 - `git diff --check`
 - `npm run lint`
+- `npm run build`
 - `npx tsc --project tsconfig.typecheck.json --noEmit`
 
 ## FULL_PATH
@@ -247,6 +244,17 @@ Enviar ao `kanban-coordinator`:
 - Link do PR
 - Resumo do ajuste
 - Validações executadas
+
+---
+
+# Procedimento de Conflito de Merge
+
+Se ao fazer `git pull origin develop` ou ao criar o PR ocorrer um **conflito de merge**:
+
+1. **Não tentar resolver o conflito sozinho.**
+2. Informar o Kanban Coordinator sobre o conflito.
+3. O Kanban Coordinator invocará o Developer Senior para analisar e resolver.
+4. Após resolução, o fluxo normal retoma.
 
 ---
 

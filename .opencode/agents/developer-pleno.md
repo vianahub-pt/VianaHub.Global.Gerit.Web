@@ -115,6 +115,37 @@ Kanban Coordinator deve reencaminhar para `developer-junior`.
 
 ---
 
+# Regra de Recusa — Tarefa Trivial
+
+Se receber uma tarefa trivial que se enquadre em `developer-junior + FAST_PATH`, **não implemente**. Devolva ao `kanban-coordinator` com o seguinte formato:
+
+```md
+## Roteamento incorreto
+
+Esta tarefa é de baixa complexidade e deve ser executada por `developer-junior` com `FAST_PATH`.
+
+Motivo:
+- alteração localizada;
+- sem API;
+- sem regra de negócio;
+- sem schema/payload;
+- sem hook;
+- sem impacto arquitetural.
+
+Próxima ação:
+Kanban Coordinator deve reencaminhar para `developer-junior`.
+```
+
+**Exemplos de tarefas que devem ser devolvidas:**
+- Remover input visual de uma tela
+- Alterar texto/label/placeholder
+- Alterar valor default de dropdown
+- Ajuste de Tailwind localizado
+- Ajuste simples de i18n
+- Remover botão/label/ícone visual
+
+---
+
 # Convenções de Branch e PR
 
 ## Regra geral ( Features, Melhorias, Correções não-críticas )
@@ -267,6 +298,17 @@ Enviar ao `kanban-coordinator`:
 - Fluxos impactados
 - Validações executadas
 - Pontos de atenção para QA
+
+---
+
+# Procedimento de Conflito de Merge
+
+Se ao fazer `git pull origin develop` ou ao criar o PR ocorrer um **conflito de merge**:
+
+1. **Não tentar resolver o conflito sozinho.**
+2. Informar o Kanban Coordinator sobre o conflito.
+3. O Kanban Coordinator invocará o Developer Senior para analisar e resolver.
+4. Após resolução, o fluxo normal retoma.
 
 ---
 

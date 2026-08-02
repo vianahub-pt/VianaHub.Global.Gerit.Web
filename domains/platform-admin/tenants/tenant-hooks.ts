@@ -69,7 +69,7 @@ export function useTenants(params: TenantListParams = {}) {
       if (sortBy) searchParams.set("SortBy", sortBy);
       if (sortDirection) searchParams.set("SortDirection", sortDirection);
 
-      const response = await fetchWithAuth(/api/gerit/v1/tenants/paged?);
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/paged?${searchParams.toString()}`);
 
       if (!response.ok) {
         throw new Error("Erro ao listar tenants");
@@ -89,7 +89,7 @@ export function useTenant(id: number) {
   return useQuery({
     queryKey: queryKeys.tenants.detail(id),
     queryFn: async (): Promise<TenantItem> => {
-      const response = await fetchWithAuth(/api/gerit/v1/tenants/);
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`);
 
       if (!response.ok) {
         throw new Error("Erro ao obter tenant");
@@ -139,7 +139,7 @@ export function useUpdateTenant() {
 
   return useMutation({
     mutationFn: async ({ id, data }: { id: number; data: Partial<TenantItem> }) => {
-      const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -169,7 +169,7 @@ export function useActivateTenant() {
 
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(/api/gerit/v1/tenants//activate, {
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}/activate`, {
         method: "PATCH",
       });
 
@@ -194,7 +194,7 @@ export function useDeactivateTenant() {
 
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(/api/gerit/v1/tenants//deactivate, {
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}/deactivate`, {
         method: "PATCH",
       });
 
@@ -219,7 +219,7 @@ export function useDeleteTenant() {
 
   return useMutation({
     mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`, {
         method: "DELETE",
       });
 

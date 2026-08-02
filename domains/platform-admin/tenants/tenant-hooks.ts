@@ -15,9 +15,9 @@
 
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback } from "react";
 import { useAuth } from "@/platform/auth";
-import { queryKeys } from "@/platform/query";
+import { useToast } from "@/shared/ui";
 
 /**
  * Interface para item de tenant
@@ -55,50 +55,81 @@ export interface TenantListParams {
 /**
  * Hook para listar tenants paginados
  */
-export function useTenants(params: TenantListParams = {}) {
+export function useTenants() {
   const { fetchWithAuth } = useAuth();
-  const { pageNumber = 1, pageSize = 10, search, sortBy, sortDirection } = params;
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useQuery({
-    queryKey: queryKeys.tenants.list({ pageNumber, pageSize, search, sortBy, sortDirection }),
-    queryFn: async (): Promise<PaginatedResponse<TenantItem>> => {
-      const searchParams = new URLSearchParams();
-      searchParams.set("PageNumber", pageNumber.toString());
-      searchParams.set("PageSize", pageSize.toString());
-      if (search) searchParams.set("Search", search);
-      if (sortBy) searchParams.set("SortBy", sortBy);
-      if (sortDirection) searchParams.set("SortDirection", sortDirection);
+  const loadTenants = useCallback(
+    async (params: TenantListParams = {}): Promise<PaginatedResponse<TenantItem> | null> => {
+      setLoading(true);
+      try {
+        const searchParams = new URLSearchParams();
+        const { pageNumber = 1, pageSize = 10, search, sortBy, sortDirection } = params;
+        searchParams.set("PageNumber", pageNumber.toString());
+        searchParams.set("PageSize", pageSize.toString());
+        if (search) searchParams.set("Search", search);
+        if (sortBy) searchParams.set("SortBy", sortBy);
+        if (sortDirection) searchParams.set("SortDirection", sortDirection);
 
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/paged?${searchParams.toString()}`);
+        const response = await fetchWithAuth(/api/gerit/v1/tenants/paged?);
 
-      if (!response.ok) {
-        throw new Error("Erro ao listar tenants");
+        if (!response.ok) {
+          throw new Error("Erro ao listar tenants");
+        }
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao listar tenants",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
-
-      return response.json();
     },
-  });
+    [fetchWithAuth, toast]
+  );
+
+  return { loadTenants, loading };
 }
 
 /**
  * Hook para obter tenant por ID
  */
-export function useTenant(id: number) {
+export function useTenant() {
   const { fetchWithAuth } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useQuery({
-    queryKey: queryKeys.tenants.detail(id),
-    queryFn: async (): Promise<TenantItem> => {
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`);
+  const getTenant = useCallback(
+    async (id: number): Promise<TenantItem | null> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth(/api/gerit/v1/tenants/);
 
-      if (!response.ok) {
-        throw new Error("Erro ao obter tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao obter tenant");
+        }
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao obter tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
-
-      return response.json();
     },
-    enabled: !!id,
-  });
+    [fetchWithAuth, toast]
+  );
+
+  return { getTenant, loading };
 }
 
 /**
@@ -106,28 +137,46 @@ export function useTenant(id: number) {
  */
 export function useCreateTenant() {
   const { fetchWithAuth } = useAuth();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useMutation({
-    mutationFn: async (data: Omit<TenantItem, "id" | "createdAt" | "updatedAt">) => {
-      const response = await fetchWithAuth("/api/gerit/v1/tenants", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+  const createTenant = useCallback(
+    async (data: Omit<TenantItem, "id" | "createdAt" | "updatedAt">): Promise<TenantItem | null> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth("/api/gerit/v1/tenants", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        throw new Error("Erro ao criar tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao criar tenant");
+        }
+
+        toast({
+          title: "Tenant criado com sucesso",
+          variant: "default",
+        });
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao criar tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
+    },
+    [fetchWithAuth, toast]
+  );
 
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.all });
-    },
-  });
+  return { createTenant, loading };
 }
 
 /**
@@ -135,29 +184,46 @@ export function useCreateTenant() {
  */
 export function useUpdateTenant() {
   const { fetchWithAuth } = useAuth();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: Partial<TenantItem> }) => {
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
+  const updateTenant = useCallback(
+    async ({ id, data }: { id: number; data: Partial<TenantItem> }): Promise<TenantItem | null> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(data),
+        });
 
-      if (!response.ok) {
-        throw new Error("Erro ao atualizar tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao atualizar tenant");
+        }
+
+        toast({
+          title: "Tenant atualizado com sucesso",
+          variant: "default",
+        });
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao atualizar tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
+    },
+    [fetchWithAuth, toast]
+  );
 
-      return response.json();
-    },
-    onSuccess: (_, { id }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.detail(id) });
-    },
-  });
+  return { updateTenant, loading };
 }
 
 /**
@@ -165,24 +231,42 @@ export function useUpdateTenant() {
  */
 export function useActivateTenant() {
   const { fetchWithAuth } = useAuth();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}/activate`, {
-        method: "PATCH",
-      });
+  const activateTenant = useCallback(
+    async (id: number): Promise<TenantItem | null> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth(/api/gerit/v1/tenants//activate, {
+          method: "PATCH",
+        });
 
-      if (!response.ok) {
-        throw new Error("Erro ao ativar tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao ativar tenant");
+        }
+
+        toast({
+          title: "Tenant ativado com sucesso",
+          variant: "default",
+        });
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao ativar tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
+    },
+    [fetchWithAuth, toast]
+  );
 
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.all });
-    },
-  });
+  return { activateTenant, loading };
 }
 
 /**
@@ -190,24 +274,42 @@ export function useActivateTenant() {
  */
 export function useDeactivateTenant() {
   const { fetchWithAuth } = useAuth();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}/deactivate`, {
-        method: "PATCH",
-      });
+  const deactivateTenant = useCallback(
+    async (id: number): Promise<TenantItem | null> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth(/api/gerit/v1/tenants//deactivate, {
+          method: "PATCH",
+        });
 
-      if (!response.ok) {
-        throw new Error("Erro ao desativar tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao desativar tenant");
+        }
+
+        toast({
+          title: "Tenant desativado com sucesso",
+          variant: "default",
+        });
+
+        return await response.json();
+      } catch (error) {
+        toast({
+          title: "Erro ao desativar tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return null;
+      } finally {
+        setLoading(false);
       }
+    },
+    [fetchWithAuth, toast]
+  );
 
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.all });
-    },
-  });
+  return { deactivateTenant, loading };
 }
 
 /**
@@ -215,22 +317,40 @@ export function useDeactivateTenant() {
  */
 export function useDeleteTenant() {
   const { fetchWithAuth } = useAuth();
-  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
 
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const response = await fetchWithAuth(`/api/gerit/v1/tenants/${id}`, {
-        method: "DELETE",
-      });
+  const deleteTenant = useCallback(
+    async (id: number): Promise<boolean> => {
+      setLoading(true);
+      try {
+        const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+          method: "DELETE",
+        });
 
-      if (!response.ok) {
-        throw new Error("Erro ao excluir tenant");
+        if (!response.ok) {
+          throw new Error("Erro ao excluir tenant");
+        }
+
+        toast({
+          title: "Tenant excluído com sucesso",
+          variant: "default",
+        });
+
+        return true;
+      } catch (error) {
+        toast({
+          title: "Erro ao excluir tenant",
+          description: error instanceof Error ? error.message : "Erro desconhecido",
+          variant: "destructive",
+        });
+        return false;
+      } finally {
+        setLoading(false);
       }
+    },
+    [fetchWithAuth, toast]
+  );
 
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tenants.all });
-    },
-  });
+  return { deleteTenant, loading };
 }

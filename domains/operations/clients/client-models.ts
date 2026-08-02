@@ -120,7 +120,7 @@ export interface ClientItem {
   id: number;
   tenantId?: number;
   partyTypeId: PartyType;
-  clientType: ClientType;
+  clientType?: ClientType;
   clientTypeDescription?: string;
   originType?: number;
   originTypeDescription?: string;
@@ -147,6 +147,11 @@ export interface ClientItem {
   cae?: string;
   numberOfEmployee?: number;
   legalRepresentative?: string;
+  // Legacy sub-objects for backward compatibility during migration
+  /** @deprecated Use top-level individual fields instead */
+  individual?: ClientIndividual;
+  /** @deprecated Use top-level company fields instead */
+  company?: ClientCompany;
 }
 
 /* ---------- Client Fiscal Data ---------- */

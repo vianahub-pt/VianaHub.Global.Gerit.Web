@@ -3,25 +3,14 @@
  *
  * Hooks de dados para gestão de Tenants do Platform Admin.
  * Backend: VianaHub.Global.Gerit - API REST para Tenants
- *
- * Referência:
- * - GET /tenants/paged - Listar tenants paginados
- * - GET /tenants/{id} - Obter tenant por ID
- * - POST - Criar tenant
- * - PUT - Atualizar tenant
- * - PATCH /activate|deactivate - Ativar/desativar tenant
- * - DELETE - Excluir tenant
  */
 
 "use client";
 
 import { useState, useCallback } from "react";
 import { useAuth } from "@/platform/auth";
-import { useToast } from "@/shared/ui";
+import { useToast } from "@/shared/feedback";
 
-/**
- * Interface para item de tenant
- */
 export interface TenantItem {
   id: number;
   name: string;
@@ -30,9 +19,6 @@ export interface TenantItem {
   updatedAt?: string;
 }
 
-/**
- * Interface para resposta paginada
- */
 export interface PaginatedResponse<T> {
   items: T[];
   totalItems: number;
@@ -41,9 +27,6 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
-/**
- * Interface para parâmetros de listagem
- */
 export interface TenantListParams {
   pageNumber?: number;
   pageSize?: number;
@@ -52,9 +35,6 @@ export interface TenantListParams {
   sortDirection?: "asc" | "desc";
 }
 
-/**
- * Hook para listar tenants paginados
- */
 export function useTenants() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -72,7 +52,7 @@ export function useTenants() {
         if (sortBy) searchParams.set("SortBy", sortBy);
         if (sortDirection) searchParams.set("SortDirection", sortDirection);
 
-        const response = await fetchWithAuth(/api/gerit/v1/tenants/paged?);
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/paged?" + searchParams.toString());
 
         if (!response.ok) {
           throw new Error("Erro ao listar tenants");
@@ -96,9 +76,6 @@ export function useTenants() {
   return { loadTenants, loading };
 }
 
-/**
- * Hook para obter tenant por ID
- */
 export function useTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -108,7 +85,7 @@ export function useTenant() {
     async (id: number): Promise<TenantItem | null> => {
       setLoading(true);
       try {
-        const response = await fetchWithAuth(/api/gerit/v1/tenants/);
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id);
 
         if (!response.ok) {
           throw new Error("Erro ao obter tenant");
@@ -132,9 +109,6 @@ export function useTenant() {
   return { getTenant, loading };
 }
 
-/**
- * Hook para criar tenant
- */
 export function useCreateTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -179,9 +153,6 @@ export function useCreateTenant() {
   return { createTenant, loading };
 }
 
-/**
- * Hook para atualizar tenant
- */
 export function useUpdateTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -191,7 +162,7 @@ export function useUpdateTenant() {
     async ({ id, data }: { id: number; data: Partial<TenantItem> }): Promise<TenantItem | null> => {
       setLoading(true);
       try {
-        const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id, {
           method: "PUT",
           headers: {
             "Content-Type": "application/json",
@@ -226,9 +197,6 @@ export function useUpdateTenant() {
   return { updateTenant, loading };
 }
 
-/**
- * Hook para ativar tenant
- */
 export function useActivateTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -238,7 +206,7 @@ export function useActivateTenant() {
     async (id: number): Promise<TenantItem | null> => {
       setLoading(true);
       try {
-        const response = await fetchWithAuth(/api/gerit/v1/tenants//activate, {
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id + "/activate", {
           method: "PATCH",
         });
 
@@ -269,9 +237,6 @@ export function useActivateTenant() {
   return { activateTenant, loading };
 }
 
-/**
- * Hook para desativar tenant
- */
 export function useDeactivateTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -281,7 +246,7 @@ export function useDeactivateTenant() {
     async (id: number): Promise<TenantItem | null> => {
       setLoading(true);
       try {
-        const response = await fetchWithAuth(/api/gerit/v1/tenants//deactivate, {
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id + "/deactivate", {
           method: "PATCH",
         });
 
@@ -312,9 +277,6 @@ export function useDeactivateTenant() {
   return { deactivateTenant, loading };
 }
 
-/**
- * Hook para excluir tenant
- */
 export function useDeleteTenant() {
   const { fetchWithAuth } = useAuth();
   const { toast } = useToast();
@@ -324,7 +286,7 @@ export function useDeleteTenant() {
     async (id: number): Promise<boolean> => {
       setLoading(true);
       try {
-        const response = await fetchWithAuth(/api/gerit/v1/tenants/, {
+        const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id, {
           method: "DELETE",
         });
 

@@ -8,3 +8,4 @@ export * from "@/platform/tenant/tenant-context";
 export * from "@/platform/subscription/subscription-context";
 export * from "@/platform/entitlements/entitlements-context";
 export * from "@/platform/workspace-bootstrap/workspace-bootstrap-provider";
+export * from "@/platform/types";

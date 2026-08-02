@@ -54,6 +54,8 @@ export function useTenants() {
 
         const response = await fetchWithAuth("/api/gerit/v1/tenants/paged?" + searchParams.toString());
 
+        if (!response) return null;
+
         if (!response.ok) {
           throw new Error("Erro ao listar tenants");
         }
@@ -86,6 +88,8 @@ export function useTenant() {
       setLoading(true);
       try {
         const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id);
+
+        if (!response) return null;
 
         if (!response.ok) {
           throw new Error("Erro ao obter tenant");
@@ -125,6 +129,8 @@ export function useCreateTenant() {
           },
           body: JSON.stringify(data),
         });
+
+        if (!response) return null;
 
         if (!response.ok) {
           throw new Error("Erro ao criar tenant");
@@ -170,6 +176,8 @@ export function useUpdateTenant() {
           body: JSON.stringify(data),
         });
 
+        if (!response) return null;
+
         if (!response.ok) {
           throw new Error("Erro ao atualizar tenant");
         }
@@ -209,6 +217,8 @@ export function useActivateTenant() {
         const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id + "/activate", {
           method: "PATCH",
         });
+
+        if (!response) return null;
 
         if (!response.ok) {
           throw new Error("Erro ao ativar tenant");
@@ -250,6 +260,8 @@ export function useDeactivateTenant() {
           method: "PATCH",
         });
 
+        if (!response) return null;
+
         if (!response.ok) {
           throw new Error("Erro ao desativar tenant");
         }
@@ -289,6 +301,8 @@ export function useDeleteTenant() {
         const response = await fetchWithAuth("/api/gerit/v1/tenants/" + id, {
           method: "DELETE",
         });
+
+        if (!response) return false;
 
         if (!response.ok) {
           throw new Error("Erro ao excluir tenant");

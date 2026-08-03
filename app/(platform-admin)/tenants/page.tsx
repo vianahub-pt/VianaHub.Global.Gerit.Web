@@ -1,6 +1,5 @@
-import { ModulePlaceholder } from "@/shared/layout/module-placeholder";
+import { TenantsPage } from "@/domains/platform-admin/tenants";
 
 export default function PlatformTenantsPage() {
-  return <ModulePlaceholder title="Platform Admin - Tenants" />;
+  return <TenantsPage />;
 }
-

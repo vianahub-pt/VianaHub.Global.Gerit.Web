@@ -24,7 +24,6 @@ import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { TenantItem } from "@/domains/platform-admin/tenants/tenant-models";
 import {
   TenantsPagedResponse,
-  normalizeTenant,
   normalizeErrorMessage,
   parsePagedTenants,
 } from "@/domains/platform-admin/tenants/tenant-utils";

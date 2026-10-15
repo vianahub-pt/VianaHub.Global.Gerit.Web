@@ -1,4 +1,5 @@
 import { logger } from "@/core/logger";
+import { buildGeritApiUrl } from "@/core/env/server-env";
 import { DEFAULT_LANGUAGE } from "@/platform/i18n/language";
 
 const FORWARDED_HEADERS = [
@@ -12,7 +13,7 @@ function buildUpstreamUrl(request: Request, path: string[]) {
   const url = new URL(request.url);
   const normalizedPath = path.join("/");
 
-  return `http://82.29.172.68/${normalizedPath}${url.search}`;
+  return buildGeritApiUrl(normalizedPath, url.search);
 }
 
 async function proxyRequest(

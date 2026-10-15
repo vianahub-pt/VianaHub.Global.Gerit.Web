@@ -1,47 +1,215 @@
-name: Build and Deploy
+name: Build and Deploy Gerit Web
 
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      target_environment:
+        description: GitHub Environment de destino
+        type: environment
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gerit-web-${{ github.event_name == 'push' && 'production-vianahub' || inputs.target_environment }}
+  cancel-in-progress: false
 
 jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
+  build:
+    name: Build e publicação da imagem
+    runs-on: ubuntu-24.04
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.build.outputs.digest }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Login to Docker Hub
-        uses: docker/login-action@v3
+      - name: Definir imagem
+        id: image
+        env:
+          DOCKERHUB_NAMESPACE: ${{ vars.DOCKERHUB_NAMESPACE }}
+        run: |
+          if [[ ! "$DOCKERHUB_NAMESPACE" =~ ^[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo "DOCKERHUB_NAMESPACE ausente ou inválido" >&2
+            exit 1
+          fi
+          echo "name=$DOCKERHUB_NAMESPACE/vianahub-web" >> "$GITHUB_OUTPUT"
+
+      - name: Preparar tags
+        id: metadata
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=raw,value=${{ github.sha }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+
+      - name: Login no Docker Hub
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - name: Configurar Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build e push
+        id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/vianahub-web:latest
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
 
   deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
+    name: Deploy no VPS
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: ${{ github.event_name == 'push' && 'production-vianahub' || inputs.target_environment }}
+    concurrency:
+      group: gerit-web-deploy-${{ github.event_name == 'push' && 'production-vianahub' || inputs.target_environment }}
+      cancel-in-progress: false
     steps:
-      - name: Deploy on VPS
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Deploy atômico com rollback
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
+        env:
+          GERIT_WEB_DOMAIN: ${{ vars.GERIT_WEB_DOMAIN }}
+          GERIT_WEB_INSTANCE_NAME: ${{ vars.GERIT_WEB_INSTANCE_NAME }}
+          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          IMAGE_REF: ${{ needs.build.outputs.image }}@${{ needs.build.outputs.digest }}
+          RUN_ID: ${{ github.run_id }}
         with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
+          host: ${{ vars.VPS_HOST }}
+          username: ${{ vars.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GERIT_WEB_DOMAIN,GERIT_WEB_INSTANCE_NAME,GERIT_API_BASE_URL,IMAGE_REF,RUN_ID
           script: |
-            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/vianahub-web:latest
-            docker stop vianahub-web || true
-            docker rm vianahub-web || true
+            set -Eeuo pipefail
+
+            fail() {
+              echo "$1" >&2
+              exit 1
+            }
+
+            [[ -n "${GERIT_WEB_DOMAIN:-}" ]] || fail "GERIT_WEB_DOMAIN é obrigatório"
+            [[ -n "${GERIT_WEB_INSTANCE_NAME:-}" ]] || fail "GERIT_WEB_INSTANCE_NAME é obrigatório"
+            [[ -n "${GERIT_API_BASE_URL:-}" ]] || fail "GERIT_API_BASE_URL é obrigatório"
+            [[ -n "${IMAGE_REF:-}" ]] || fail "IMAGE_REF é obrigatório"
+            [[ "$GERIT_WEB_DOMAIN" =~ ^([A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+[A-Za-z]{2,63}$ ]] || fail "GERIT_WEB_DOMAIN inválido"
+            [[ "$GERIT_WEB_INSTANCE_NAME" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$ ]] || fail "GERIT_WEB_INSTANCE_NAME inválido"
+            [[ "$GERIT_API_BASE_URL" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~/-]*)?$ ]] || fail "GERIT_API_BASE_URL inválida"
+            [[ "$IMAGE_REF" =~ ^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*@sha256:[a-f0-9]{64}$ ]] || fail "IMAGE_REF deve usar digest SHA-256"
+            [[ "${RUN_ID:-}" =~ ^[0-9]+$ ]] || fail "RUN_ID inválido"
+
+            NETWORK_NAME=proxy-network
+            DYNAMIC_DIR=/opt/infrastructure/reverse-proxy/dynamic
+            TRAEFIK_FILE="$DYNAMIC_DIR/gerit-web.yml"
+            BACKUP_CONTAINER="${GERIT_WEB_INSTANCE_NAME}-previous-${RUN_ID}"
+            BACKUP_FILE="$DYNAMIC_DIR/.gerit-web.yml.backup-${RUN_ID}"
+            TEMP_FILE="$DYNAMIC_DIR/.gerit-web.yml.tmp-${RUN_ID}"
+
+            docker network inspect "$NETWORK_NAME" >/dev/null 2>&1 || fail "Docker network proxy-network não existe"
+            [[ -d "$DYNAMIC_DIR" ]] || fail "Diretório dinâmico do Traefik não existe"
+            (( ${#BACKUP_CONTAINER} <= 63 )) || fail "Nome de container de backup excede 63 caracteres"
+            ! docker container inspect "$BACKUP_CONTAINER" >/dev/null 2>&1 || fail "Container de backup já existe"
+            docker pull "$IMAGE_REF"
+
+            HAD_CONFIG=false
+            HAD_CONTAINER=false
+            DEPLOY_STARTED=false
+            CONTAINER_REPLACEMENT_STARTED=false
+
+            validate_container() {
+              status=$(docker inspect --format '{{.State.Status}}' "$GERIT_WEB_INSTANCE_NAME")
+              network=$(docker inspect --format '{{with index .NetworkSettings.Networks "proxy-network"}}yes{{end}}' "$GERIT_WEB_INSTANCE_NAME")
+              [[ "$status" == running && "$network" == yes ]]
+            }
+
+            rollback() {
+              result=${1:-$?}
+              trap - ERR
+              if [[ "$DEPLOY_STARTED" == true ]]; then
+                echo "Deploy falhou; restaurando estado anterior" >&2
+                if [[ "$CONTAINER_REPLACEMENT_STARTED" == true ]] && docker container inspect "$GERIT_WEB_INSTANCE_NAME" >/dev/null 2>&1; then
+                  docker rm -f "$GERIT_WEB_INSTANCE_NAME" >/dev/null 2>&1 || true
+                fi
+                if [[ "$CONFIG_CHANGED" == true ]]; then
+                  if [[ "$HAD_CONFIG" == true && -f "$BACKUP_FILE" ]]; then
+                    mv -f "$BACKUP_FILE" "$TRAEFIK_FILE" || echo "Falha ao restaurar configuração anterior do Traefik" >&2
+                  else
+                    rm -f "$TRAEFIK_FILE" || true
+                  fi
+                fi
+                if [[ "$HAD_CONTAINER" == true ]]; then
+                  if docker rename "$BACKUP_CONTAINER" "$GERIT_WEB_INSTANCE_NAME"; then
+                    validate_container || echo "Container anterior restaurado, mas não validou running na proxy-network" >&2
+                  else
+                    echo "Falha ao restaurar container anterior" >&2
+                  fi
+                fi
+                rm -f "$TEMP_FILE" || true
+              fi
+              rm -f "$BACKUP_FILE" || true
+              exit "$result"
+            }
+            trap 'rollback $?' ERR
+
+            abort_deploy() {
+              echo "$1" >&2
+              rollback 1
+            }
+
+            CONFIG_CHANGED=false
+            DEPLOY_STARTED=true
+            if [[ -f "$TRAEFIK_FILE" ]]; then
+              cp -p "$TRAEFIK_FILE" "$BACKUP_FILE"
+              HAD_CONFIG=true
+            fi
+
+            if docker container inspect "$GERIT_WEB_INSTANCE_NAME" >/dev/null 2>&1; then
+              docker rename "$GERIT_WEB_INSTANCE_NAME" "$BACKUP_CONTAINER"
+              HAD_CONTAINER=true
+            fi
+
+            cat > "$TEMP_FILE" <<EOF
+            http:
+              routers:
+                gerit-web:
+                  rule: "Host(\`$GERIT_WEB_DOMAIN\`)"
+                  entryPoints:
+                    - web
+                  service: gerit-web
+
+              services:
+                gerit-web:
+                  loadBalancer:
+                    servers:
+                      - url: "http://$GERIT_WEB_INSTANCE_NAME:3000"
+            EOF
+            mv -f "$TEMP_FILE" "$TRAEFIK_FILE"
+            CONFIG_CHANGED=true
+
+            CONTAINER_REPLACEMENT_STARTED=true
             docker run -d \
-              --name vianahub-web \
-              -p 3000:3000 \
+              --name "$GERIT_WEB_INSTANCE_NAME" \
+              --network "$NETWORK_NAME" \
               --restart always \
-              ${{ secrets.DOCKERHUB_USERNAME }}/vianahub-web:latest
+              --env GERIT_API_BASE_URL="$GERIT_API_BASE_URL" \
+              "$IMAGE_REF"
+
+            validate_container || abort_deploy "Container novo não está running na proxy-network"
+            sleep 5
+            validate_container || abort_deploy "Container novo falhou na validação após espera"
+
+            trap - ERR
+            rm -f "$BACKUP_FILE"
+            if [[ "$HAD_CONTAINER" == true ]]; then
+              docker rm -f "$BACKUP_CONTAINER"
+            fi

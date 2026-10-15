@@ -382,6 +382,34 @@ O coordinator deve indicar no handoff a base esperada para branch e PR:
 
 ---
 
+# Deteção de Merge (pós For Deploy)
+
+Após mover o card para **For Deploy**, o Coordinator deve verificar periodicamente se o PR foi mergeado:
+
+```powershell
+# Verificar estado do PR
+gh pr view PR_NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json state,mergedAt
+```
+
+- Se `state == "MERGED"`, mover card para **Done** e notificar o usuário.
+- Se `state == "OPEN"`, aguardar e repetir a verificação a cada 5 minutos.
+- Se `state == "CLOSED"` (sem merge), notificar o usuário para decisão.
+
+---
+
+# Procedimento de Conflito de Merge
+
+Se durante o desenvolvimento ocorrer um **conflito de merge** ao fazer `git pull origin develop` ou ao criar o PR:
+
+1. O Developer atual **não tenta resolver o conflito sozinho**.
+2. O Developer informa o Kanban Coordinator sobre o conflito.
+3. O Kanban Coordinator **invoca o Developer Senior** para analisar e resolver o conflito.
+4. Após resolução, o fluxo normal retoma com o Developer original.
+
+**Nota:** Todo Developer é obrigado a executar `npm run build` antes de fazer `git push`. Se o build falhar, o Developer deve corrigir antes de prosseguir.
+
+---
+
 # Regra Anti-loop
 
 Se mesmo bug reportado 2 vezes na mesma issue → escalar para usuário com histórico.

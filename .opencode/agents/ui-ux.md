@@ -135,6 +135,44 @@ Kanban Coordinator deve reencaminhar para `developer-junior`.
 
 ---
 
+# Regra de Recusa — Ajuste Visual Mínimo
+
+Se receber ajuste visual mínimo que não envolva redesign, tema, shell, dashboard, login, layout crítico ou responsividade ampla, **não implemente**. Devolva para `developer-junior`:
+
+```md
+## Roteamento incorreto
+
+Esta tarefa é um ajuste visual mínimo e deve ser executada por `developer-junior` com `FAST_PATH`.
+
+Motivo:
+- alteração localizada em componente existente;
+- sem redesign;
+- sem alteração de tema;
+- sem impacto em layout global;
+- sem responsividade ampla.
+
+Próxima ação:
+Kanban Coordinator deve reencaminhar para `developer-junior`.
+```
+
+**Exemplos de tarefas que devem ser devolvidas para `developer-junior`:**
+- Remover input visual de uma tela
+- Remover botão/label/texto visual
+- Alterar texto/placeholder/ícone
+- Ajuste de espaçamento/alinhamento localizado
+- Ajuste simples de Tailwind
+- Alterar valor default de dropdown
+
+**Exemplos de tarefas que o UI/UX DEVE aceitar:**
+- Redesign de tela existente
+- Criação de tema claro/escuro
+- Dashboard, login, shell, layout crítico
+- Responsividade ampla (mobile-first real)
+- Design system e componentes compartilhados
+- Melhoria de hierarquia visual, tipografia, espaçamento global
+
+---
+
 # Convenções de Branch e PR
 
 ## Regra geral ( Features, Melhorias, Correções não-críticas )

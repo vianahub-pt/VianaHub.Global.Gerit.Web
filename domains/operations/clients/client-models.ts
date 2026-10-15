@@ -1,4 +1,41 @@
 "use client";
+/* ---------- Client Types & Party Types ---------- */
+
+export type PartyType = 1 | 2;
+
+export const PartyType = {
+  Individual: 1 as PartyType,
+  Organization: 2 as PartyType,
+} as const;
+
+export type ClientType =
+  | 1 // Pessoa Singular
+  | 2 // Recibos Verdes
+  | 3 // Freelancer
+  | 4 // Pessoa Jurídica
+  | 5; // Sociedade Unipessoal por Quotas
+
+export const ClientType = {
+  PessoaSingular: 1 as ClientType,
+  RecibosVerdes: 2 as ClientType,
+  Freelancer: 3 as ClientType,
+  PessoaJuridica: 4 as ClientType,
+  SociedadeUnipessoalQuotas: 5 as ClientType,
+} as const;
+
+export function isIndividualClientType(clientType: ClientType | number | undefined): boolean {
+  return typeof clientType === "number" && [1, 2, 3].includes(clientType);
+}
+
+export function isCompanyClientType(clientType: ClientType | number | undefined): boolean {
+  return typeof clientType === "number" && [4, 5].includes(clientType);
+}
+
+export function getPartyTypeFromClientType(clientType: ClientType | number | undefined): PartyType | undefined {
+  if (!isIndividualClientType(clientType) && !isCompanyClientType(clientType)) return undefined;
+  return isIndividualClientType(clientType) ? PartyType.Individual : PartyType.Organization;
+}
+
 /* ---------- Client Addresses ---------- */
 export interface AddressItem {
   id: number;
@@ -48,6 +85,7 @@ export const initialAddressFormState: AddressFormState = {
   note: "",
   isPrimary: false,
 };
+
 /* ---------- Client Contact Network ---------- */
 export interface ContactNetworkItem {
   id: number;
@@ -76,46 +114,13 @@ export const initialContactNetworkFormState: ContactNetworkFormState = {
   isWhatsapp: false,
   isPrimary: false,
 };
-/* ---------- Client Individual ---------- */
-export interface ClientIndividual {
-  id?: number;
-  tenantId?: number;
-  clientId?: number;
-  fullName?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  cellPhoneNumber?: string;
-  isWhatsapp?: boolean;
-  email?: string;
-  birthDate?: string;
-  gender?: string;
-  documentType?: string;
-  documentNumber?: string;
-  nationality?: string;
-  isActive?: boolean;
-}
-export interface ClientCompany {
-  id?: number;
-  tenantId?: number;
-  clientId?: number;
-  legalName?: string;
-  tradeName?: string;
-  phoneNumber?: string;
-  cellPhoneNumber?: string;
-  isWhatsapp?: boolean;
-  email?: string;
-  site?: string;
-  companyRegistration?: string;
-  cae?: string;
-  numberOfEmployee?: number;
-  legalRepresentative?: string;
-  isActive?: boolean;
-}
+
+/* ---------- Unified Client Model ---------- */
 export interface ClientItem {
   id: number;
   tenantId?: number;
-  clientType?: number;
+  partyTypeId: PartyType;
+  clientType?: ClientType;
   clientTypeDescription?: string;
   originType?: number;
   originTypeDescription?: string;
@@ -125,9 +130,30 @@ export interface ClientItem {
   urlImage?: string | null;
   note?: string | null;
   isActive: boolean;
+  // Individual fields (when partyTypeId === 1)
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  birthDate?: string;
+  gender?: string;
+  documentType?: string;
+  documentNumber?: string;
+  nationality?: string;
+  // Company fields (when partyTypeId === 2)
+  legalName?: string;
+  tradeName?: string;
+  site?: string;
+  companyRegistration?: string;
+  cae?: string;
+  numberOfEmployee?: number;
+  legalRepresentative?: string;
+  // Legacy sub-objects for backward compatibility during migration
+  /** @deprecated Use top-level individual fields instead */
   individual?: ClientIndividual;
+  /** @deprecated Use top-level company fields instead */
   company?: ClientCompany;
 }
+
 /* ---------- Client Fiscal Data ---------- */
 export interface ClientFiscalDataItem {
   id: number;
@@ -157,6 +183,7 @@ export const initialFiscalDataFormState: ClientFiscalDataFormState = {
   fiscalEmail: "",
 };
 export type FiscalDataSortColumn = "TaxNumber" | "VatNumber" | "FiscalCountry" | "IsVatRegistered" | "IBAN" | "FiscalEmail";
+
 /* ---------- Acquisition Source Types ---------- */
 export interface AcquisitionSourceType {
   id: number;
@@ -213,3 +240,43 @@ export const initialConsentFormState: ClientConsentFormState = {
   userAgent: "",
 };
 export type ConsentSortColumn = "consentType" | "consentOriginType" | "granted" | "grantedDate" | "isActive";
+
+/* ---------- Legacy types for backward compatibility during migration ---------- */
+/** @deprecated Use ClientItem with partyTypeId instead */
+export interface ClientIndividual {
+  id?: number;
+  tenantId?: number;
+  clientId?: number;
+  fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  cellPhoneNumber?: string;
+  isWhatsapp?: boolean;
+  email?: string;
+  birthDate?: string;
+  gender?: string;
+  documentType?: string;
+  documentNumber?: string;
+  nationality?: string;
+  isActive?: boolean;
+}
+
+/** @deprecated Use ClientItem with partyTypeId instead */
+export interface ClientCompany {
+  id?: number;
+  tenantId?: number;
+  clientId?: number;
+  legalName?: string;
+  tradeName?: string;
+  phoneNumber?: string;
+  cellPhoneNumber?: string;
+  isWhatsapp?: boolean;
+  email?: string;
+  site?: string;
+  companyRegistration?: string;
+  cae?: string;
+  numberOfEmployee?: number;
+  legalRepresentative?: string;
+  isActive?: boolean;
+}

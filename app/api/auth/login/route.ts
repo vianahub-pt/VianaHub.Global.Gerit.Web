@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logger, redactEmail } from "@/core/logger";
+import { buildGeritApiUrl } from "@/core/env/server-env";
 import { normalizeLanguageTag } from "@/platform/i18n/language";
 
 interface LoginRequestBody {
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
       email: redactEmail(payload.email),
     });
 
-    const upstreamResponse = await fetch("http://82.29.172.68/v1/auth/login", {
+    const upstreamResponse = await fetch(buildGeritApiUrl("v1/auth/login"), {
       method: "POST",
       headers: {
         "Accept-Language": preferredLanguage,

@@ -280,6 +280,30 @@ Entrega: branch, alteração mínima, commit, push, PR e notificação ao coordi
 
 **Proibido incluir:** contexto completo da issue, histórico de outros agentes, comandos executados, validações realizadas, análises longas, logs, checklist completo.
 
+## Deteção de Merge (pós For Deploy)
+
+Após mover o card para **For Deploy**, o Coordinator deve verificar periodicamente se o PR foi mergeado:
+
+```powershell
+# Verificar estado do PR
+gh pr view PR_NUMERO --repo vianahub-pt/VianaHub.Global.Gerit.Web --json state,mergedAt
+```
+
+- Se `state == "MERGED"`, mover card para **Done** e notificar o usuário.
+- Se `state == "OPEN"`, aguardar e repetir a verificação a cada 5 minutos.
+- Se `state == "CLOSED"` (sem merge), notificar o usuário para decisão.
+
+## Procedimento de Conflito de Merge
+
+Se durante o desenvolvimento ocorrer um **conflito de merge** ao fazer `git pull origin develop` ou ao criar o PR:
+
+1. O Developer atual **não tenta resolver o conflito sozinho**.
+2. O Developer informa o Kanban Coordinator sobre o conflito.
+3. O Kanban Coordinator **invoca o Developer Senior** para analisar e resolver o conflito.
+4. Após resolução, o fluxo normal retoma com o Developer original.
+
+**Nota:** Todo Developer é obrigado a executar `npm run build` antes de fazer `git push`. Se o build falhar, o Developer deve corrigir antes de prosseguir.
+
 ---
 
 # Modos de Execução
@@ -312,10 +336,7 @@ Exemplos obrigatórios de classificação como FAST_PATH:
 
 - `git diff --check` (sempre)
 - `npm run lint` somente se a alteração tocar arquivos TS/TSX relevantes
-- Typecheck somente se alterar tipos, imports/exports, hooks ou props
-- Build somente se alterar rota, config, shared crítico ou se houver erro de lint/typecheck
-
-**NÃO executar por padrão em FAST_PATH:** `npm run build`, `npx tsc --project tsconfig.typecheck.json --noEmit`. Esses comandos só devem rodar se houver alteração em rota, import/export, tipo compartilhado, props públicas, schema, hook, componente compartilhado crítico, config ou erro prévio de lint/typecheck.
+- `npm run build` (sempre — obrigatório antes de push)
 
 ## STANDARD_PATH
 
@@ -333,8 +354,8 @@ Usar para tarefas funcionais intermediárias:
 
 - `git diff --check` (sempre)
 - `npm run lint`
+- `npm run build`
 - Typecheck quando aplicável
-- Build somente quando a alteração impactar rota, página, import/export, formulário complexo, hook de dados ou shared
 
 ## FULL_PATH
 
@@ -394,20 +415,32 @@ Para tarefas críticas, arquiteturais ou de segurança:
 
 ---
 
+# Classificação de Bugs (QA)
+
+| Severidade | Developer recomendado |
+|-----------|----------------------|
+| Crítica | `developer-senior` |
+| Alta | `developer-senior` |
+| Média | `developer-pleno` |
+| Baixa | `developer-junior` |
+
+---
+
 # Etapas do Fluxo
 
 | Etapa | Responsável | Ação |
 |-------|-------------|------|
-| 1. Demanda recebida | `kanban-coordinator` | Entende a demanda e aciona PO quando necessário |
-| 2. Issue criada | `po` | Cria/refina issue e notifica coordinator |
-| 3. Card no board | `kanban-coordinator` | Adiciona issue ao board e move para To do |
-| 4. Roteamento | `kanban-coordinator` | Classifica modo, escolhe Developer/UI/UX, move para In Progress |
-| 5. Desenvolvimento | Developer/UI/UX | Implementa conforme modo, commita, cria PR e notifica coordinator |
-| 6. Para QA | `kanban-coordinator` | Move para For Tests e aciona QA |
-| 7. Validação | `qa` | Valida conforme modo QA e notifica coordinator |
-| 8. Aprovado | `kanban-coordinator` | Move para For Deploy |
-| 9. Reprovado | `kanban-coordinator` | Move para In Progress e encaminha correção |
-| 10. Merge | Usuário | Revisa, aprova e faz merge do PR |
+| 1. Demanda recebida | `kanban-coordinator` | Entende a demanda e aciona PO |
+| 2. Task BDD | `po` | Analisa demanda, escreve Task em BDD, define classificação/complexidade/labels |
+| 3. Issue criada | `kanban-coordinator` | Cria issue com base na Task BDD do PO, com labels |
+| 4. Card no board | `kanban-coordinator` | Adiciona issue ao board e move para To do |
+| 5. Roteamento | `kanban-coordinator` | Classifica modo, escolhe Developer/UI/UX, move para In Progress |
+| 6. Desenvolvimento | Developer/UI/UX | Implementa conforme modo, executa build, commita, cria PR e notifica coordinator |
+| 7. Para QA | `kanban-coordinator` | Move para For Tests e aciona QA |
+| 8. Validação | `qa` | Valida conforme modo QA, recomenda Developer se reprovar, notifica coordinator |
+| 9. Aprovado | `kanban-coordinator` | Move para For Deploy e inicia detecção de merge |
+| 10. Reprovado | `kanban-coordinator` | Move para In Progress e encaminha correção |
+| 11. Merge detectado | `kanban-coordinator` | Move para Done e notifica usuário |
 
 ---
 
@@ -458,6 +491,41 @@ Se nenhuma opção justificar → rotear para `developer-junior`.
 
 ---
 
+# Regra de Recusa de Tarefas Triviais
+
+Os agentes `developer-pleno`, `developer-senior` e `ui-ux` podem devolver tarefas triviais para o agente correto quando recebem roteamento inadequado.
+
+## Developer Pleno
+
+Se receber tarefa trivial que se enquadre em `developer-junior + FAST_PATH`, **não implemente**. Devolva ao `kanban-coordinator` com o formato:
+
+```md
+## Roteamento incorreto
+
+Esta tarefa é de baixa complexidade e deve ser executada por `developer-junior` com `FAST_PATH`.
+
+Motivo:
+- alteração localizada;
+- sem API;
+- sem regra de negócio;
+- sem schema/payload;
+- sem hook;
+- sem impacto arquitetural.
+
+Próxima ação:
+Kanban Coordinator deve reencaminhar para `developer-junior`.
+```
+
+## Developer Senior
+
+Se receber tarefa trivial ou média sem justificativa de arquitetura, segurança ou performance, **não implemente**. Devolva ao `kanban-coordinator` com recomendação do agente correto.
+
+## UI/UX Specialist
+
+Se receber ajuste visual mínimo que não envolva redesign, tema, shell, dashboard, login, layout crítico ou responsividade ampla, **não implemente**. Devolva para `developer-junior`.
+
+---
+
 # Roteamento de Correção (após QA)
 
 | Tipo de problema | Developer | Modo |
@@ -504,6 +572,10 @@ Ou em caso de bloqueio real:
 ## Anti-loop
 
 Se o mesmo bug for reportado 2 vezes na mesma issue, escalar para o usuário e `kanban-coordinator`.
+
+## Build Obrigatório
+
+Todo Developer é obrigado a executar `npm run build` antes de fazer `git push`. Se o build falhar, o Developer deve corrigir antes de prosseguir. Nunca fazer push com build quebrado.
 
 ---
 

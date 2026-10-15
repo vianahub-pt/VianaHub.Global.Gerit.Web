@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/core/logger";
+import { buildGeritApiUrl } from "@/core/env/server-env";
 import { normalizeLanguageTag } from "@/platform/i18n/language";
 
 interface RefreshRequestBody {
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
     const preferredLanguage = normalizeLanguageTag(
       request.headers.get("accept-language"),
     );
-    const upstreamResponse = await fetch("http://82.29.172.68/v1/auth/refresh", {
+    const upstreamResponse = await fetch(buildGeritApiUrl("v1/auth/refresh"), {
       method: "POST",
       headers: {
         "Accept-Language": preferredLanguage,

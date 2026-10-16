@@ -346,6 +346,10 @@ paket-files/
 *.pyc
 *.tsbuildinfo
 
+# Temporary Codex response/checkpoint files are never part of a commit.
+/agentic/state/*.tmp
+/agentic/state/.codex-last-message.md
+
 # Cake - Uncomment if you are using it
 #tools/**
 #!tools/packages.config

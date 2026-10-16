@@ -1,0 +1,3 @@
+# Prompt de retomada
+
+Leia `agentic/state/loop-state.json`, o goal, o plano e `agentic/journal/current.md`. Confirme que repositório, branch e goal correspondem ao checkpoint e inspecione o diff sem apagá-lo. Descubra a próxima ação a partir de `pending_action` e `last_successful_step`; não reinicie o goal nem repita gate já concluído sem motivo. Consulte ai-memory somente se as ferramentas MCP reais estiverem disponíveis; falha de memória não bloqueia a retomada. Registre o estado `RESUMING`, atualize o journal e continue dentro dos guardrails e limites. Quota não é falha; não invente endpoint nem reset. Nunca faça merge ou deploy.

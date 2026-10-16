@@ -1,0 +1,8 @@
+# Project settings are loaded by Codex only after the repository is trusted.
+# Model slugs were read from `codex debug models` in Codex CLI 0.133.0.
+approval_policy = "never"
+sandbox_mode = "workspace-write"
+
+[mcp_servers.ai-memory]
+url = "http://127.0.0.1:49374/mcp"
+enabled = true

@@ -8,7 +8,7 @@ const body = [
   "- **Prioridade:** Alta",
   "- **Severidade:** Não aplicável",
   "- **Complexidade sugerida pelo PO:** Alta",
-  "- **Developer provável:** developer-senior",
+  "- **Agentes prováveis:** architect (análise) + implementer, com security e reviewer ao final",
   "- **Motivo da complexidade:** A feature envolve refatoração estrutural de componentes de layout compartilhados (`shared/layout`), integração com o sistema de autenticação (`useAuth`, `permissions`, `hasPermission`), criação de API de configuração de menu baseada em permissões dinâmicas e alteração de componentes consumidos por toda a aplicação (workspace-shell, client-layout). O impacto é transversal e exige análise de causa raiz para evitar regressões.",
   "",
   "## Contexto",

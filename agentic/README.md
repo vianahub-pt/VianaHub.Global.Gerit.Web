@@ -14,7 +14,7 @@ O loop valida o repositório, busca `origin`, cria branch a partir da base decla
 
 O Codex só carrega `.codex/config.toml` em um projeto confiável. A configuração fixa sandbox `workspace-write`, aprovação `never` e MCP ai-memory via HTTP local. Nunca use `danger-full-access`. `AI_MEMORY_AUTH_TOKEN` é opcional e deve existir somente no ambiente do usuário se a instância exigir autenticação; não grave seu valor no repositório.
 
-Os slugs foram verificados no catálogo local `codex debug models` do Codex CLI 0.133.0: orchestrator, architect, security e reviewer usam `gpt-5.5`; implementer e tester usam `gpt-5.4-mini`. Os papéis mecânicos usam o modelo mini. Revalide os slugs com `codex debug models` ao atualizar o CLI. O CLI instalado rejeitou o override global de concorrência em `[agents]`; por isso não fixamos uma chave incompatível e deixamos a concorrência no padrão do Codex.
+Os modelos dos agentes foram conferidos com `codex debug models` no Codex CLI 0.163.0. Orchestrator, implementer e tester usam `gpt-6-luna`; architect, security e reviewer usam `gpt-5.6-terra`. O modelo padrão project-local para `codex exec` sem override também é `gpt-6-luna`, evitando depender de um modelo global que pode não ser suportado pela conta. Revalide os slugs com `codex debug models` ao atualizar o CLI. O CLI instalado rejeitou o override global de concorrência em `[agents]`; por isso não fixamos uma chave incompatível e deixamos a concorrência no padrão do Codex.
 
 ## Continuidade e quota
 

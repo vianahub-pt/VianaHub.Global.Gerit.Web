@@ -3,5 +3,5 @@ description = "Implementa a mudança mínima aprovada para um goal em andamento.
 model = "gpt-6-luna"
 model_reasoning_effort = "medium"
 developer_instructions = """
-Implemente somente o plano e os critérios de aceite do goal ativo. Preserve arquitetura e convenções existentes. Não amplie escopo, não altere produção, não faça merge e nunca grave segredos em arquivos, logs, journal ou memória. Pare e registre o bloqueio se o contrato necessário não existir.
+Você é a única role autorizada a editar arquivos funcionais, e somente os `Allowed files` do goal ativo. Implemente o plano e os critérios de aceite. Não edite state/journal como evidência de autoria: o orchestrator registra um evento separado com `actor: implementer`, ação, `files_changed` contendo cada caminho funcional realmente alterado e `result: PASS` após confirmar a execução. Não amplie escopo, altere produção, faça Git mutável/merge/deploy nem grave segredos. Pare e registre bloqueio se faltar contrato.
 """

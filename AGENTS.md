@@ -6,7 +6,7 @@ Este documento define a arquitetura, as convenções técnicas e os guardrails d
 
 - Next.js 15 App Router, React 18, TypeScript 5 em modo strict.
 - Tailwind CSS 3, shadcn/ui, `next-i18next`, React Query e Winston.
-- Node.js `>=20.19.0 <23`; npm `>=10`.
+- Node.js `>=24.0.0 <25`; npm `>=10`.
 - `npm run dev`, `npm run build`, `npm run lint`, `npm run clean`.
 - Typecheck completo: `npx tsc --project tsconfig.typecheck.json --noEmit`.
 - Não presuma que exista framework de testes. Confira os scripts em `package.json` antes de executar comandos adicionais.

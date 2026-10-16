@@ -120,7 +120,7 @@ function Get-AgenticState {
         return Get-AgenticStateTemplate
     }
 
-    $raw = Get-Content -LiteralPath $script:AgenticStatePath -Raw
+    $raw = [System.IO.File]::ReadAllText($script:AgenticStatePath, [System.Text.UTF8Encoding]::new($false))
     if ([string]::IsNullOrWhiteSpace($raw)) {
         throw "O arquivo de estado agentic esta vazio."
     }
@@ -214,7 +214,8 @@ function Add-AgenticJournalEvent {
         "- memory: $Memory"
     ) -join [Environment]::NewLine
 
-    Add-Content -LiteralPath $script:AgenticJournalPath -Value $event -Encoding utf8
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    [System.IO.File]::AppendAllText($script:AgenticJournalPath, $event + [Environment]::NewLine, $utf8NoBom)
 }
 
 function Get-AgenticQuotaClassification {

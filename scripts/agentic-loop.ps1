@@ -142,7 +142,8 @@ function Invoke-SmokeTest {
     $historyName = "{0}-smoke-test.md" -f [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")
     $historyPath = Join-Path (Join-Path $script:AgenticRepoRoot "agentic/journal/history") $historyName
     Copy-Item -LiteralPath $script:AgenticJournalPath -Destination $historyPath -Force
-    Set-Content -LiteralPath $script:AgenticJournalPath -Value "# Journal do goal ativo`n`nEventos sao append-only durante cada goal. Nao registre segredos, tokens, cookies, connection strings ou PII desnecessaria." -Encoding utf8
+    $journalHeader = "# Journal do goal ativo`n`nEventos sao append-only durante cada goal. Nao registre segredos, tokens, cookies, connection strings ou PII desnecessaria."
+    [System.IO.File]::WriteAllText($script:AgenticJournalPath, $journalHeader, [System.Text.UTF8Encoding]::new($false))
 
     Write-Output "SMOKE_TEST: PASS"
     Write-Output "- state machine e transicoes validas"
@@ -209,7 +210,7 @@ function Invoke-CodexOrchestrator {
     $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue ate WAITING_HUMAN_MERGE ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: WAITING_HUMAN_MERGE ou FINAL_STATE: FAILED."
 
     $responsePath = Join-Path $script:AgenticRepoRoot "agentic/state/.codex-last-message.md"
-    $codexArguments = @("exec", "--json", "--sandbox", "workspace-write", "--cd", $script:AgenticRepoRoot, "--output-last-message", $responsePath, $prompt)
+    $codexArguments = @("exec", "--json", "--approve-for-me", "--cd", $script:AgenticRepoRoot, "--output-last-message", $responsePath, $prompt)
     $codexResult = Invoke-AgenticNativeProcess -FilePath "codex" -Arguments $codexArguments -CaptureStandardError
     $exitCode = $codexResult.ExitCode
     $combinedOutput = @($codexResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine

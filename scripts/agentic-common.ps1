@@ -10,6 +10,79 @@ $script:AgenticStates = @(
     "RESUMING", "WAITING_HUMAN_MERGE", "FAILED"
 )
 
+function Invoke-AgenticNativeProcess {
+    param(
+        [Parameter(Mandatory = $true)][string]$FilePath,
+        [string[]]$Arguments = @(),
+        [switch]$CaptureStandardError
+    )
+
+    $command = Get-Command -Name $FilePath -ErrorAction Stop
+    if ($command.CommandType -notin @("Application", "ExternalScript")) {
+        throw "Command '$FilePath' is not an executable process."
+    }
+    $commandPath = $command.Source
+
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        if ($CaptureStandardError) {
+            $output = @(& $commandPath @Arguments 2>&1)
+        }
+        else {
+            $output = @(& $commandPath @Arguments 2>$null)
+        }
+        $exitCode = $LASTEXITCODE
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+    }
+
+    return [pscustomobject]@{
+        ExitCode = $exitCode
+        Output = @($output)
+    }
+}
+
+function Assert-AgenticNativeProcessSucceeded {
+    param(
+        [Parameter(Mandatory = $true)]$Result,
+        [Parameter(Mandatory = $true)][string]$CommandName
+    )
+
+    if ($Result.ExitCode -ne 0) {
+        throw "$CommandName failed (exit code $($Result.ExitCode))."
+    }
+}
+
+function Invoke-AgenticGit {
+    param([Parameter(Mandatory = $true)][string[]]$GitArguments)
+
+    $arguments = @("-C", $script:AgenticRepoRoot) + $GitArguments
+    $result = Invoke-AgenticNativeProcess -FilePath "git" -Arguments $arguments
+    Assert-AgenticNativeProcessSucceeded -Result $result -CommandName "Git command"
+    return $result.Output
+}
+
+function Get-AgenticRelativePath {
+    param(
+        [Parameter(Mandatory = $true)][string]$BasePath,
+        [Parameter(Mandatory = $true)][string]$TargetPath
+    )
+
+    $baseFullPath = [IO.Path]::GetFullPath($BasePath)
+    $targetFullPath = [IO.Path]::GetFullPath($TargetPath)
+    $separators = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $basePrefix = $baseFullPath.TrimEnd($separators) + [IO.Path]::DirectorySeparatorChar
+    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+
+    if (-not $targetFullPath.StartsWith($basePrefix, $comparison)) {
+        throw "Target path is outside the repository root."
+    }
+
+    return $targetFullPath.Substring($basePrefix.Length).Replace('\', '/')
+}
+
 function Get-AgenticStateTemplate {
     [pscustomobject]@{
         goal_id = $null

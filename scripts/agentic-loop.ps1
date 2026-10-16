@@ -57,6 +57,42 @@ function Invoke-SmokeTest {
         $actual = (Get-AgenticQuotaClassification -Text $fixture.Text).Kind
         Invoke-Assert ($actual -eq $fixture.Expected) "Fixture de classificacao falhou: $($fixture.Expected)"
     }
+
+    $fixtureRoot = [IO.Path]::GetTempPath()
+    $successFixture = Join-Path $fixtureRoot ("agentic-native-success-{0}.cmd" -f [guid]::NewGuid().ToString("N"))
+    $failureFixture = Join-Path $fixtureRoot ("agentic-native-failure-{0}.cmd" -f [guid]::NewGuid().ToString("N"))
+    $cmdEncoding = [Text.Encoding]::ASCII
+    [IO.File]::WriteAllText($successFixture, "@echo off`r`necho benign native stderr fixture 1>&2`r`nexit /b 0`r`n", $cmdEncoding)
+    [IO.File]::WriteAllText($failureFixture, "@echo off`r`necho benign native stderr fixture 1>&2`r`nexit /b 9`r`n", $cmdEncoding)
+    try {
+        $errorPreferenceBefore = $ErrorActionPreference
+        $stateBeforeNativeFixture = Get-AgenticState
+        $successResult = Invoke-AgenticNativeProcess -FilePath $env:ComSpec -Arguments @("/d", "/c", $successFixture) -CaptureStandardError
+        Invoke-Assert ($successResult.ExitCode -eq 0) "Processo nativo com stderr benigno e exit 0 deve passar."
+        $successOutput = @($successResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+        Invoke-Assert ($successOutput -match "benign native stderr fixture") "Fixture nao confirmou a captura da mensagem stderr."
+        Assert-AgenticNativeProcessSucceeded -Result $successResult -CommandName "Native smoke fixture"
+        Invoke-Assert ($ErrorActionPreference -eq $errorPreferenceBefore) "ErrorActionPreference nao foi restaurado apos processo nativo."
+
+        $failureResult = Invoke-AgenticNativeProcess -FilePath $env:ComSpec -Arguments @("/d", "/c", $failureFixture) -CaptureStandardError
+        Invoke-Assert ($failureResult.ExitCode -eq 9) "Exit code nao zero do processo nativo nao foi preservado."
+        Invoke-Assert ($ErrorActionPreference -eq $errorPreferenceBefore) "ErrorActionPreference nao foi restaurado apos falha nativa."
+        $failureRecognized = $false
+        try {
+            Assert-AgenticNativeProcessSucceeded -Result $failureResult -CommandName "Native smoke fixture"
+        }
+        catch {
+            $failureRecognized = $_.Exception.Message -match "exit code 9"
+        }
+        Invoke-Assert $failureRecognized "O supervisor nao reconheceu a falha nativa com exit code nao zero."
+
+        $stateAfterNativeFixture = Get-AgenticState
+        Invoke-Assert ($stateAfterNativeFixture.state -eq $stateBeforeNativeFixture.state -and $stateAfterNativeFixture.state -ne "FAILED") "Mensagem stderr benigna alterou o state do supervisor."
+    }
+    finally {
+        Remove-Item -LiteralPath $successFixture, $failureFixture -Force -ErrorAction SilentlyContinue
+    }
+
     $unknownQuota = Get-AgenticQuotaClassification -Text "usage limit reached"
     $weeklyQuota = Get-AgenticQuotaClassification -Text "weekly limit reached"
     Invoke-Assert ($unknownQuota.WaitMinutes -eq 15 -and $weeklyQuota.WaitMinutes -eq 360) "Backoff padrao para quota desconhecida/semanal esta incorreto."
@@ -66,15 +102,18 @@ function Invoke-SmokeTest {
     Invoke-Assert ($retryFixture.Kind -eq "QUOTA" -and $retryFixture.WaitMinutes -eq 1 -and $retrySeconds -ge 44 -and $retrySeconds -le 46) "Tempo Retry-After explicito nao foi respeitado."
     Invoke-Assert ($allowed -contains "FAILED") "Estado terminal FAILED nao esta permitido."
 
-    $resumeFixture = [pscustomobject]@{ goal_id = $metadata["ID"]; branch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim(); state = "WAITING_FOR_QUOTA"; pending_action = "fixture" }
+    $resumeBranchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+    $resumeBranch = if ($resumeBranchOutput.Count -gt 0) { ([string]$resumeBranchOutput[0]).Trim() } else { "" }
+    $resumeFixture = [pscustomobject]@{ goal_id = $metadata["ID"]; branch = $resumeBranch; state = "WAITING_FOR_QUOTA"; pending_action = "fixture" }
     $resumeFixture.state = "RESUMING"
     Invoke-Assert ($resumeFixture.state -eq "RESUMING" -and $resumeFixture.goal_id -eq $metadata["ID"] -and -not [string]::IsNullOrWhiteSpace($resumeFixture.branch)) "Fixture de retomada nao preservou goal/branch."
 
-    $currentBranch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
-    Invoke-Assert ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentBranch)) "Nao foi possivel confirmar a branch atual."
+    $currentBranchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+    $currentBranch = if ($currentBranchOutput.Count -gt 0) { ([string]$currentBranchOutput[0]).Trim() } else { "" }
+    Invoke-Assert (-not [string]::IsNullOrWhiteSpace($currentBranch)) "Nao foi possivel confirmar a branch atual."
     $state = Get-AgenticState
     $state.goal_id = $metadata["ID"]
-    $state.goal_file = [System.IO.Path]::GetRelativePath($script:AgenticRepoRoot, $GoalPath).Replace('\', '/')
+    $state.goal_file = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $GoalPath
     $state.branch = $currentBranch
     $state.base_branch = $metadata["Base branch"]
     $state.started_at = [DateTime]::UtcNow.ToString("o")
@@ -116,11 +155,7 @@ function Invoke-SmokeTest {
 
 function Invoke-Git {
     param([string[]]$GitArguments)
-    $output = & git -C $script:AgenticRepoRoot @GitArguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        throw "Comando git falhou: git $($GitArguments -join ' ') (exit $LASTEXITCODE); saida detalhada omitida."
-    }
-    return $output
+    return Invoke-AgenticGit -GitArguments $GitArguments
 }
 
 function Set-FailedState {
@@ -142,22 +177,22 @@ function Start-GoalBranch {
     if ($prefix -notin @("feature", "fix", "hotfix")) { throw "Branch prefix deve ser feature, fix ou hotfix." }
     if (($prefix -eq "hotfix") -ne ($base -eq "main")) { throw "Somente hotfix usa main; goals normais devem usar develop." }
 
-    $currentBranch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
-    if ($LASTEXITCODE -ne 0 -or $currentBranch -ne $base) {
+    $currentBranchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+    $currentBranch = if ($currentBranchOutput.Count -gt 0) { ([string]$currentBranchOutput[0]).Trim() } else { "" }
+    if ($currentBranch -ne $base) {
         throw "Goal novo requer checkout limpo da base '$base'; branch atual: '$currentBranch'."
     }
-    $changes = & git -C $script:AgenticRepoRoot status --porcelain
-    if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel validar git status." }
+    $changes = Invoke-Git -GitArguments @("status", "--porcelain")
     if (-not [string]::IsNullOrWhiteSpace(($changes -join ""))) { throw "Working tree nao esta limpo; nenhuma alteracao foi descartada." }
 
     Invoke-Git -GitArguments @("fetch", "origin") | Out-Null
     $slug = ($Metadata["ID"].ToLowerInvariant() -replace "[^a-z0-9-]+", "-").Trim("-")
     if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal nao pode gerar slug de branch." }
     $branchName = "$prefix/$slug"
-    $existing = & git -C $script:AgenticRepoRoot branch --list $branchName
-    if ($LASTEXITCODE -ne 0 -or $existing) { throw "Branch local '$branchName' ja existe; nao sera sobrescrita." }
-    $remoteExisting = & git -C $script:AgenticRepoRoot branch --remotes --list "origin/$branchName"
-    if ($LASTEXITCODE -ne 0 -or $remoteExisting) { throw "Branch remota 'origin/$branchName' ja existe; nao sera sobrescrita." }
+    $existing = Invoke-Git -GitArguments @("branch", "--list", $branchName)
+    if ($existing) { throw "Branch local '$branchName' ja existe; nao sera sobrescrita." }
+    $remoteExisting = Invoke-Git -GitArguments @("branch", "--remotes", "--list", "origin/$branchName")
+    if ($remoteExisting) { throw "Branch remota 'origin/$branchName' ja existe; nao sera sobrescrita." }
     Invoke-Git -GitArguments @("switch", "--create", $branchName, "origin/$base") | Out-Null
     return $branchName
 }
@@ -170,13 +205,14 @@ function Invoke-CodexOrchestrator {
 
     $promptPath = Join-Path $script:AgenticRepoRoot "agentic/prompts/autonomous-loop.md"
     $prompt = Get-Content -LiteralPath $promptPath -Raw
-    $relativeGoal = [System.IO.Path]::GetRelativePath($script:AgenticRepoRoot, $GoalPath).Replace('\', '/')
+    $relativeGoal = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $GoalPath
     $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue ate WAITING_HUMAN_MERGE ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: WAITING_HUMAN_MERGE ou FINAL_STATE: FAILED."
 
     $responsePath = Join-Path $script:AgenticRepoRoot "agentic/state/.codex-last-message.md"
-    $cliOutput = @(& codex exec --json --sandbox workspace-write --cd $script:AgenticRepoRoot --output-last-message $responsePath $prompt 2>&1)
-    $exitCode = $LASTEXITCODE
-    $combinedOutput = $cliOutput -join [Environment]::NewLine
+    $codexArguments = @("exec", "--json", "--sandbox", "workspace-write", "--cd", $script:AgenticRepoRoot, "--output-last-message", $responsePath, $prompt)
+    $codexResult = Invoke-AgenticNativeProcess -FilePath "codex" -Arguments $codexArguments -CaptureStandardError
+    $exitCode = $codexResult.ExitCode
+    $combinedOutput = @($codexResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
     $lastMessage = ""
     if (Test-Path -LiteralPath $responsePath) {
         $lastMessage = Get-Content -LiteralPath $responsePath -Raw
@@ -204,7 +240,8 @@ try {
     if ($Resume) {
         if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Nao ha goal ativo retomavel no estado '$($state.state)'." }
         if ($state.goal_id -ne $metadata["ID"]) { throw "O goal fornecido nao corresponde ao checkpoint existente." }
-        $branch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
+        $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+        $branch = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
         if ($branch -ne $state.branch) { throw "Branch atual '$branch' difere do checkpoint '$($state.branch)'." }
         if ($state.state -eq "WAITING_FOR_QUOTA") {
             $resumeAt = if ($state.resume_after) {
@@ -228,7 +265,7 @@ try {
         $branchName = Start-GoalBranch -Metadata $metadata
         $state = Get-AgenticStateTemplate
         $state.goal_id = $metadata["ID"]
-        $state.goal_file = [System.IO.Path]::GetRelativePath($script:AgenticRepoRoot, $resolvedGoal).Replace('\', '/')
+        $state.goal_file = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $resolvedGoal
         $state.branch = $branchName
         $state.base_branch = $metadata["Base branch"]
         $state.started_at = [DateTime]::UtcNow.ToString("o")

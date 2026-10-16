@@ -11,10 +11,10 @@ try {
     $goalPath = Join-Path $script:AgenticRepoRoot ([string]$state.goal_file)
     if (-not (Test-Path -LiteralPath $goalPath -PathType Leaf)) { throw "Arquivo do goal do checkpoint nao existe." }
     if (-not (Test-Path -LiteralPath $script:AgenticJournalPath -PathType Leaf)) { throw "Journal do checkpoint nao existe." }
-    $currentBranch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
-    if ($LASTEXITCODE -ne 0 -or $currentBranch -ne $state.branch) { throw "Branch atual nao corresponde ao checkpoint; nenhum arquivo foi alterado." }
-    $localChanges = @(& git -C $script:AgenticRepoRoot status --porcelain)
-    if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel validar git status do checkpoint." }
+    $currentBranchOutput = @(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))
+    $currentBranch = if ($currentBranchOutput.Count -gt 0) { ([string]$currentBranchOutput[0]).Trim() } else { "" }
+    if ($currentBranch -ne $state.branch) { throw "Branch atual nao corresponde ao checkpoint; nenhum arquivo foi alterado." }
+    $localChanges = @(Invoke-AgenticGit -GitArguments @("status", "--porcelain"))
     if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Estado '$($state.state)' nao esta aguardando retomada." }
     if ($state.state -eq "WAITING_FOR_QUOTA") {
         $resumeAt = if ($state.resume_after) {

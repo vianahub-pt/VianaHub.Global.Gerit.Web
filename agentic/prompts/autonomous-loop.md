@@ -10,6 +10,8 @@ Limites rígidos por goal: 8 iterações, 40 chamadas de agente, 3 falhas consec
 
 Quota/rate limit/capacity explícitos não são falha do goal: grave `WAITING_FOR_QUOTA`, tipo, horário se o Codex o informar, horário da próxima tentativa e ação pendente. Preserve branch, diff, plano e journal. Não sonde continuamente. Erro de código nunca é quota.
 
-Só após lint, build, typecheck e demais gates aplicáveis passarem, e security e reviewer emitirem PASS, avance para READY_TO_COMMIT e READY_TO_PR. Faça commit e push na branch de trabalho e crie PR para a base declarada no goal. Não faça merge, deploy, alteração de produção ou promoção para `main`. Registre URL/número e termine em `WAITING_HUMAN_MERGE`.
+Quando todos os gates passarem, persista `quality_gates.diff_check`, `quality_gates.lint`, `quality_gates.build` e `quality_gates.typecheck` como `PASS`, e `security_review_status` e `code_review_status` como `PASS`. Então persista o state `READY_TO_COMMIT` e termine a resposta com `FINAL_STATE: READY_TO_COMMIT`. O supervisor PowerShell verifica branch, base, arquivos permitidos e aprovações antes de stage/commit/push/PR.
+
+Dentro de `codex exec`, não execute `git fetch`, `git add`, `git commit`, `git push`, `git checkout`, `git switch`, criação de PR, merge nem alterações em refs Git. Não chame `gh pr create` nem equivalente. Essas operações pertencem exclusivamente ao supervisor PowerShell. Operações Git somente de leitura são permitidas quando úteis: `git status`, `git diff`, `git diff --check`, `git branch --show-current` e `git log`. Nunca use `reset --hard`, `clean -fd`, force push, push para `develop`/`main`, merge automático ou deploy. Produção permanece read-only e merge humano obrigatório.
 
 Não imprima nem armazene secrets, JWT, cookies, connection strings, chaves privadas ou PII desnecessária em saída, journal, state ou memória. Respeite sandbox `workspace-write` e não escreva fora do repositório.

@@ -131,6 +131,9 @@ function Invoke-SmokeTest {
         Add-AgenticJournalEvent -Goal $metadata["ID"] -State $stateName -Agent "orchestrator" -Action "Simular transicao local" -Result "PASS: transicao fixture validada" -Gate "SMOKE_TEST" -Memory "MEMORY_UNAVAILABLE simulado"
     }
 
+    $fixtureResult = Invoke-AgenticSupervisorFixtures
+    Invoke-Assert ($fixtureResult -eq "PASS: fixtures A-G") "Fixtures do supervisor nao passaram."
+
     $state.state = "IDLE"
     $state.active_agent = $null
     $state.pending_action = $null
@@ -142,13 +145,15 @@ function Invoke-SmokeTest {
     $historyName = "{0}-smoke-test.md" -f [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")
     $historyPath = Join-Path (Join-Path $script:AgenticRepoRoot "agentic/journal/history") $historyName
     Copy-Item -LiteralPath $script:AgenticJournalPath -Destination $historyPath -Force
-    Set-Content -LiteralPath $script:AgenticJournalPath -Value "# Journal do goal ativo`n`nEventos sao append-only durante cada goal. Nao registre segredos, tokens, cookies, connection strings ou PII desnecessaria." -Encoding utf8
+    $journalHeader = "# Journal do goal ativo`n`nEventos sao append-only durante cada goal. Nao registre segredos, tokens, cookies, connection strings ou PII desnecessaria."
+    [System.IO.File]::WriteAllText($script:AgenticJournalPath, $journalHeader, [System.Text.UTF8Encoding]::new($false))
 
     Write-Output "SMOKE_TEST: PASS"
     Write-Output "- state machine e transicoes validas"
     Write-Output "- fixtures de quota e erro de codigo classificadas"
     Write-Output "- retomada validou repositorio, branch, goal e journal local"
     Write-Output "- MEMORY_UNAVAILABLE simulado sem bloquear o fluxo"
+    Write-Output "- fixtures A-G do handoff, gates, branch, push e PR verificavel"
     Write-Output "- state atomico persistido e journal arquivado em agentic/journal/history/$historyName"
     Write-Output "- nenhuma chamada Codex, PR ou acao de producao executada"
 }
@@ -160,12 +165,116 @@ function Invoke-Git {
 
 function Set-FailedState {
     param($State, [string]$Reason)
-    $State.state = "FAILED"
-    $State.last_failure = $Reason
-    $State.pending_action = $null
-    $State.active_agent = $null
-    Write-AgenticState -State $State
-    Add-AgenticJournalEvent -Goal ([string]$State.goal_id) -State "FAILED" -Agent "orchestrator" -Action "Encerrar com falha segura" -Result "FAILED" -Gate ([string]$State.last_gate) -Failure $Reason -Quota ([string]$State.quota_state) -Memory ([string]$State.memory_status)
+    $failed = New-AgenticFailedCheckpoint -State $State -Reason $Reason
+    Write-AgenticState -State $failed
+    Add-AgenticJournalEvent -Goal ([string]$failed.goal_id) -State "FAILED" -Agent "orchestrator" -Action "Encerrar com falha segura" -Result "FAILED" -Gate ([string]$failed.last_gate) -Failure $Reason -Quota ([string]$failed.quota_state) -Memory ([string]$failed.memory_status)
+}
+
+function Get-AgenticWorkingTreePaths {
+    $lines = @(Invoke-Git -GitArguments @("status", "--porcelain=v1", "--untracked-files=all"))
+    $paths = @()
+    foreach ($line in $lines) {
+        $entry = [string]$line
+        if ($entry.Length -lt 4) { throw "Git status retornou uma entrada invalida." }
+        if ($entry.Substring(0, 2) -match "[RC]") { throw "Renames/copies nao sao aceitos no stage agentic automatico." }
+        $path = $entry.Substring(3).Replace('\', '/')
+        if ($path.StartsWith('"') -or $path.Contains(" -> ")) { throw "Git status retornou caminho que requer revisao manual." }
+        $paths += $path
+    }
+    return $paths
+}
+
+function Invoke-AgenticFinalization {
+    param($State, [hashtable]$Metadata)
+
+    $step = "validacao de prontidao"
+    $script:AgenticLastNativeExitCode = $null
+    try {
+        $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+        $currentBranch = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
+        $allChangedPaths = @(Get-AgenticWorkingTreePaths)
+        $supervisorPaths = @(Get-AgenticSupervisorPaths)
+        $goalPaths = @($allChangedPaths | Where-Object { $_ -notin $supervisorPaths })
+        Test-AgenticReadiness -State $State -Metadata $Metadata -CurrentBranch $currentBranch -ChangedPaths $allChangedPaths | Out-Null
+        if (-not (Test-AgenticPushTarget -Branch $currentBranch)) { throw "Destino de push nao e uma branch de trabalho permitida." }
+
+        $step = "validacao da base remota"
+        $base = [string]$Metadata["Base branch"]
+        if ($base -notin @("develop", "main")) { throw "Base de PR nao permitida." }
+        $remoteOutput = @(Invoke-Git -GitArguments @("remote", "get-url", "origin"))
+        $remoteUrl = if ($remoteOutput.Count -gt 0) { ([string]$remoteOutput[0]).Trim() } else { "" }
+        $repoMatch = [regex]::Match($remoteUrl, '(?:github\.com[:/])(?<repo>[^/]+/[^/]+?)(?:\.git)?$')
+        if (-not $repoMatch.Success) { throw "Remote origin nao identifica um repositorio GitHub verificavel." }
+        $repository = $repoMatch.Groups["repo"].Value
+        $baseCheck = Invoke-AgenticNativeProcess -FilePath "git" -Arguments @("-C", $script:AgenticRepoRoot, "merge-base", "--is-ancestor", "origin/$base", "HEAD")
+        Assert-AgenticNativeProcessSucceeded -Result $baseCheck -CommandName "git merge-base"
+
+        $step = "stage das alteracoes permitidas"
+        if ($goalPaths.Count -eq 0) { throw "Nenhum arquivo do goal foi alterado; state/journal nao sao commitados." }
+        Invoke-Git -GitArguments (@("add", "--") + $goalPaths) | Out-Null
+        $stagedPaths = @(Invoke-Git -GitArguments @("diff", "--cached", "--name-only")) | ForEach-Object { ([string]$_).Replace('\', '/') }
+        if (@($stagedPaths | Where-Object { $_ -notin $goalPaths }).Count -gt 0) { throw "Stage contem arquivo fora do goal." }
+        if (@($stagedPaths).Count -eq 0) { throw "Stage do goal ficou vazio." }
+
+        $step = "git commit"
+        $commitMessage = [string]$Metadata["Title"]
+        $commitResult = Invoke-AgenticNativeProcess -FilePath "git" -Arguments @("-C", $script:AgenticRepoRoot, "commit", "-m", $commitMessage) -CaptureStandardError
+        Assert-AgenticNativeProcessSucceeded -Result $commitResult -CommandName "git commit"
+        $shaOutput = @(Invoke-Git -GitArguments @("rev-parse", "HEAD"))
+        $State.commit_sha = if ($shaOutput.Count -gt 0) { ([string]$shaOutput[0]).Trim() } else { $null }
+        if ([string]::IsNullOrWhiteSpace([string]$State.commit_sha)) { throw "Commit nao retornou SHA verificavel." }
+        Write-AgenticState -State $State
+        Add-AgenticJournalEvent -Goal ([string]$State.goal_id) -State "READY_TO_COMMIT" -Agent "supervisor" -Action "Commit criado pelo supervisor" -Result "PASS: SHA persistido no checkpoint" -Gate "GATES, SECURITY_REVIEW, CODE_REVIEW: PASS" -Memory ([string]$State.memory_status)
+
+        $step = "git push da branch de trabalho"
+        $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+        $currentBranch = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
+        if ($currentBranch -ne [string]$State.branch -or -not (Test-AgenticPushTarget -Branch $currentBranch)) { throw "Push bloqueado: branch atual nao e a branch de trabalho validada." }
+        $pushResult = Invoke-AgenticNativeProcess -FilePath "git" -Arguments @("-C", $script:AgenticRepoRoot, "push", "--set-upstream", "origin", $currentBranch) -CaptureStandardError
+        Assert-AgenticNativeProcessSucceeded -Result $pushResult -CommandName "git push"
+
+        $State.state = "READY_TO_PR"
+        $State.pending_action = "Criar e verificar PR para a base declarada"
+        Write-AgenticState -State $State
+        Add-AgenticJournalEvent -Goal ([string]$State.goal_id) -State "READY_TO_PR" -Agent "supervisor" -Action "Commit e push da branch de trabalho concluidos" -Result "PASS" -Gate "GATES, SECURITY_REVIEW, CODE_REVIEW: PASS" -Memory ([string]$State.memory_status)
+
+        $step = "criacao do pull request"
+        $bodyPath = Join-Path ([IO.Path]::GetTempPath()) ("agentic-pr-{0}.md" -f [guid]::NewGuid().ToString("N"))
+        $body = "Goal: $($Metadata['ID'])`n`nQuality gates, security review e code review foram validados pelo supervisor antes do commit.`n`nEste PR nao foi mergeado nem implantado."
+        [IO.File]::WriteAllText($bodyPath, $body, [Text.UTF8Encoding]::new($false))
+        try {
+            $prCreate = Invoke-AgenticNativeProcess -FilePath "gh" -Arguments @("pr", "create", "--repo", $repository, "--base", $base, "--head", $currentBranch, "--title", [string]$Metadata["Title"], "--body-file", $bodyPath) -CaptureStandardError
+        }
+        finally {
+            Remove-Item -LiteralPath $bodyPath -Force -ErrorAction SilentlyContinue
+        }
+        Assert-AgenticNativeProcessSucceeded -Result $prCreate -CommandName "gh pr create"
+        $prUrl = @($prCreate.Output | ForEach-Object { [regex]::Match([string]$_, 'https://github\.com/[^/]+/[^/]+/pull/[0-9]+').Value } | Where-Object { $_ } | Select-Object -First 1)
+        if ($prUrl.Count -eq 0) { throw "gh pr create nao retornou URL verificavel." }
+
+        $step = "verificacao do pull request"
+        $prView = Invoke-AgenticNativeProcess -FilePath "gh" -Arguments @("pr", "view", $prUrl[0], "--repo", $repository, "--json", "number,url,state,headRefName,baseRefName") -CaptureStandardError
+        Assert-AgenticNativeProcessSucceeded -Result $prView -CommandName "gh pr view"
+        $prJson = @($prView.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+        $pullRequest = $prJson | ConvertFrom-Json
+        if (-not (Test-AgenticPullRequest -PullRequest $pullRequest -Branch $currentBranch -BaseBranch $base)) { throw "PR nao corresponde a branch/base ou nao esta aberto." }
+
+        Set-AgenticVerifiedPullRequestState -State $State -PullRequest $pullRequest -Branch $currentBranch -BaseBranch $base | Out-Null
+        $State.pending_action = $null
+        $State.active_agent = $null
+        $State.last_gate = "PR verificado; aguardando merge humano"
+        $State.last_successful_step = "Supervisor criou e verificou commit, push e PR"
+        Write-AgenticState -State $State
+        Add-AgenticJournalEvent -Goal ([string]$State.goal_id) -State "WAITING_HUMAN_MERGE" -Agent "supervisor" -Action "Registrar PR verificavel e aguardar merge humano" -Result "PASS: PR #$($State.pr_number)" -Gate ([string]$State.last_gate) -Memory ([string]$State.memory_status)
+        Write-Output "Goal concluido. PR: $($State.pr_url). Estado: WAITING_HUMAN_MERGE."
+        return $true
+    }
+    catch {
+        $reason = "Finalizacao do supervisor falhou durante $step; checkpoint e alteracoes locais preservados."
+        if ($null -ne $script:AgenticLastNativeExitCode -and [int]$script:AgenticLastNativeExitCode -ne 0) { $reason = "Finalizacao do supervisor falhou durante $step (exit code $($script:AgenticLastNativeExitCode)); saida omitida e checkpoint preservado." }
+        Set-FailedState -State (Get-AgenticState) -Reason $reason
+        throw "Finalizacao do supervisor falhou; state FAILED persistido e checkpoint preservado."
+    }
 }
 
 function Start-GoalBranch {
@@ -204,18 +313,18 @@ function Invoke-CodexOrchestrator {
     if ($null -eq $codexCommand) { throw "Codex CLI nao encontrado no PATH." }
 
     $promptPath = Join-Path $script:AgenticRepoRoot "agentic/prompts/autonomous-loop.md"
-    $prompt = Get-Content -LiteralPath $promptPath -Raw
+    $prompt = [System.IO.File]::ReadAllText($promptPath, [System.Text.UTF8Encoding]::new($false))
     $relativeGoal = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $GoalPath
-    $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue ate WAITING_HUMAN_MERGE ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: WAITING_HUMAN_MERGE ou FINAL_STATE: FAILED."
+    $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue ate READY_TO_COMMIT ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: READY_TO_COMMIT ou FINAL_STATE: FAILED."
 
     $responsePath = Join-Path $script:AgenticRepoRoot "agentic/state/.codex-last-message.md"
-    $codexArguments = @("exec", "--json", "--sandbox", "workspace-write", "--cd", $script:AgenticRepoRoot, "--output-last-message", $responsePath, $prompt)
+    $codexArguments = @("exec", "--json", "--approve-for-me", "--cd", $script:AgenticRepoRoot, "--output-last-message", $responsePath, $prompt)
     $codexResult = Invoke-AgenticNativeProcess -FilePath "codex" -Arguments $codexArguments -CaptureStandardError
     $exitCode = $codexResult.ExitCode
     $combinedOutput = @($codexResult.Output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
     $lastMessage = ""
     if (Test-Path -LiteralPath $responsePath) {
-        $lastMessage = Get-Content -LiteralPath $responsePath -Raw
+        $lastMessage = [System.IO.File]::ReadAllText($responsePath, [System.Text.UTF8Encoding]::new($false))
         Remove-Item -LiteralPath $responsePath -Force
     }
     return [pscustomobject]@{
@@ -354,20 +463,25 @@ try {
             exit 1
         }
 
-        if ($state.state -eq "WAITING_HUMAN_MERGE") {
-            if ([string]::IsNullOrWhiteSpace([string]$state.pr_url) -or [string]::IsNullOrWhiteSpace([string]$state.pr_number)) {
-                Set-FailedState -State $state -Reason "Codex informou WAITING_HUMAN_MERGE sem referencia verificavel de PR."
+        if ($state.state -eq "READY_TO_COMMIT") {
+            $readyMessage = [regex]::IsMatch($result.LastMessage, "(?im)^\s*FINAL_STATE:\s*READY_TO_COMMIT\s*$")
+            if (-not $readyMessage) {
+                Set-FailedState -State $state -Reason "State READY_TO_COMMIT nao foi confirmado na resposta final do Codex."
                 exit 1
             }
-            Write-Output "Goal concluido. PR: $($state.pr_url). Estado: WAITING_HUMAN_MERGE."
+            Invoke-AgenticFinalization -State $state -Metadata $metadata | Out-Null
             exit 0
+        }
+        if ($state.state -in @("READY_TO_PR", "WAITING_HUMAN_MERGE")) {
+            Set-FailedState -State $state -Reason "Codex tentou concluir uma fase Git exclusiva do supervisor."
+            exit 1
         }
         if ($state.state -eq "FAILED") {
             Write-Output "Goal encerrado em FAILED. Consulte state e journal locais."
             exit 1
         }
 
-        $finalState = [regex]::Match($result.LastMessage, "(?im)^\s*FINAL_STATE:\s*(WAITING_HUMAN_MERGE|FAILED)\s*$")
+        $finalState = [regex]::Match($result.LastMessage, "(?im)^\s*FINAL_STATE:\s*(READY_TO_COMMIT|FAILED)\s*$")
         if ($finalState.Success -and $finalState.Groups[1].Value -eq "FAILED") {
             if ($state.state -ne "FAILED") { Set-FailedState -State $state -Reason "Codex encerrou explicitamente em FAILED." }
             exit 1

@@ -3,5 +3,5 @@ description = "Executa quality gates e registra evidências com resultados verif
 model = "gpt-6-luna"
 model_reasoning_effort = "low"
 developer_instructions = """
-Execute apenas os gates aplicáveis ao goal e registre comando, exit code, resumo e falhas. Nunca declare PASS se o comando falhou ou não foi executado. Não altere implementação para mascarar uma falha; encaminhe evidência objetiva ao orchestrator.
+Execute apenas os gates aplicáveis ao goal e registre comando, exit code, resumo e falhas. Para os gates padrão, atualize `quality_gates.diff_check`, `quality_gates.lint`, `quality_gates.build` e `quality_gates.typecheck` com PASS ou FAIL somente após executar cada comando. Nunca declare PASS se o comando falhou ou não foi executado. Não altere implementação para mascarar uma falha; encaminhe evidência objetiva ao orchestrator.
 """

@@ -4,6 +4,7 @@
 - Title: Validate the Codex agentic framework end to end
 - Base branch: develop
 - Branch prefix: feature
+- Allowed files: agentic/validation/framework-e2e-validation.md, agentic/plans/framework-e2e-validation.md
 
 ## Objective
 
@@ -21,9 +22,9 @@ O objetivo é provar que o loop autônomo consegue:
 - executar security review;
 - executar code review;
 - registrar journal e state;
-- criar commit;
-- fazer push;
-- criar Pull Request para develop;
+- entregar `READY_TO_COMMIT` ao supervisor;
+- supervisor cria commit e faz push somente da branch de trabalho;
+- supervisor cria e verifica Pull Request para develop;
 - parar em WAITING_HUMAN_MERGE.
 
 ## Scope
@@ -74,9 +75,8 @@ Nenhum arquivo de produção pode ser alterado.
 - reviewer retorna PASS;
 - journal atualizado;
 - loop-state atualizado;
-- commit criado;
-- push realizado;
-- PR criado para develop;
+- Codex não executa Git mutável nem cria PR;
+- supervisor cria commit, push da branch de trabalho e PR aberto para develop;
 - state final = WAITING_HUMAN_MERGE;
 - nenhum merge automático;
 - nenhuma alteração em main;

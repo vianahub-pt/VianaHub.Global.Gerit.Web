@@ -37,6 +37,7 @@ function Invoke-AgenticNativeProcess {
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
     }
+    $script:AgenticLastNativeExitCode = $exitCode
 
     return [pscustomobject]@{
         ExitCode = $exitCode
@@ -100,6 +101,14 @@ function Get-AgenticStateTemplate {
         last_gate = $null
         last_failure = $null
         last_successful_step = $null
+        quality_gates = [pscustomobject]@{
+            diff_check = "PENDING"
+            lint = "PENDING"
+            build = "PENDING"
+            typecheck = "PENDING"
+        }
+        security_review_status = "PENDING"
+        code_review_status = "PENDING"
         pending_action = $null
         commit_sha = $null
         pr_number = $null
@@ -159,6 +168,201 @@ function Test-AgenticTransition {
         FAILED = @()
     }
     return $valid[$From] -contains $To
+}
+
+function Get-AgenticSupervisorPaths {
+    return @("agentic/state/loop-state.json", "agentic/journal/current.md")
+}
+
+function Get-AgenticAllowedGoalFiles {
+    param([Parameter(Mandatory = $true)][hashtable]$Metadata)
+
+    $raw = [string]$Metadata["Allowed files"]
+    if ([string]::IsNullOrWhiteSpace($raw) -or $raw -eq "none") { return @() }
+    return @($raw -split "," | ForEach-Object { $_.Trim().Replace('\', '/') } | Where-Object { $_ })
+}
+
+function Test-AgenticReadiness {
+    param(
+        [Parameter(Mandatory = $true)]$State,
+        [Parameter(Mandatory = $true)][hashtable]$Metadata,
+        [Parameter(Mandatory = $true)][string]$CurrentBranch,
+        [Parameter(Mandatory = $true)][string[]]$ChangedPaths
+    )
+
+    if ([string]$State.state -ne "READY_TO_COMMIT") { throw "Codex precisa entregar state READY_TO_COMMIT." }
+    if ([string]$State.branch -ne $CurrentBranch) { throw "Branch atual nao corresponde ao checkpoint." }
+    if ([string]$State.base_branch -ne [string]$Metadata["Base branch"]) { throw "Base do state nao corresponde ao goal." }
+    $prefix = [string]$Metadata["Branch prefix"]
+    $slug = ([string]$Metadata["ID"]).ToLowerInvariant() -replace "[^a-z0-9-]+", "-"
+    $slug = $slug.Trim("-")
+    $expectedBranch = "$prefix/$slug"
+    if ($CurrentBranch -ne $expectedBranch -or $CurrentBranch -in @("develop", "main")) { throw "Branch nao corresponde ao prefixo e ID declarados no goal." }
+    if ($State.base_branch -notin @("develop", "main") -or (($prefix -eq "hotfix") -ne ($State.base_branch -eq "main"))) { throw "Combinacao de branch/base nao permitida." }
+
+    $qualityGates = @("diff_check", "lint", "build", "typecheck")
+    foreach ($gate in $qualityGates) {
+        if ([string]$State.quality_gates.$gate -ne "PASS") { throw "Quality gate '$gate' nao consta como PASS." }
+    }
+    if ([string]$State.security_review_status -ne "PASS") { throw "Security review nao consta como PASS." }
+    if ([string]$State.code_review_status -ne "PASS") { throw "Code review nao consta como PASS." }
+
+    $allowed = @(Get-AgenticAllowedGoalFiles -Metadata $Metadata)
+    if ($allowed.Count -eq 0) { throw "Goal precisa declarar Allowed files antes do commit." }
+    if ($ChangedPaths.Count -eq 0) { throw "Nenhuma alteracao de goal para stage." }
+    $allowedSet = @{}
+    foreach ($path in $allowed) { $allowedSet[$path.ToLowerInvariant()] = $true }
+    foreach ($path in $ChangedPaths) {
+        $normalized = ([string]$path).Replace('\', '/')
+        if ($normalized -in (Get-AgenticSupervisorPaths)) { continue }
+        if (-not $allowedSet.ContainsKey($normalized.ToLowerInvariant())) { throw "Working tree contem arquivo fora do escopo permitido pelo goal." }
+    }
+    return $true
+}
+
+function Test-AgenticPushTarget {
+    param([Parameter(Mandatory = $true)][string]$Branch)
+
+    return ($Branch -match '^(feature|fix|hotfix)/[a-z0-9][a-z0-9-]*$' -and $Branch -notin @("develop", "main"))
+}
+
+function Test-AgenticPullRequest {
+    param(
+        [Parameter(Mandatory = $true)]$PullRequest,
+        [Parameter(Mandatory = $true)][string]$Branch,
+        [Parameter(Mandatory = $true)][string]$BaseBranch
+    )
+
+    if ($null -eq $PullRequest) { return $false }
+    $number = 0
+    $validNumber = [int]::TryParse([string]$PullRequest.number, [ref]$number)
+    return ($validNumber -and $number -gt 0 -and
+        [string]$PullRequest.state -eq "OPEN" -and
+        [string]$PullRequest.headRefName -eq $Branch -and
+        [string]$PullRequest.baseRefName -eq $BaseBranch -and
+        [string]$PullRequest.url -match '^https://github\.com/[^/]+/[^/]+/pull/[0-9]+$')
+}
+
+function Set-AgenticVerifiedPullRequestState {
+    param(
+        [Parameter(Mandatory = $true)]$State,
+        [Parameter(Mandatory = $true)]$PullRequest,
+        [Parameter(Mandatory = $true)][string]$Branch,
+        [Parameter(Mandatory = $true)][string]$BaseBranch
+    )
+
+    if (-not (Test-AgenticPullRequest -PullRequest $PullRequest -Branch $Branch -BaseBranch $BaseBranch)) {
+        throw "Pull request nao e verificavel para a branch/base declaradas."
+    }
+    $State.pr_number = [string]$PullRequest.number
+    $State.pr_url = [string]$PullRequest.url
+    $State.state = "WAITING_HUMAN_MERGE"
+    return $State
+}
+
+function New-AgenticFailedCheckpoint {
+    param([Parameter(Mandatory = $true)]$State, [Parameter(Mandatory = $true)][string]$Reason)
+
+    $failed = $State | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $failed.state = "FAILED"
+    $failed.last_failure = $Reason
+    $failed.pending_action = $null
+    $failed.active_agent = $null
+    if ($null -ne $failed.PSObject.Properties["updated_at"]) { $failed.updated_at = [DateTime]::UtcNow.ToString("o") }
+    else { $failed | Add-Member -NotePropertyName updated_at -NotePropertyValue ([DateTime]::UtcNow.ToString("o")) }
+    return $failed
+}
+
+function Invoke-AgenticSupervisorFixtures {
+    $promptPath = Join-Path $script:AgenticRepoRoot "agentic/prompts/autonomous-loop.md"
+    $prompt = [System.IO.File]::ReadAllText($promptPath, [System.Text.UTF8Encoding]::new($false))
+    foreach ($forbidden in @("git fetch", "git add", "git commit", "git push", "git checkout", "git switch", "gh pr create", "merge")) {
+        if ($prompt -notmatch [regex]::Escape($forbidden)) { throw "Prompt nao proibe '$forbidden' dentro do Codex." }
+    }
+    if ($prompt -notmatch "FINAL_STATE: READY_TO_COMMIT") { throw "Prompt nao define READY_TO_COMMIT como handoff do Codex." }
+    $codexState = [pscustomobject]@{ state = "READY_TO_COMMIT" }
+    if ($codexState.state -ne "READY_TO_COMMIT") { throw "Fixture A: Codex nao pode concluir em READY_TO_COMMIT." }
+    $readOnlyCommands = @("git status", "git diff", "git diff --check", "git branch --show-current", "git log")
+    if (@($readOnlyCommands | Where-Object { $_ -match 'git (fetch|add|commit|push|checkout|switch)|gh pr create' }).Count -gt 0) { throw "Fixture A: lista de comandos read-only contem Git mutavel." }
+
+    $metadata = @{
+        "ID" = "agentic-fixture"
+        "Title" = "Fixture do supervisor"
+        "Base branch" = "develop"
+        "Branch prefix" = "feature"
+        "Allowed files" = "agentic/validation/agentic-fixture.md"
+    }
+    $state = [pscustomobject]@{
+        state = "READY_TO_COMMIT"
+        branch = "feature/agentic-fixture"
+        base_branch = "develop"
+        quality_gates = [pscustomobject]@{ diff_check = "PASS"; lint = "PASS"; build = "PASS"; typecheck = "PASS" }
+        security_review_status = "PASS"
+        code_review_status = "PASS"
+        goal_id = "agentic-fixture"
+        commit_sha = $null
+        pr_number = $null
+        pr_url = $null
+        last_gate = "CODE_REVIEW: PASS"
+        last_failure = $null
+        pending_action = "supervisor"
+        active_agent = "supervisor"
+        memory_status = "MEMORY_UNAVAILABLE"
+        quota_state = "AVAILABLE"
+        updated_at = $null
+    }
+    if (-not (Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("agentic/validation/agentic-fixture.md", "agentic/state/loop-state.json"))) { throw "Fixture B: READY_TO_COMMIT nao foi reconhecido." }
+
+    $rejected = $false
+    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/wrong-branch" -ChangedPaths @("agentic/validation/agentic-fixture.md") | Out-Null }
+    catch { $rejected = $true }
+    if (-not $rejected) { throw "Fixture C: branch incorreta foi aceita." }
+
+    $rejected = $false
+    $state.security_review_status = "PENDING"
+    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("agentic/validation/agentic-fixture.md") | Out-Null }
+    catch { $rejected = $true }
+    if (-not $rejected) { throw "Fixture D: state sem reviews PASS foi aceito." }
+    $state.security_review_status = "PASS"
+    $state.code_review_status = "PENDING"
+    $rejected = $false
+    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("agentic/validation/agentic-fixture.md") | Out-Null }
+    catch { $rejected = $true }
+    if (-not $rejected) { throw "Fixture D: state sem code review PASS foi aceito." }
+    $state.code_review_status = "PASS"
+    $state.quality_gates.lint = "FAIL"
+    $rejected = $false
+    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("agentic/validation/agentic-fixture.md") | Out-Null }
+    catch { $rejected = $true }
+    if (-not $rejected) { throw "Fixture D: state sem quality gates PASS foi aceito." }
+    $state.quality_gates.lint = "PASS"
+
+    if (-not (Test-AgenticPushTarget -Branch "feature/agentic-fixture")) { throw "Fixture E: branch de trabalho valida foi rejeitada." }
+    foreach ($protectedBranch in @("develop", "main")) {
+        if (Test-AgenticPushTarget -Branch $protectedBranch) { throw "Fixture E: push para '$protectedBranch' foi permitido." }
+    }
+
+    foreach ($operation in @("git commit", "git push", "gh pr create")) {
+        $state.commit_sha = if ($operation -eq "git commit") { $null } else { "fixture-commit-sha" }
+        $failed = New-AgenticFailedCheckpoint -State $state -Reason "$operation falhou (exit code 9); saida omitida."
+        $expectedCommit = if ($operation -eq "git commit") { $null } else { "fixture-commit-sha" }
+        if ($failed.state -ne "FAILED" -or $failed.commit_sha -ne $expectedCommit -or $failed.branch -ne $state.branch -or $failed.goal_id -ne $state.goal_id) { throw "Fixture F: falha de $operation nao preservou o checkpoint." }
+    }
+
+    $pr = [pscustomobject]@{ number = 316; url = "https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/pull/316"; state = "OPEN"; headRefName = "feature/agentic-fixture"; baseRefName = "develop" }
+    if (-not (Test-AgenticPullRequest -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop")) { throw "Fixture G: PR verificavel foi rejeitado." }
+    $pr.state = "MERGED"
+    if (Test-AgenticPullRequest -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop") { throw "Fixture G: estado final aceitou PR que nao esta aberto." }
+    $state.state = "READY_TO_PR"
+    $rejected = $false
+    try { Set-AgenticVerifiedPullRequestState -State $state -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop" | Out-Null }
+    catch { $rejected = $true }
+    if (-not $rejected -or $state.state -ne "READY_TO_PR") { throw "Fixture G: WAITING_HUMAN_MERGE foi definido sem PR verificavel." }
+    $pr.state = "OPEN"
+    Set-AgenticVerifiedPullRequestState -State $state -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop" | Out-Null
+    if ($state.state -ne "WAITING_HUMAN_MERGE" -or $state.pr_number -ne "316" -or -not $state.pr_url) { throw "Fixture G: PR verificavel nao produziu checkpoint WAITING_HUMAN_MERGE." }
+
+    return "PASS: fixtures A-G"
 }
 
 function Write-AgenticState {
@@ -264,9 +468,9 @@ function Get-AgenticQuotaClassification {
 function Get-AgenticGoalMetadata {
     param([Parameter(Mandatory = $true)][string]$Path)
 
-    $content = Get-Content -LiteralPath $Path -Raw
+    $content = [System.IO.File]::ReadAllText($Path, [System.Text.UTF8Encoding]::new($false))
     $metadata = @{}
-    foreach ($key in @("ID", "Title", "Base branch", "Branch prefix")) {
+    foreach ($key in @("ID", "Title", "Base branch", "Branch prefix", "Allowed files")) {
         $pattern = "(?im)^\s*(?:-\s*)?(?:\*\*)?" + [regex]::Escape($key) + "(?:\*\*)?\s*:\s*(.+?)\s*$"
         $match = [regex]::Match($content, $pattern)
         if ($match.Success) {

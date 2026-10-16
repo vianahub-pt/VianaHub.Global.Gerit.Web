@@ -4,6 +4,7 @@
 - Title: Validação determinística do framework agentic
 - Base branch: develop
 - Branch prefix: feature
+- Allowed files: none
 
 ## Objective
 

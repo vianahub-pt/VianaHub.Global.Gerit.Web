@@ -67,6 +67,7 @@ O framework do repositório está em `.codex/`, `agentic/` e `scripts/`. Consult
 - Quota não é falha do goal. Registre o checkpoint, preserve branch/diff/journal e use `WAITING_FOR_QUOTA`. Não invente API de quota nem reset. Se Codex não informar reset, espere no mínimo 15 minutos para limites desconhecidos/temporários e 6 horas para limite semanal antes de nova tentativa. Nunca faça sondagem contínua.
 - A retomada lê state, goal, plano e journal antes de agir. Se ai-memory estiver indisponível, registre isso e continue usando o journal local.
 - Só o supervisor cria commit, push e PR depois de validar branch/base, escopo de arquivos, quality gates, security PASS e reviewer PASS. Push é limitado à branch de trabalho e PR usa a base declarada no goal. `WAITING_HUMAN_MERGE` só é válido depois de o supervisor verificar PR aberto com URL, número, head e base correspondentes. Não faça merge nem deploy.
+- Para iniciar trabalho pelo Codex Desktop, use `agentic/prompts/front-door.md` e entregue intake apenas em `agentic/state/intake.md` para `scripts/agentic-start.ps1`. O supervisor valida árvore e allowlist antes de criar branch, materializa o goal depois do checkout e chama o loop em modo de branch preparada. Nunca inclua segredo, path absoluto, traversal, curingas ou repo inteiro. O Desktop apresenta progresso alto nível sem chain-of-thought; o fluxo mantém quota/resume e termina em `WAITING_HUMAN_MERGE` ou `FAILED`.
 
 ## Memória e journal
 

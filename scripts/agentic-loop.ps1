@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Goal,
     [switch]$SmokeTest,
-    [switch]$Resume
+    [switch]$Resume,
+    [switch]$PreparedBranch
 )
 
 Set-StrictMode -Version Latest
@@ -283,35 +284,6 @@ function Invoke-AgenticFinalization {
     }
 }
 
-function Start-GoalBranch {
-    param([hashtable]$Metadata)
-
-    $base = $Metadata["Base branch"]
-    $prefix = $Metadata["Branch prefix"]
-    if ($base -notin @("develop", "main")) { throw "Base branch deve ser develop ou main." }
-    if ($prefix -notin @("feature", "fix", "hotfix")) { throw "Branch prefix deve ser feature, fix ou hotfix." }
-    if (($prefix -eq "hotfix") -ne ($base -eq "main")) { throw "Somente hotfix usa main; goals normais devem usar develop." }
-
-    $currentBranchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
-    $currentBranch = if ($currentBranchOutput.Count -gt 0) { ([string]$currentBranchOutput[0]).Trim() } else { "" }
-    if ($currentBranch -ne $base) {
-        throw "Goal novo requer checkout limpo da base '$base'; branch atual: '$currentBranch'."
-    }
-    $changes = Invoke-Git -GitArguments @("status", "--porcelain")
-    if (-not [string]::IsNullOrWhiteSpace(($changes -join ""))) { throw "Working tree nao esta limpo; nenhuma alteracao foi descartada." }
-
-    Invoke-Git -GitArguments @("fetch", "origin") | Out-Null
-    $slug = ($Metadata["ID"].ToLowerInvariant() -replace "[^a-z0-9-]+", "-").Trim("-")
-    if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal nao pode gerar slug de branch." }
-    $branchName = "$prefix/$slug"
-    $existing = Invoke-Git -GitArguments @("branch", "--list", $branchName)
-    if ($existing) { throw "Branch local '$branchName' ja existe; nao sera sobrescrita." }
-    $remoteExisting = Invoke-Git -GitArguments @("branch", "--remotes", "--list", "origin/$branchName")
-    if ($remoteExisting) { throw "Branch remota 'origin/$branchName' ja existe; nao sera sobrescrita." }
-    Invoke-Git -GitArguments @("switch", "--create", $branchName, "origin/$base") | Out-Null
-    return $branchName
-}
-
 function Invoke-CodexOrchestrator {
     param($State, [string]$GoalPath)
 
@@ -344,11 +316,17 @@ try {
     $resolvedGoal = (Resolve-Path -LiteralPath $Goal).Path
     $repoPrefix = $script:AgenticRepoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
     Invoke-Assert ($resolvedGoal.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) "Goal precisa estar dentro do repositorio."
-    $metadata = Get-AgenticGoalMetadata -Path $resolvedGoal
+    if ($PreparedBranch) { $metadata = Assert-AgenticIntake -Path $resolvedGoal }
+    else { $metadata = Get-AgenticGoalMetadata -Path $resolvedGoal }
+    if ($PreparedBranch -and $SmokeTest) { throw "PreparedBranch não pode ser combinado com SmokeTest." }
 
     if ($SmokeTest) {
         Invoke-SmokeTest -GoalPath $resolvedGoal
         exit 0
+    }
+    if ($PreparedBranch) {
+        if ($Resume) { throw "PreparedBranch não pode ser combinado com Resume." }
+        Assert-AgenticPreparedHandoff -GoalPath $resolvedGoal -Metadata $metadata | Out-Null
     }
 
     $state = Get-AgenticState
@@ -377,7 +355,13 @@ try {
     }
     else {
         if ($state.state -ne "IDLE") { throw "Ja existe um goal nao finalizado no estado '$($state.state)'; use agentic-resume.ps1." }
-        $branchName = Start-GoalBranch -Metadata $metadata
+        if ($PreparedBranch) {
+            $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
+            $branchName = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
+            $expected = "$($metadata['Branch prefix'])/$($metadata['ID'])"
+            if ($branchName -ne $expected -or $branchName -in @("develop", "main")) { throw "Branch preparada não corresponde ao intake validado." }
+        }
+        else { $branchName = Start-GoalBranch -Metadata $metadata }
         $state = Get-AgenticStateTemplate
         $state.goal_id = $metadata["ID"]
         $state.goal_file = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $resolvedGoal

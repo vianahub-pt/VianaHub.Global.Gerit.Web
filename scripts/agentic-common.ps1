@@ -404,6 +404,166 @@ function Invoke-AgenticSupervisorFixtures {
     $prompt = [System.IO.File]::ReadAllText($promptPath, [System.Text.UTF8Encoding]::new($false))
     $supervisorPath = Join-Path $script:AgenticRepoRoot "scripts/agentic-loop.ps1"
     $supervisorSource = [System.IO.File]::ReadAllText($supervisorPath, [System.Text.UTF8Encoding]::new($false))
+    $commonSource = [System.IO.File]::ReadAllText((Join-Path $script:AgenticRepoRoot "scripts/agentic-common.ps1"), [System.Text.UTF8Encoding]::new($false))
+    $startPath = Join-Path $script:AgenticRepoRoot "scripts/agentic-start.ps1"
+    $startSource = [System.IO.File]::ReadAllText($startPath, [System.Text.UTF8Encoding]::new($false))
+    $intakeFixturePath = Join-Path ([IO.Path]::GetTempPath()) ("agentic-intake-{0}.md" -f [guid]::NewGuid().ToString("N"))
+    $validIntake = @'
+- ID: clients-crud
+- Title: Implementar CRUD de Clients
+- Base branch: develop
+- Branch prefix: feature
+- Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts
+
+## Objective
+Implementar o CRUD usando a API existente.
+## Discovery requirements
+Architect confirma contratos da API.
+## Acceptance criteria
+CRUD funcional com allowlist validada.
+## Validation requirements
+Executar gates padrão.
+## Security/production restrictions
+Sem produção, deploy ou merge automático.
+'@
+    try {
+        [IO.File]::WriteAllText($intakeFixturePath, $validIntake, [Text.UTF8Encoding]::new($false))
+        $fixtureMetadata = Assert-AgenticIntake -Path $intakeFixturePath -BasePath ([IO.Path]::GetTempPath())
+        if ($fixtureMetadata["ID"] -ne "clients-crud") { throw "Fixture A: intake válido não foi normalizado." }
+        $invalidIntakes = @(
+            @{ Name = "B base"; Replace = "Base branch: develop"; With = "Base branch: production" },
+            @{ Name = "C prefixo"; Replace = "Branch prefix: feature"; With = "Branch prefix: release" },
+            @{ Name = "D ID traversal"; Replace = "ID: clients-crud"; With = "ID: ../clients-crud" },
+            @{ Name = "E allowlist vazia"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: " },
+            @{ Name = "F wildcard"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: **" },
+            @{ Name = "F repo inteiro"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: ." },
+            @{ Name = "password"; Replace = "Sem produção, deploy ou merge automático."; With = "password: [REDACTED]" },
+            @{ Name = "authorization bearer"; Replace = "Sem produção, deploy ou merge automático."; With = "Authorization: Bearer [REDACTED]" },
+            @{ Name = "cookie"; Replace = "Sem produção, deploy ou merge automático."; With = "Cookie: session=[REDACTED]" },
+            @{ Name = "set-cookie"; Replace = "Sem produção, deploy ou merge automático."; With = "Set-Cookie: session=[REDACTED]; HttpOnly" },
+            @{ Name = "cookie frase"; Replace = "Sem produção, deploy ou merge automático."; With = "A resposta incluiu Cookie: session=[REDACTED]." },
+            @{ Name = "set-cookie markdown"; Replace = "Sem produção, deploy ou merge automático."; With = "- Set-Cookie: session=[REDACTED]; HttpOnly" },
+            @{ Name = "api key"; Replace = "Sem produção, deploy ou merge automático."; With = "api_key: [REDACTED]" },
+            @{ Name = "api key com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "API KEY: [REDACTED]" },
+            @{ Name = "access key com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "ACCESS KEY: [REDACTED]" },
+            @{ Name = "client secret com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "CLIENT SECRET: [REDACTED]" },
+            @{ Name = "jwt puro"; Replace = "Sem produção, deploy ou merge automático."; With = ("eyJ" + ("A" * 24) + "." + ("B" * 24) + "." + ("C" * 24)) },
+            @{ Name = "PEM"; Replace = "Sem produção, deploy ou merge automático."; With = "-----BEGIN PRIVATE KEY-----" },
+            @{ Name = "URL com credenciais"; Replace = "Sem produção, deploy ou merge automático."; With = ("https://user:[REDACTED]@example.invalid") }
+        )
+        foreach ($case in $invalidIntakes) {
+            $candidate = $validIntake.Replace([string]$case.Replace, [string]$case.With)
+            [IO.File]::WriteAllText($intakeFixturePath, $candidate, [Text.UTF8Encoding]::new($false))
+            $rejected = $false; $rejectionMessage = ""
+            try { Assert-AgenticIntake -Path $intakeFixturePath -BasePath ([IO.Path]::GetTempPath()) | Out-Null } catch { $rejected = $true; $rejectionMessage = $_.Exception.Message }
+            if (-not $rejected) { throw ("Fixture {0}: entrada insegura aceita." -f $case.Name) }
+            if ($case.Name -in @("password", "authorization bearer", "cookie", "set-cookie", "cookie frase", "set-cookie markdown", "api key", "api key com espaço", "access key com espaço", "client secret com espaço", "jwt puro", "PEM", "URL com credenciais") -and $rejectionMessage -ne "Intake rejeitado: conteúdo sensível detectado; valor omitido.") { throw ("Fixture {0}: alerta de dado sensível não foi sanitizado." -f $case.Name) }
+        }
+    }
+    finally { Remove-Item -LiteralPath $intakeFixturePath -Force -ErrorAction SilentlyContinue }
+    # Fixtures G-H: intake is the sole dirty path accepted by bootstrap.
+    if (-not (Assert-AgenticBootstrapStatus -StatusLines @("?? agentic/state/intake.md"))) { throw "Fixture H: intake novo controlado não foi aceito." }
+    $unrelatedStatusCases = @(
+        [pscustomobject]@{ Lines = @(" M agentic/state/loop-state.json") },
+        [pscustomobject]@{ Lines = @("?? agentic/journal/current.md") },
+        [pscustomobject]@{ Lines = @("?? src/unrelated.ts") },
+        [pscustomobject]@{ Lines = [string[]]@() }
+    )
+    foreach ($statusCase in $unrelatedStatusCases) {
+        $rejected = $false
+        try { Assert-AgenticBootstrapStatus -StatusLines $statusCase.Lines | Out-Null } catch { $rejected = $true }
+        if (-not $rejected) { throw "Fixture G: alteração preexistente foi aceita junto ao intake." }
+    }
+    if ($startSource -notmatch 'agentic/state/intake\.md' -or $startSource -notmatch 'Bootstrap bloqueado') { throw "Fixture G-H: bootstrap não restringe alterações locais ao intake controlado." }
+    $branchCreationIndex = $startSource.IndexOf('Start-GoalBranch -Metadata $metadata')
+    $goalWriterIndex = $startSource.IndexOf('Write-AgenticPreparedGoal -Path $goalPath')
+    if ($branchCreationIndex -lt 0 -or $goalWriterIndex -le $branchCreationIndex) { throw "Fixture J: start não chama materialização depois de criar a branch." }
+    # Fixture J: materialization is behaviorally gated by the checked-out work branch.
+    $bootstrapFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-bootstrap-{0}" -f [guid]::NewGuid().ToString("N"))
+    $bootstrapFixtureGoal = Join-Path $bootstrapFixtureRoot "agentic/goals/fixture-goal.md"
+    $bootstrapFixtureMetadata = @{ ID = "fixture-goal"; "Branch prefix" = "feature" }
+    $outsideGoal = $null
+    [IO.Directory]::CreateDirectory($bootstrapFixtureRoot) | Out-Null
+    try {
+        $wrongBranchRejected = $false
+        try { Write-AgenticPreparedGoal -Path $bootstrapFixtureGoal -Text "fixture goal" -Metadata $bootstrapFixtureMetadata -CurrentBranch "develop" -BasePath $bootstrapFixtureRoot | Out-Null } catch { $wrongBranchRejected = $true }
+        if (-not $wrongBranchRejected -or (Test-Path -LiteralPath $bootstrapFixtureGoal)) { throw "Fixture J: goal foi materializado antes da branch de trabalho." }
+        Write-AgenticPreparedGoal -Path $bootstrapFixtureGoal -Text "fixture goal" -Metadata $bootstrapFixtureMetadata -CurrentBranch "feature/fixture-goal" -BasePath $bootstrapFixtureRoot | Out-Null
+        if (-not (Test-Path -LiteralPath $bootstrapFixtureGoal) -or [IO.File]::ReadAllText($bootstrapFixtureGoal) -cne "fixture goal") { throw "Fixture J: goal não foi materializado na branch validada." }
+        $insideHandle = [IO.File]::OpenRead($bootstrapFixtureGoal)
+        try { Assert-AgenticOpenedPathWithinRoot -Stream $insideHandle -Path $bootstrapFixtureGoal -BasePath $bootstrapFixtureRoot | Out-Null } finally { $insideHandle.Dispose() }
+        $outsideGoal = Join-Path ([IO.Path]::GetTempPath()) ("agentic-outside-{0}.md" -f [guid]::NewGuid().ToString("N"))
+        $outsideGoalRejected = $false
+        try { Write-AgenticPreparedGoal -Path $outsideGoal -Text "fixture goal" -Metadata @{ ID = "fixture-goal"; "Branch prefix" = "feature" } -CurrentBranch "feature/fixture-goal" -BasePath $bootstrapFixtureRoot | Out-Null } catch { $outsideGoalRejected = $true }
+        if (-not $outsideGoalRejected -or (Test-Path -LiteralPath $outsideGoal)) { throw "Fixture J: destino fora do repositório temporário foi aceito." }
+    }
+    finally {
+        Remove-Item -LiteralPath $bootstrapFixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
+        if ($outsideGoal -and (Test-Path -LiteralPath $outsideGoal)) { Remove-Item -LiteralPath $outsideGoal -Force -ErrorAction SilentlyContinue }
+    }
+    # Reparse point fixture uses NTFS junctions in temporary directories and exercises existing intake and destination checks.
+    $reparseFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-reparse-{0}" -f [guid]::NewGuid().ToString("N"))
+    $reparseOutside = Join-Path ([IO.Path]::GetTempPath()) ("agentic-reparse-target-{0}" -f [guid]::NewGuid().ToString("N"))
+    $stateJunction = Join-Path $reparseFixtureRoot "agentic/state"
+    $goalsJunction = Join-Path $reparseFixtureRoot "agentic/goals"
+    [IO.Directory]::CreateDirectory((Join-Path $reparseFixtureRoot "agentic")) | Out-Null
+    [IO.Directory]::CreateDirectory($reparseOutside) | Out-Null
+    try {
+        $null = New-Item -ItemType Junction -Path $stateJunction -Target $reparseOutside -ErrorAction Stop
+        [IO.File]::WriteAllText((Join-Path $reparseOutside "intake.md"), $validIntake, [Text.UTF8Encoding]::new($false))
+        $directReparseCheckRejected = $false
+        try { Assert-AgenticNoReparsePoints -Path (Join-Path $stateJunction "intake.md") -BasePath $reparseFixtureRoot -RequireLeaf | Out-Null } catch { $directReparseCheckRejected = $true }
+        $reparseIntakeRejected = $false
+        try { Assert-AgenticIntake -Path (Join-Path $stateJunction "intake.md") -BasePath $reparseFixtureRoot | Out-Null } catch { $reparseIntakeRejected = $true }
+        if (-not $reparseIntakeRejected) {
+            $junctionItem = Get-Item -LiteralPath $stateJunction -Force -ErrorAction SilentlyContinue
+            $junctionType = if ($null -eq $junctionItem) { "missing" } else { $junctionItem.GetType().Name }
+            $junctionAttributes = try { [IO.File]::GetAttributes($stateJunction).ToString() } catch { "unavailable" }
+            $relativePath = Get-AgenticRelativePath -BasePath $reparseFixtureRoot -TargetPath (Join-Path $stateJunction "intake.md")
+            $componentAttributes = @()
+            $componentPath = $reparseFixtureRoot
+            foreach ($component in ($relativePath -split '/')) { $componentPath = Join-Path $componentPath $component; $componentAttributes += try { [IO.File]::GetAttributes($componentPath).ToString() } catch { "missing" } }
+            throw "Fixture Reparse intake: DirectCheck=$directReparseCheckRejected; PathType=$junctionType; FileAttributes=$junctionAttributes; Components=$($componentAttributes -join ',')."
+        }
+
+        $null = New-Item -ItemType Junction -Path $goalsJunction -Target $reparseOutside -ErrorAction Stop
+        $outsideHandlePath = Join-Path $reparseOutside "outside-handle.txt"
+        [IO.File]::WriteAllText($outsideHandlePath, "fixture", [Text.UTF8Encoding]::new($false))
+        $outsideHandle = [IO.File]::OpenRead($outsideHandlePath)
+        $outsideFinalPathRejected = $false
+        try { Assert-AgenticOpenedPathWithinRoot -Stream $outsideHandle -Path (Join-Path $goalsJunction "outside-handle.txt") -BasePath $reparseFixtureRoot | Out-Null } catch { $outsideFinalPathRejected = $true } finally { $outsideHandle.Dispose() }
+        if (-not $outsideFinalPathRejected) { throw "Fixture Reparse final path: handle fora da raiz foi aceito." }
+        if (Test-Path -LiteralPath (Join-Path $reparseOutside "fixture-goal.md")) { throw "Fixture Reparse destino: arquivo-alvo preexistia antes do teste de escrita." }
+        $reparseDestinationRejected = $false
+        try { Write-AgenticPreparedGoal -Path (Join-Path $goalsJunction "fixture-goal.md") -Text "fixture" -Metadata $bootstrapFixtureMetadata -CurrentBranch "feature/fixture-goal" -BasePath $reparseFixtureRoot | Out-Null } catch { $reparseDestinationRejected = $true }
+        if (-not $reparseDestinationRejected -or (Test-Path -LiteralPath (Join-Path $reparseOutside "fixture-goal.md"))) { throw "Fixture Reparse destino: junction não foi rejeitado antes da escrita." }
+    }
+    finally {
+        foreach ($junction in @($stateJunction, $goalsJunction)) {
+            if (Test-Path -LiteralPath $junction) { try { [IO.Directory]::Delete($junction, $false) } catch { } }
+        }
+        foreach ($directory in @((Join-Path $reparseFixtureRoot "agentic"), $reparseFixtureRoot)) {
+            if (Test-Path -LiteralPath $directory) { try { [IO.Directory]::Delete($directory, $false) } catch { } }
+        }
+        if (Test-Path -LiteralPath $reparseOutside) { try { [IO.Directory]::Delete($reparseOutside, $true) } catch { } }
+    }
+    # Fixtures I/K/L/M/N: supervisor owns Git mutations; manual/resume stays compatible; no automatic merge/deploy; valid handoff enters the prepared loop.
+    if ($startSource -notmatch 'Invoke-AgenticGit' -or $startSource -notmatch 'agentic-loop\.ps1') { throw "Fixture I/N: handoff válido não é executado pelo supervisor." }
+    if ($startSource -notmatch 'NamedPipeServerStreamAcl\]::Create' -or $startSource -notmatch 'NamedPipeServerStream\]::new' -or $startSource -match 'CurrentUserOnly') { throw "Fixture N: criação do pipe não mantém ACL compatível com PS 5.1 e PS 7." }
+    if ($supervisorSource -notmatch 'Start-(?:Agentic)?GoalBranch\s+-Metadata\s+\$metadata' -or $supervisorSource -notmatch '\$Resume' -or $supervisorSource -notmatch '\$PreparedBranch') { throw "Fixture K/L: loop manual ou retomada incompatível." }
+    if ($supervisorSource -notmatch 'Assert-AgenticPreparedHandoff' -or $commonSource -notmatch 'agentic/goals/\{0\}\.md') { throw "Fixture N: prepared branch sem handoff autenticado ou goal canônico." }
+    $wrongGoalRejected = $false
+    try { Assert-AgenticPreparedHandoff -GoalPath (Join-Path $script:AgenticRepoRoot "agentic/goals/other.md") -Metadata @{ ID = "clients-crud"; "Branch prefix" = "feature" } | Out-Null } catch { $wrongGoalRejected = $true }
+    if (-not $wrongGoalRejected) { throw "Fixture N: caminho não canônico aceito para branch preparada." }
+    $savedPipe = [string]$env:GERIT_AGENTIC_HANDOFF_PIPE
+    Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue
+    $handoffWithoutSupervisorRejected = $false
+    try { Assert-AgenticPreparedHandoff -GoalPath (Join-Path $script:AgenticRepoRoot "agentic/goals/clients-crud.md") -Metadata @{ ID = "clients-crud"; "Branch prefix" = "feature" } | Out-Null } catch { $handoffWithoutSupervisorRejected = $true }
+    finally { if ($savedPipe) { $env:GERIT_AGENTIC_HANDOFF_PIPE = $savedPipe } }
+    if (-not $handoffWithoutSupervisorRejected) { throw "Fixture N: PreparedBranch foi aceito sem o canal temporário do supervisor." }
+    $mergeCommandPattern = '(?i)\bgit(?:\.exe)?\s+merge(?:\s|$)|deploy\s+production'
+    if ("git merge-base develop main" -match $mergeCommandPattern -or "git merge --no-ff feature/topic" -notmatch $mergeCommandPattern) { throw "Fixture M: detector de merge automático tem falso positivo/negativo." }
+    if ($supervisorSource -match $mergeCommandPattern -or $startSource -match $mergeCommandPattern) { throw "Fixture M: merge/deploy automático detectado." }
     foreach ($forbidden in @("git fetch", "git add", "git commit", "git push", "git checkout", "git switch", "gh pr create", "merge")) {
         if ($prompt -notmatch [regex]::Escape($forbidden)) { throw "Prompt nao proibe '$forbidden' dentro do Codex." }
     }
@@ -790,4 +950,224 @@ function Get-AgenticGoalMetadata {
         }
     }
     return $metadata
+}
+
+function Assert-AgenticIntake {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$BasePath = $script:AgenticRepoRoot
+    )
+    Assert-AgenticNoReparsePoints -Path $Path -BasePath $BasePath -RequireLeaf | Out-Null
+    $metadata = Get-AgenticGoalMetadata -Path $Path
+    $content = [System.IO.File]::ReadAllText($Path, [System.Text.UTF8Encoding]::new($false))
+    if ($metadata["Base branch"] -notin @("develop", "main")) { throw "Intake rejeitado: base inválida." }
+    if ($metadata["Branch prefix"] -notin @("feature", "fix", "hotfix")) { throw "Intake rejeitado: prefixo inválido." }
+    if (($metadata["Branch prefix"] -eq "hotfix") -ne ($metadata["Base branch"] -eq "main")) { throw "Intake rejeitado: combinação base/prefixo inválida." }
+    if ($metadata["ID"] -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $metadata["ID"] -match '--|-$') { throw "Intake rejeitado: ID inválido." }
+    if ($metadata["Title"].Length -gt 120 -or [string]::IsNullOrWhiteSpace($metadata["Title"])) { throw "Intake rejeitado: título inválido." }
+    if (-not $metadata.ContainsKey("Allowed files") -or [string]::IsNullOrWhiteSpace($metadata["Allowed files"])) { throw "Intake rejeitado: Allowed files obrigatório." }
+    $sensitivePatterns = @(
+        '(?i)(password|passwd|secret|token|jwt|private[_ -]?key|connection[_ -]?string|api[_ -]?key|access[_ -]?key|client[_ -]?secret)\s*[:=]',
+        '(?i)\bauthorization\s*:\s*(?:bearer|basic)\s+\S+',
+        '(?i)\b(?:set-cookie|cookie)\s*:\s*[^\r\n]+',
+        '(?i)\bbearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}',
+        '(?i)\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}',
+        '(?i)-----BEGIN\s+(?:[A-Z0-9 ]+\s+)?(?:PRIVATE KEY|CERTIFICATE)-----',
+        '(?i)\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@'
+    )
+    foreach ($pattern in $sensitivePatterns) {
+        if ($content -match $pattern) { throw "Intake rejeitado: conteúdo sensível detectado; valor omitido." }
+    }
+    $allowed = @(Get-AgenticAllowedGoalFiles -Metadata $metadata)
+    if ($allowed.Count -eq 0) { throw "Intake rejeitado: allowlist concreta obrigatória." }
+    foreach ($entry in $allowed) {
+        if ($entry -match '[*?\[\]]|(^|/)\.\.?(/|$)|^/|^[a-zA-Z]:|\\\\|(^|/)\.git(/|$)' -or $entry -in @(".", "**")) { throw "Intake rejeitado: caminho permitido inválido." }
+        if ($entry -notmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') { throw "Intake rejeitado: caminho permitido inválido." }
+    }
+    foreach ($required in @("Objective", "Discovery requirements", "Acceptance criteria", "Validation requirements", "Security/production restrictions")) {
+        if ($content -notmatch ("(?im)^##?\s*" + [regex]::Escape($required) + "\s*$")) { throw "Intake rejeitado: seção obrigatória ausente." }
+    }
+    return $metadata
+}
+
+function Start-GoalBranch {
+    param([Parameter(Mandatory = $true)][hashtable]$Metadata)
+    $base = $Metadata["Base branch"]; $prefix = $Metadata["Branch prefix"]
+    if ($base -notin @("develop", "main") -or $prefix -notin @("feature", "fix", "hotfix") -or (($prefix -eq "hotfix") -ne ($base -eq "main"))) { throw "Base/prefix de branch não permitidos." }
+    $current = [string](@(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))[0]).Trim()
+    if ($current -ne $base) { throw "Goal novo requer checkout limpo da base '$base'." }
+    if (-not [string]::IsNullOrWhiteSpace((@(Invoke-AgenticGit -GitArguments @("status", "--porcelain")) -join ""))) { throw "Working tree não está limpa; nenhuma alteração foi descartada." }
+    Invoke-AgenticGit -GitArguments @("fetch", "origin") | Out-Null
+    $slug = ([string]$Metadata["ID"]).ToLowerInvariant() -replace "[^a-z0-9-]+", "-"
+    $slug = $slug.Trim("-")
+    if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal não pode gerar slug de branch." }
+    $branch = "$prefix/$slug"
+    if (@(Invoke-AgenticGit -GitArguments @("branch", "--list", $branch)).Count -gt 0 -or @(Invoke-AgenticGit -GitArguments @("branch", "--remotes", "--list", "origin/$branch")).Count -gt 0) { throw "Branch já existe; não será sobrescrita." }
+    Invoke-AgenticGit -GitArguments @("switch", "--create", $branch, "origin/$base") | Out-Null
+    return $branch
+}
+
+function Assert-AgenticPreparedHandoff {
+    param(
+        [Parameter(Mandatory = $true)][string]$GoalPath,
+        [Parameter(Mandatory = $true)][hashtable]$Metadata
+    )
+    $expectedGoal = [IO.Path]::GetFullPath((Join-Path $script:AgenticRepoRoot ("agentic/goals/{0}.md" -f $Metadata["ID"])))
+    $actualGoal = [IO.Path]::GetFullPath($GoalPath)
+    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not [string]::Equals($actualGoal, $expectedGoal, $comparison)) { throw "Handoff preparado bloqueado: caminho canônico do goal inválido." }
+    $pipeName = [string]$env:GERIT_AGENTIC_HANDOFF_PIPE
+    if ($pipeName -notmatch '^gerit-agentic-[0-9a-fA-F]{32}$') { throw "Handoff preparado bloqueado: origem do supervisor não comprovada." }
+    $client = $null
+    try {
+        $client = [IO.Pipes.NamedPipeClientStream]::new('.', $pipeName, [IO.Pipes.PipeDirection]::In, [IO.Pipes.PipeOptions]::None)
+        $client.Connect(5000)
+        $reader = [IO.StreamReader]::new($client, [Text.Encoding]::UTF8, $false, 1024, $true)
+        $token = [string]$env:GERIT_AGENTIC_HANDOFF_TOKEN
+        if ($token -notmatch '^[0-9a-f]{64}$') { throw "Handoff preparado bloqueado: token temporário inválido." }
+        $expectedMessage = "prepared|$($Metadata['ID'])|$($Metadata['Branch prefix'])/$($Metadata['ID'])|agentic/goals/$($Metadata['ID']).md|$token"
+        $received = $reader.ReadLine()
+        $reader.Dispose()
+        if ($received -cne $expectedMessage) { throw "Handoff preparado bloqueado: autorização do supervisor inválida." }
+        Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue
+        Remove-Item Env:GERIT_AGENTIC_HANDOFF_TOKEN -ErrorAction SilentlyContinue
+        return $true
+    }
+    catch { throw "Handoff preparado bloqueado: conexão temporária do supervisor indisponível." }
+    finally { if ($null -ne $client) { $client.Dispose() } }
+}
+
+function Assert-AgenticBootstrapStatus {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$StatusLines)
+    $foundIntake = $false
+    foreach ($line in $StatusLines) {
+        if ([string]$line -notmatch '^..\s+(.+)$') { throw "Bootstrap bloqueado: formato de status não reconhecido." }
+        $path = $Matches[1].Replace('\', '/')
+        if ($path -ne "agentic/state/intake.md" -or -not ([string]$line).StartsWith("??")) { throw "Bootstrap bloqueado: a árvore deve estar limpa exceto pelo intake novo." }
+        $foundIntake = $true
+    }
+    if (-not $foundIntake) { throw "Bootstrap bloqueado: intake novo não aparece como arquivo não rastreado." }
+    return $true
+}
+
+function Assert-AgenticNoReparsePoints {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [string]$BasePath = $script:AgenticRepoRoot,
+        [switch]$RequireLeaf
+    )
+    $baseFull = [IO.Path]::GetFullPath($BasePath)
+    $targetFull = [IO.Path]::GetFullPath($Path)
+    $relative = Get-AgenticRelativePath -BasePath $baseFull -TargetPath $targetFull
+    $pathRoot = [IO.Path]::GetPathRoot($baseFull)
+    $cursor = $pathRoot
+    try {
+        $rootAttributes = [IO.File]::GetAttributes($cursor)
+    }
+    catch { throw "Path agentic rejeitado: raiz não pôde ser validada." }
+    if (($rootAttributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Path agentic rejeitado: raiz contém reparse point." }
+    $trimSeparators = [char[]]@([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+    $baseSegments = $baseFull.Substring($pathRoot.Length).Trim($trimSeparators) -split '[\\/]'
+    foreach ($segment in $baseSegments) {
+        if ([string]::IsNullOrEmpty($segment)) { continue }
+        $cursor = Join-Path $cursor $segment
+        $ancestorAttributes = $null
+        try { $ancestorAttributes = [IO.File]::GetAttributes($cursor) }
+        catch [IO.FileNotFoundException] { }
+        catch [IO.DirectoryNotFoundException] { }
+        catch { throw "Path agentic rejeitado: componente da raiz não pôde ser validado." }
+        if ($null -ne $ancestorAttributes -and ($ancestorAttributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Path agentic rejeitado: raiz contém reparse point." }
+    }
+    $cursor = $baseFull
+    foreach ($segment in ($relative -split '/')) {
+        $cursor = Join-Path $cursor $segment
+        $attributes = $null
+        try { $attributes = [IO.File]::GetAttributes($cursor) }
+        catch [IO.FileNotFoundException] { }
+        catch [IO.DirectoryNotFoundException] { }
+        catch { throw "Path agentic rejeitado: componente do caminho não pôde ser validado." }
+        if ($null -ne $attributes -and ($attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw "Path agentic rejeitado: reparse point detectado." }
+    }
+    if ($RequireLeaf -and -not (Test-Path -LiteralPath $targetFull -PathType Leaf)) { throw "Path agentic rejeitado: arquivo obrigatório ausente." }
+    return $targetFull
+}
+
+function Assert-AgenticOpenedPathWithinRoot {
+    param(
+        [Parameter(Mandatory = $true)][IO.FileStream]$Stream,
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$BasePath
+    )
+    if (-not ("GeritAgenticFinalPathNative" -as [type])) {
+        Add-Type -TypeDefinition @"
+using System;
+using System.IO;
+using System.Text;
+using Microsoft.Win32.SafeHandles;
+using System.Runtime.InteropServices;
+public static class GeritAgenticFinalPathNative {
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    public static extern SafeFileHandle CreateFile(string name, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
+    [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
+    public static extern uint GetFinalPathNameByHandle(SafeFileHandle handle, StringBuilder path, uint length, uint flags);
+    public static string FinalPath(SafeFileHandle handle) {
+        uint size = 512;
+        while (size <= 32768) {
+            StringBuilder path = new StringBuilder((int)size);
+            uint written = GetFinalPathNameByHandle(handle, path, size, 0);
+            if (written == 0) throw new IOException("Final handle path unavailable.");
+            if (written < size) return path.ToString();
+            size = written + 1;
+        }
+        throw new IOException("Final handle path too long.");
+    }
+}
+"@
+    }
+    $baseFull = [IO.Path]::GetFullPath($BasePath)
+    $pathFull = [IO.Path]::GetFullPath($Path)
+    $relative = Get-AgenticRelativePath -BasePath $baseFull -TargetPath $pathFull
+    $rootHandle = $null
+    try {
+        $rootHandle = [GeritAgenticFinalPathNative]::CreateFile($baseFull, 0, 7, [IntPtr]::Zero, 3, 0x02000000, [IntPtr]::Zero)
+        if ($null -eq $rootHandle -or $rootHandle.IsInvalid) { throw "Final path unavailable." }
+        $rootFinal = [GeritAgenticFinalPathNative]::FinalPath($rootHandle)
+        $fileFinal = [GeritAgenticFinalPathNative]::FinalPath($Stream.SafeFileHandle)
+        $separator = [IO.Path]::DirectorySeparatorChar
+        $rootPrefix = $rootFinal.TrimEnd([char[]]@('\', '/')) + $separator
+        $expectedFinal = $rootPrefix + $relative.Replace('/', '\')
+        if (-not [string]::Equals($fileFinal, $expectedFinal, [StringComparison]::OrdinalIgnoreCase)) { throw "Opened path escaped expected repository location." }
+        return $true
+    }
+    catch { throw "Goal bloqueado: caminho final do handle não pôde ser validado." }
+    finally { if ($null -ne $rootHandle) { $rootHandle.Dispose() } }
+}
+
+function Write-AgenticPreparedGoal {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$Text,
+        [Parameter(Mandatory = $true)][hashtable]$Metadata,
+        [Parameter(Mandatory = $true)][string]$CurrentBranch,
+        [string]$BasePath = $script:AgenticRepoRoot
+    )
+    $expectedBranch = "$($Metadata['Branch prefix'])/$($Metadata['ID'])"
+    if ($CurrentBranch -cne $expectedBranch -or $CurrentBranch -in @("develop", "main")) { throw "Goal não pode ser materializado fora da branch de trabalho validada." }
+    $expectedPath = [IO.Path]::GetFullPath((Join-Path $BasePath ("agentic/goals/{0}.md" -f $Metadata["ID"])))
+    $actualPath = Assert-AgenticNoReparsePoints -Path $Path -BasePath $BasePath
+    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
+    if (-not [string]::Equals($actualPath, $expectedPath, $comparison)) { throw "Goal não pode ser materializado fora do caminho canônico." }
+    if (Test-Path -LiteralPath $actualPath) { throw "Goal de destino já existe; não será sobrescrito." }
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $actualPath)) | Out-Null
+    Assert-AgenticNoReparsePoints -Path $actualPath -BasePath $BasePath | Out-Null
+    $stream = [IO.File]::Open($actualPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+    try {
+        $revalidatedPath = Assert-AgenticNoReparsePoints -Path $actualPath -BasePath $BasePath
+        if (-not [string]::Equals($revalidatedPath, $expectedPath, $comparison)) { throw "Goal não pode ser materializado fora do caminho canônico." }
+        Assert-AgenticOpenedPathWithinRoot -Stream $stream -Path $actualPath -BasePath $BasePath | Out-Null
+        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
+        $stream.Write($bytes, 0, $bytes.Length)
+    }
+    finally { $stream.Dispose() }
+    return $actualPath
 }

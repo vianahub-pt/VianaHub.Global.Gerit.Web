@@ -1,11 +1,17 @@
-# Upgrade Gerit Web runtime to Node.js 24 LTS
+# Goal
+
+- ID: upgrade-runtime-node-24
+- Title: Upgrade Gerit Web runtime to Node.js 24 LTS
+- Base branch: develop
+- Branch prefix: feature
+- Allowed files: package.json, package-lock.json, Dockerfile, .github/workflows/ci.yml, AGENTS.md, agentic/README.md
+
+## Title
+
+Upgrade Gerit Web runtime to Node.js 24 LTS
 
 ## Metadata
 
-- **ID:** `upgrade-runtime-node-24`
-- **Title:** Upgrade Gerit Web runtime to Node.js 24 LTS
-- **Base branch:** `develop`
-- **Branch prefix:** `feature`
 - **PR target:** `develop`
 - **Stop condition:** `WAITING_HUMAN_MERGE` ou `FAILED`
 

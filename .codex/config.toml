@@ -5,5 +5,4 @@ sandbox_mode = "workspace-write"
 
 [mcp_servers.ai-memory]
 url = "http://127.0.0.1:49374/mcp"
-bearer_token_env_var = "AI_MEMORY_AUTH_TOKEN"
 enabled = true

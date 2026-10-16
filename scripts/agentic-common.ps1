@@ -49,15 +49,15 @@ function Get-AgenticState {
 
     $raw = Get-Content -LiteralPath $script:AgenticStatePath -Raw
     if ([string]::IsNullOrWhiteSpace($raw)) {
-        throw "O arquivo de estado agentic está vazio."
+        throw "O arquivo de estado agentic esta vazio."
     }
 
     $state = $raw | ConvertFrom-Json
     if ($null -eq $state.state -or $null -eq $state.base_branch) {
-        throw "O arquivo de estado agentic não contém campos obrigatórios."
+        throw "O arquivo de estado agentic nao contem campos obrigatorios."
     }
     if ($script:AgenticStates -notcontains [string]$state.state) {
-        throw "O arquivo de estado contém um estado não permitido."
+        throw "O arquivo de estado contem um estado nao permitido."
     }
     return $state
 }
@@ -127,12 +127,12 @@ function Add-AgenticJournalEvent {
     $iteration = (Get-AgenticState).iteration
     $event = @(
         "",
-        "## $timestamp — $Goal — iteração $iteration",
+        "## $timestamp - $Goal - iteracao $iteration",
         "- state: $State",
         "- agent: $Agent",
         "- action: $Action",
         "- files: agentic/state/loop-state.json; agentic/journal/current.md",
-        "- decision: checkpoint persistido antes da ação; conteúdo sensível omitido",
+        "- decision: checkpoint persistido antes da acao; conteudo sensivel omitido",
         "- gate: $Gate",
         "- result: $Result",
         "- failure: $Failure",
@@ -201,7 +201,7 @@ function Get-AgenticGoalMetadata {
     }
     foreach ($key in @("ID", "Title", "Base branch", "Branch prefix")) {
         if (-not $metadata.ContainsKey($key)) {
-            throw "O goal não declara o campo obrigatório '$key'."
+            throw "O goal nao declara o campo obrigatorio '$key'."
         }
     }
     return $metadata

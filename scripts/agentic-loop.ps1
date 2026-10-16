@@ -30,7 +30,7 @@ function Invoke-SmokeTest {
         "CODE_REVIEW", "READY_TO_COMMIT", "READY_TO_PR", "WAITING_HUMAN_MERGE"
     )
     foreach ($stateName in $transitions) {
-        Invoke-Assert ($allowed -contains $stateName) "Estado não permitido: $stateName"
+        Invoke-Assert ($allowed -contains $stateName) "Estado nao permitido: $stateName"
     }
     $validPath = @(
         @("IDLE", "DISCOVERY"), @("DISCOVERY", "PLANNING"), @("PLANNING", "IMPLEMENTING"),
@@ -41,9 +41,9 @@ function Invoke-SmokeTest {
         @("RESUMING", "IMPLEMENTING"), @("TESTING", "CORRECTING"), @("CORRECTING", "IMPLEMENTING")
     )
     foreach ($edge in $validPath) {
-        Invoke-Assert (Test-AgenticTransition -From $edge[0] -To $edge[1]) "Transição não permitida: $($edge[0]) -> $($edge[1])"
+        Invoke-Assert (Test-AgenticTransition -From $edge[0] -To $edge[1]) "Transicao nao permitida: $($edge[0]) -> $($edge[1])"
     }
-    Invoke-Assert (-not (Test-AgenticTransition -From "WAITING_HUMAN_MERGE" -To "IMPLEMENTING")) "Estado final não pode reabrir o goal."
+    Invoke-Assert (-not (Test-AgenticTransition -From "WAITING_HUMAN_MERGE" -To "IMPLEMENTING")) "Estado final nao pode reabrir o goal."
 
     $fixtures = @(
         @{ Text = "usage limit reached"; Expected = "QUOTA" },
@@ -55,23 +55,23 @@ function Invoke-SmokeTest {
     )
     foreach ($fixture in $fixtures) {
         $actual = (Get-AgenticQuotaClassification -Text $fixture.Text).Kind
-        Invoke-Assert ($actual -eq $fixture.Expected) "Fixture de classificação falhou: $($fixture.Expected)"
+        Invoke-Assert ($actual -eq $fixture.Expected) "Fixture de classificacao falhou: $($fixture.Expected)"
     }
     $unknownQuota = Get-AgenticQuotaClassification -Text "usage limit reached"
     $weeklyQuota = Get-AgenticQuotaClassification -Text "weekly limit reached"
-    Invoke-Assert ($unknownQuota.WaitMinutes -eq 15 -and $weeklyQuota.WaitMinutes -eq 360) "Backoff padrão para quota desconhecida/semanal está incorreto."
+    Invoke-Assert ($unknownQuota.WaitMinutes -eq 15 -and $weeklyQuota.WaitMinutes -eq 360) "Backoff padrao para quota desconhecida/semanal esta incorreto."
     $retryStart = [DateTimeOffset]::UtcNow
     $retryFixture = Get-AgenticQuotaClassification -Text "rate limit; retry after 45 seconds"
     $retrySeconds = ([DateTimeOffset]::Parse($retryFixture.RetryAt) - $retryStart).TotalSeconds
-    Invoke-Assert ($retryFixture.Kind -eq "QUOTA" -and $retryFixture.WaitMinutes -eq 1 -and $retrySeconds -ge 44 -and $retrySeconds -le 46) "Tempo Retry-After explícito não foi respeitado."
-    Invoke-Assert ($allowed -contains "FAILED") "Estado terminal FAILED não está permitido."
+    Invoke-Assert ($retryFixture.Kind -eq "QUOTA" -and $retryFixture.WaitMinutes -eq 1 -and $retrySeconds -ge 44 -and $retrySeconds -le 46) "Tempo Retry-After explicito nao foi respeitado."
+    Invoke-Assert ($allowed -contains "FAILED") "Estado terminal FAILED nao esta permitido."
 
     $resumeFixture = [pscustomobject]@{ goal_id = $metadata["ID"]; branch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim(); state = "WAITING_FOR_QUOTA"; pending_action = "fixture" }
     $resumeFixture.state = "RESUMING"
-    Invoke-Assert ($resumeFixture.state -eq "RESUMING" -and $resumeFixture.goal_id -eq $metadata["ID"] -and -not [string]::IsNullOrWhiteSpace($resumeFixture.branch)) "Fixture de retomada não preservou goal/branch."
+    Invoke-Assert ($resumeFixture.state -eq "RESUMING" -and $resumeFixture.goal_id -eq $metadata["ID"] -and -not [string]::IsNullOrWhiteSpace($resumeFixture.branch)) "Fixture de retomada nao preservou goal/branch."
 
     $currentBranch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
-    Invoke-Assert ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentBranch)) "Não foi possível confirmar a branch atual."
+    Invoke-Assert ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($currentBranch)) "Nao foi possivel confirmar a branch atual."
     $state = Get-AgenticState
     $state.goal_id = $metadata["ID"]
     $state.goal_file = [System.IO.Path]::GetRelativePath($script:AgenticRepoRoot, $GoalPath).Replace('\', '/')
@@ -89,36 +89,36 @@ function Invoke-SmokeTest {
         $state.state = $stateName
         $state.pending_action = "smoke fixture: $stateName"
         Write-AgenticState -State $state
-        Add-AgenticJournalEvent -Goal $metadata["ID"] -State $stateName -Agent "orchestrator" -Action "Simular transição local" -Result "PASS: transição fixture validada" -Gate "SMOKE_TEST" -Memory "MEMORY_UNAVAILABLE simulado"
+        Add-AgenticJournalEvent -Goal $metadata["ID"] -State $stateName -Agent "orchestrator" -Action "Simular transicao local" -Result "PASS: transicao fixture validada" -Gate "SMOKE_TEST" -Memory "MEMORY_UNAVAILABLE simulado"
     }
 
     $state.state = "IDLE"
     $state.active_agent = $null
     $state.pending_action = $null
     $state.last_gate = "SMOKE_TEST: PASS"
-    $state.last_successful_step = "Smoke test determinístico concluído sem chamada de modelo"
+    $state.last_successful_step = "Smoke test deterministico concluido sem chamada de modelo"
     $state.memory_status = "MEMORY_UNAVAILABLE"
     Write-AgenticState -State $state
 
     $historyName = "{0}-smoke-test.md" -f [DateTime]::UtcNow.ToString("yyyyMMdd-HHmmss")
     $historyPath = Join-Path (Join-Path $script:AgenticRepoRoot "agentic/journal/history") $historyName
     Copy-Item -LiteralPath $script:AgenticJournalPath -Destination $historyPath -Force
-    Set-Content -LiteralPath $script:AgenticJournalPath -Value "# Journal do goal ativo`n`nEventos são append-only durante cada goal. Não registre segredos, tokens, cookies, connection strings ou PII desnecessária." -Encoding utf8
+    Set-Content -LiteralPath $script:AgenticJournalPath -Value "# Journal do goal ativo`n`nEventos sao append-only durante cada goal. Nao registre segredos, tokens, cookies, connection strings ou PII desnecessaria." -Encoding utf8
 
     Write-Output "SMOKE_TEST: PASS"
-    Write-Output "- state machine e transições válidas"
-    Write-Output "- fixtures de quota e erro de código classificadas"
-    Write-Output "- retomada validou repositório, branch, goal e journal local"
+    Write-Output "- state machine e transicoes validas"
+    Write-Output "- fixtures de quota e erro de codigo classificadas"
+    Write-Output "- retomada validou repositorio, branch, goal e journal local"
     Write-Output "- MEMORY_UNAVAILABLE simulado sem bloquear o fluxo"
-    Write-Output "- state atômico persistido e journal arquivado em agentic/journal/history/$historyName"
-    Write-Output "- nenhuma chamada Codex, PR ou ação de produção executada"
+    Write-Output "- state atomico persistido e journal arquivado em agentic/journal/history/$historyName"
+    Write-Output "- nenhuma chamada Codex, PR ou acao de producao executada"
 }
 
 function Invoke-Git {
     param([string[]]$GitArguments)
     $output = & git -C $script:AgenticRepoRoot @GitArguments 2>&1
     if ($LASTEXITCODE -ne 0) {
-        throw "Comando git falhou: git $($GitArguments -join ' ') (exit $LASTEXITCODE); saída detalhada omitida."
+        throw "Comando git falhou: git $($GitArguments -join ' ') (exit $LASTEXITCODE); saida detalhada omitida."
     }
     return $output
 }
@@ -147,17 +147,17 @@ function Start-GoalBranch {
         throw "Goal novo requer checkout limpo da base '$base'; branch atual: '$currentBranch'."
     }
     $changes = & git -C $script:AgenticRepoRoot status --porcelain
-    if ($LASTEXITCODE -ne 0) { throw "Não foi possível validar git status." }
-    if (-not [string]::IsNullOrWhiteSpace(($changes -join ""))) { throw "Working tree não está limpo; nenhuma alteração foi descartada." }
+    if ($LASTEXITCODE -ne 0) { throw "Nao foi possivel validar git status." }
+    if (-not [string]::IsNullOrWhiteSpace(($changes -join ""))) { throw "Working tree nao esta limpo; nenhuma alteracao foi descartada." }
 
     Invoke-Git -GitArguments @("fetch", "origin") | Out-Null
     $slug = ($Metadata["ID"].ToLowerInvariant() -replace "[^a-z0-9-]+", "-").Trim("-")
-    if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal não pode gerar slug de branch." }
+    if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal nao pode gerar slug de branch." }
     $branchName = "$prefix/$slug"
     $existing = & git -C $script:AgenticRepoRoot branch --list $branchName
-    if ($LASTEXITCODE -ne 0 -or $existing) { throw "Branch local '$branchName' já existe; não será sobrescrita." }
+    if ($LASTEXITCODE -ne 0 -or $existing) { throw "Branch local '$branchName' ja existe; nao sera sobrescrita." }
     $remoteExisting = & git -C $script:AgenticRepoRoot branch --remotes --list "origin/$branchName"
-    if ($LASTEXITCODE -ne 0 -or $remoteExisting) { throw "Branch remota 'origin/$branchName' já existe; não será sobrescrita." }
+    if ($LASTEXITCODE -ne 0 -or $remoteExisting) { throw "Branch remota 'origin/$branchName' ja existe; nao sera sobrescrita." }
     Invoke-Git -GitArguments @("switch", "--create", $branchName, "origin/$base") | Out-Null
     return $branchName
 }
@@ -166,12 +166,12 @@ function Invoke-CodexOrchestrator {
     param($State, [string]$GoalPath)
 
     $codexCommand = Get-Command codex -ErrorAction SilentlyContinue
-    if ($null -eq $codexCommand) { throw "Codex CLI não encontrado no PATH." }
+    if ($null -eq $codexCommand) { throw "Codex CLI nao encontrado no PATH." }
 
     $promptPath = Join-Path $script:AgenticRepoRoot "agentic/prompts/autonomous-loop.md"
     $prompt = Get-Content -LiteralPath $promptPath -Raw
     $relativeGoal = [System.IO.Path]::GetRelativePath($script:AgenticRepoRoot, $GoalPath).Replace('\', '/')
-    $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue até WAITING_HUMAN_MERGE ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: WAITING_HUMAN_MERGE ou FINAL_STATE: FAILED."
+    $prompt += "`n`nGoal ativo: $relativeGoal`nBranch: $($State.branch)`nBase: $($State.base_branch)`nLeia o checkpoint e continue ate WAITING_HUMAN_MERGE ou FAILED. Ao terminar, inclua exatamente uma linha FINAL_STATE: WAITING_HUMAN_MERGE ou FINAL_STATE: FAILED."
 
     $responsePath = Join-Path $script:AgenticRepoRoot "agentic/state/.codex-last-message.md"
     $cliOutput = @(& codex exec --json --sandbox workspace-write --cd $script:AgenticRepoRoot --output-last-message $responsePath $prompt 2>&1)
@@ -192,7 +192,7 @@ function Invoke-CodexOrchestrator {
 try {
     $resolvedGoal = (Resolve-Path -LiteralPath $Goal).Path
     $repoPrefix = $script:AgenticRepoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
-    Invoke-Assert ($resolvedGoal.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) "Goal precisa estar dentro do repositório."
+    Invoke-Assert ($resolvedGoal.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) "Goal precisa estar dentro do repositorio."
     $metadata = Get-AgenticGoalMetadata -Path $resolvedGoal
 
     if ($SmokeTest) {
@@ -202,8 +202,8 @@ try {
 
     $state = Get-AgenticState
     if ($Resume) {
-        if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Não há goal ativo retomável no estado '$($state.state)'." }
-        if ($state.goal_id -ne $metadata["ID"]) { throw "O goal fornecido não corresponde ao checkpoint existente." }
+        if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Nao ha goal ativo retomavel no estado '$($state.state)'." }
+        if ($state.goal_id -ne $metadata["ID"]) { throw "O goal fornecido nao corresponde ao checkpoint existente." }
         $branch = (& git -C $script:AgenticRepoRoot branch --show-current).Trim()
         if ($branch -ne $state.branch) { throw "Branch atual '$branch' difere do checkpoint '$($state.branch)'." }
         if ($state.state -eq "WAITING_FOR_QUOTA") {
@@ -224,7 +224,7 @@ try {
         $state.pending_action = "Retomar do checkpoint e journal existentes"
     }
     else {
-        if ($state.state -ne "IDLE") { throw "Já existe um goal não finalizado no estado '$($state.state)'; use agentic-resume.ps1." }
+        if ($state.state -ne "IDLE") { throw "Ja existe um goal nao finalizado no estado '$($state.state)'; use agentic-resume.ps1." }
         $branchName = Start-GoalBranch -Metadata $metadata
         $state = Get-AgenticStateTemplate
         $state.goal_id = $metadata["ID"]
@@ -247,25 +247,25 @@ try {
             $state.quota_detected_at = if ($state.quota_detected_at) { $state.quota_detected_at } else { [DateTime]::UtcNow.ToString("o") }
             $state.resume_after = [DateTime]::UtcNow.AddMinutes($waitMinutes).ToString("o")
             Write-AgenticState -State $state
-            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "WAITING_FOR_QUOTA" -Agent "orchestrator" -Action "Aplicar intervalo mínimo sem reset explícito" -Result "PENDING: checkpoint persistido" -Quota ([string]$state.quota_type) -Memory ([string]$state.memory_status)
+            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "WAITING_FOR_QUOTA" -Agent "orchestrator" -Action "Aplicar intervalo minimo sem reset explicito" -Result "PENDING: checkpoint persistido" -Quota ([string]$state.quota_type) -Memory ([string]$state.memory_status)
         }
         if ($state.state -eq "WAITING_FOR_QUOTA") {
             $resumeAt = [DateTime]::Parse([string]$state.resume_after).ToUniversalTime()
             $remaining = [int][Math]::Ceiling(($resumeAt - [DateTime]::UtcNow).TotalSeconds)
             if ($remaining -gt 0) {
-                Write-Output "Quota pausada; próxima tentativa após $($resumeAt.ToString('u'))."
+                Write-Output "Quota pausada; proxima tentativa apos $($resumeAt.ToString('u'))."
                 Start-Sleep -Seconds $remaining
             }
             $state.state = "RESUMING"
             $state.quota_state = "PROBE_DUE"
             $state.resume_after = $null
-            $state.pending_action = "Repetir a ação pendente depois do intervalo de quota"
+            $state.pending_action = "Repetir a acao pendente depois do intervalo de quota"
             Write-AgenticState -State $state
-            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Probe único após backoff" -Result "PENDING" -Quota ([string]$state.quota_type) -Memory ([string]$state.memory_status)
+            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Probe unico apos backoff" -Result "PENDING" -Quota ([string]$state.quota_type) -Memory ([string]$state.memory_status)
         }
 
         if ($state.agent_calls -ge $state.max_agent_calls -or $state.iteration -ge $state.max_iterations) {
-            Set-FailedState -State $state -Reason "Limite interno de iterações/chamadas atingido."
+            Set-FailedState -State $state -Reason "Limite interno de iteracoes/chamadas atingido."
             exit 1
         }
 
@@ -293,10 +293,10 @@ try {
             $state.quota_detected_at = $now.ToString("o")
             $state.quota_reset_at = $classification.RetryAt
             $state.resume_after = if ($classification.RetryAt) { $classification.RetryAt } else { $now.AddMinutes($classification.WaitMinutes).ToString("o") }
-            $state.pending_action = "Retomar ação Codex após backoff; preservar goal, branch, diff e journal"
+            $state.pending_action = "Retomar acao Codex apos backoff; preservar goal, branch, diff e journal"
             $state.active_agent = $null
             Write-AgenticState -State $state
-            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "WAITING_FOR_QUOTA" -Agent "orchestrator" -Action "Pausar após sinal explícito de quota" -Result "PENDING: checkpoint persistido" -Quota $classification.Type -Memory ([string]$state.memory_status)
+            Add-AgenticJournalEvent -Goal $metadata["ID"] -State "WAITING_FOR_QUOTA" -Agent "orchestrator" -Action "Pausar apos sinal explicito de quota" -Result "PENDING: checkpoint persistido" -Quota $classification.Type -Memory ([string]$state.memory_status)
             continue
         }
         if ($state.state -eq "WAITING_FOR_QUOTA") {
@@ -307,22 +307,22 @@ try {
             if ($classification.Kind -eq "TRANSIENT_ERROR" -and $state.consecutive_failures -lt $state.max_consecutive_failures) {
                 $state.consecutive_failures++
                 $state.state = "RESUMING"
-                $state.pending_action = "Repetir uma vez após erro transitório"
+                $state.pending_action = "Repetir uma vez apos erro transitorio"
                 Write-AgenticState -State $state
-                Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Backoff de erro transitório" -Result "RETRY" -Failure "Falha transitória do subprocesso Codex; saída bruta omitida"
+                Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Backoff de erro transitorio" -Result "RETRY" -Failure "Falha transitoria do subprocesso Codex; saida bruta omitida"
                 Start-Sleep -Seconds ($classification.WaitMinutes * 60)
                 continue
             }
-            Set-FailedState -State $state -Reason "codex exec terminou com código $($result.ExitCode); saída bruta omitida."
+            Set-FailedState -State $state -Reason "codex exec terminou com codigo $($result.ExitCode); saida bruta omitida."
             exit 1
         }
 
         if ($state.state -eq "WAITING_HUMAN_MERGE") {
             if ([string]::IsNullOrWhiteSpace([string]$state.pr_url) -or [string]::IsNullOrWhiteSpace([string]$state.pr_number)) {
-                Set-FailedState -State $state -Reason "Codex informou WAITING_HUMAN_MERGE sem referência verificável de PR."
+                Set-FailedState -State $state -Reason "Codex informou WAITING_HUMAN_MERGE sem referencia verificavel de PR."
                 exit 1
             }
-            Write-Output "Goal concluído. PR: $($state.pr_url). Estado: WAITING_HUMAN_MERGE."
+            Write-Output "Goal concluido. PR: $($state.pr_url). Estado: WAITING_HUMAN_MERGE."
             exit 0
         }
         if ($state.state -eq "FAILED") {
@@ -342,17 +342,17 @@ try {
 
         $state.state = "RESUMING"
         $state.active_agent = "orchestrator"
-        $state.pending_action = "Continuar workflow do último checkpoint; não reiniciar fases concluídas"
+        $state.pending_action = "Continuar workflow do ultimo checkpoint; nao reiniciar fases concluidas"
         $state.consecutive_failures = 0
         Write-AgenticState -State $state
-        Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Continuar após etapa Codex concluída" -Result "PENDING" -Memory ([string]$state.memory_status)
+        Add-AgenticJournalEvent -Goal $metadata["ID"] -State "RESUMING" -Agent "orchestrator" -Action "Continuar apos etapa Codex concluida" -Result "PENDING" -Memory ([string]$state.memory_status)
     }
 }
 catch {
     try {
         $checkpoint = Get-AgenticState
         if ($checkpoint.goal_id -eq $metadata["ID"] -and $checkpoint.state -notin @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) {
-            Set-FailedState -State $checkpoint -Reason "Falha técnica no supervisor; consulte o erro local sem descartar o checkpoint."
+            Set-FailedState -State $checkpoint -Reason "Falha tecnica no supervisor; consulte o erro local sem descartar o checkpoint."
         }
     }
     catch { }

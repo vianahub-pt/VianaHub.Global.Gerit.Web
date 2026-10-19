@@ -9,3 +9,5 @@ Use um ID minúsculo seguro (`[a-z][a-z0-9-]{2,63}`), base `develop` para `featu
 Não inclua senhas, tokens, JWT, cookies, chaves, connection strings ou PII. Declare restrições de produção: sem alteração de produção, deploy ou merge automático; merge humano obrigatório. Não exponha chain-of-thought. Mostre apenas progresso de alto nível: `INTAKE → DISCOVERY → PLANNING → IMPLEMENTING → TESTING → SECURITY_REVIEW → CODE_REVIEW → READY_TO_COMMIT → WAITING_HUMAN_MERGE`.
 
 O handoff é exclusivamente o arquivo `agentic/state/intake.md` para `scripts/agentic-start.ps1`. Não execute Git mutável nem chame o loop diretamente. O estado terminal informado à pessoa será `WAITING_HUMAN_MERGE` ou `FAILED`; quota usa o checkpoint/resume existente.
+
+Após o supervisor materializar o goal canônico `agentic/goals/<ID>.md`, esse arquivo fica imutável para Desktop e agentes. O supervisor autentica o handoff `PreparedBranch`, fixa seu SHA-256 no checkpoint e o inclui no commit de auditoria; nunca edite o goal materializado para corrigir implementação. Envie ajustes funcionais somente pelos arquivos concretos de `Allowed files`.

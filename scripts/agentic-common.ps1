@@ -88,6 +88,7 @@ function Get-AgenticStateTemplate {
     [pscustomobject]@{
         goal_id = $null
         goal_file = $null
+        bootstrap_goal_sha256 = $null
         branch = $null
         base_branch = "develop"
         iteration = 0
@@ -179,6 +180,121 @@ function Test-AgenticSupervisorPath {
 
     $normalized = $Path.Replace('\', '/')
     return ($normalized -match '^agentic/(state|journal)(/|$)')
+}
+
+function Get-AgenticCommitPaths {
+    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ChangedPaths)
+
+    return @($ChangedPaths | ForEach-Object { ([string]$_).Replace('\', '/') } | Where-Object { $_ -and -not (Test-AgenticSupervisorPath -Path $_) } | Sort-Object -Unique)
+}
+
+function Get-AgenticFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $bytes = [IO.File]::ReadAllBytes($Path)
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try { return ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha256.Dispose() }
+}
+
+function Get-AgenticBootstrapAnchorPath {
+    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
+
+    if ($GoalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $GoalId -match '--|-$') { throw 'Bootstrap goal anchor rejeitado: ID não é canônico.' }
+    $gitPath = Join-Path $BasePath '.git'
+    if (-not (Test-Path -LiteralPath $gitPath)) { throw 'Bootstrap goal anchor indisponível: metadados Git ausentes.' }
+    $gitDirResult = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $BasePath, 'rev-parse', '--git-path', 'agentic-bootstrap-goals')
+    Assert-AgenticNativeProcessSucceeded -Result $gitDirResult -CommandName 'git rev-parse'
+    $relativeGitPath = ([string]@($gitDirResult.Output)[0]).Trim()
+    if ([string]::IsNullOrWhiteSpace($relativeGitPath)) { throw 'Bootstrap goal anchor indisponível: caminho Git vazio.' }
+    $anchorDirectory = if ([IO.Path]::IsPathRooted($relativeGitPath)) { $relativeGitPath } else { Join-Path $BasePath $relativeGitPath }
+    return Join-Path $anchorDirectory ("{0}.sha256" -f $GoalId)
+}
+
+function Write-AgenticBootstrapAnchor {
+    param([Parameter(Mandatory = $true)][string]$GoalId, [Parameter(Mandatory = $true)][string]$Sha256, [string]$BasePath = $script:AgenticRepoRoot)
+
+    if ($Sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal anchor rejeitado: SHA-256 inválido.' }
+    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $anchorPath)) | Out-Null
+    try {
+        $stream = [IO.File]::Open($anchorPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+        try {
+            $bytes = [Text.Encoding]::ASCII.GetBytes($Sha256 + "`n")
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Flush($true)
+        }
+        finally { $stream.Dispose() }
+    }
+    catch [IO.IOException] {
+        if (-not (Test-Path -LiteralPath $anchorPath -PathType Leaf) -or (Get-AgenticBootstrapAnchorSha256 -GoalId $GoalId -BasePath $BasePath) -cne $Sha256) { throw 'Bootstrap goal anchor já existe com conteúdo diferente.' }
+    }
+    return $anchorPath
+}
+
+function Get-AgenticBootstrapAnchorSha256 {
+    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
+
+    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
+    if (-not (Test-Path -LiteralPath $anchorPath -PathType Leaf)) { throw 'Bootstrap goal rejeitado: âncora autenticada do supervisor ausente.' }
+    $sha256 = [IO.File]::ReadAllText($anchorPath, [Text.Encoding]::ASCII).TrimEnd("`r", "`n")
+    if ($sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal rejeitado: âncora autenticada inválida.' }
+    return $sha256
+}
+
+function Test-AgenticBootstrapAnchor {
+    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
+
+    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
+    return (Test-Path -LiteralPath $anchorPath -PathType Leaf)
+}
+
+function Assert-AgenticBootstrapAnchor {
+    param([Parameter(Mandatory = $true)][string]$GoalId, [Parameter(Mandatory = $true)][string]$ExpectedSha256, [string]$BasePath = $script:AgenticRepoRoot)
+
+    $anchoredSha256 = Get-AgenticBootstrapAnchorSha256 -GoalId $GoalId -BasePath $BasePath
+    if ($anchoredSha256 -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: hash diverge da âncora imutável do supervisor.' }
+    return $anchoredSha256
+}
+
+function Assert-AgenticBootstrapGoalIntegrity {
+    param(
+        [Parameter(Mandatory = $true)]$State,
+        [Parameter(Mandatory = $true)][hashtable]$Metadata,
+        [Parameter(Mandatory = $true)][string]$ExpectedSha256,
+        [string]$BasePath = $script:AgenticRepoRoot
+    )
+
+    $goalId = [string]$Metadata['ID']
+    if ($goalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $goalId -match '--|-$') { throw 'Bootstrap goal rejeitado: ID não é canônico.' }
+    $stateGoalIdProperty = $State.PSObject.Properties['goal_id']
+    if ($null -eq $stateGoalIdProperty -or [string]$stateGoalIdProperty.Value -cne $goalId) { throw 'Bootstrap goal rejeitado: goal_id não corresponde ao goal ativo.' }
+    if ($ExpectedSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal rejeitado: SHA-256 autenticado ausente ou inválido.' }
+    $stateHashProperty = $State.PSObject.Properties['bootstrap_goal_sha256']
+    if ($null -eq $stateHashProperty -or [string]$stateHashProperty.Value -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: hash do checkpoint difere do handoff do supervisor.' }
+
+    $canonicalPath = 'agentic/goals/{0}.md' -f $goalId
+    $stateGoalFileProperty = $State.PSObject.Properties['goal_file']
+    if ($null -eq $stateGoalFileProperty -or [string]$stateGoalFileProperty.Value -cne $canonicalPath) { throw 'Bootstrap goal rejeitado: goal_file não é o caminho canônico.' }
+    $fullPath = Join-Path $BasePath ($canonicalPath.Replace('/', [IO.Path]::DirectorySeparatorChar))
+    Assert-AgenticNoReparsePoints -Path $fullPath -BasePath $BasePath -RequireLeaf | Out-Null
+    if ((Get-AgenticFileSha256 -Path $fullPath) -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: conteúdo mudou após a materialização.' }
+    return $canonicalPath
+}
+
+function Test-AgenticBootstrapGoalProvenance {
+    param(
+        [Parameter(Mandatory = $true)][string]$GoalId,
+        [Parameter(Mandatory = $true)][string]$CanonicalPath,
+        [Parameter(Mandatory = $true)][string]$Sha256,
+        [Parameter(Mandatory = $true)][string]$JournalText
+    )
+
+    foreach ($event in @(Get-AgenticJournalEvents -JournalText $JournalText)) {
+        $eventPaths = @(([string]$event.files_changed -split '\s*[,;]\s*') | ForEach-Object { $_.Replace('\', '/') })
+        if ($event.goal -ceq $GoalId -and $event.state -ceq 'DISCOVERY' -and $event.controller -ceq 'supervisor' -and $event.actor -ceq 'supervisor' -and $event.action -ceq 'Materializar goal bootstrap autenticado' -and $event.result -ceq 'PASS' -and $event.gate -ceq "bootstrap_goal_sha256=$Sha256" -and $eventPaths -ccontains $CanonicalPath) { return $true }
+    }
+    throw 'Bootstrap goal rejeitado: provenance explícita do supervisor ausente.'
 }
 
 function Get-AgenticJournalEvents {
@@ -300,7 +416,8 @@ function Test-AgenticReadiness {
         [Parameter(Mandatory = $true)][hashtable]$Metadata,
         [Parameter(Mandatory = $true)][string]$CurrentBranch,
         [Parameter(Mandatory = $true)][string[]]$ChangedPaths,
-        [string]$JournalText
+        [string]$JournalText,
+        [string]$BootstrapGoalSha256
     )
 
     if ([string]$State.state -ne "READY_TO_COMMIT") { throw "Codex precisa entregar state READY_TO_COMMIT." }
@@ -311,6 +428,17 @@ function Test-AgenticReadiness {
     $stateGoalId = [string]$stateGoalIdProperty.Value
     if ([string]::IsNullOrWhiteSpace($stateGoalId)) { throw "State.goal_id nao pode estar vazio antes do commit." }
     if ($stateGoalId -cne $goalId) { throw "ID do goal no state nao corresponde exatamente ao goal ativo." }
+    $stateBootstrapHashProperty = $State.PSObject.Properties["bootstrap_goal_sha256"]
+    $stateBootstrapHash = if ($null -eq $stateBootstrapHashProperty) { "" } else { [string]$stateBootstrapHashProperty.Value }
+    $bootstrapGoalPath = $null
+    if (-not [string]::IsNullOrWhiteSpace($BootstrapGoalSha256)) {
+        $bootstrapGoalPath = Assert-AgenticBootstrapGoalIntegrity -State $State -Metadata $Metadata -ExpectedSha256 $BootstrapGoalSha256
+        if ([string]::IsNullOrWhiteSpace($JournalText)) { $JournalText = [System.IO.File]::ReadAllText($script:AgenticJournalPath, [System.Text.UTF8Encoding]::new($false)) }
+        Test-AgenticBootstrapGoalProvenance -GoalId $goalId -CanonicalPath $bootstrapGoalPath -Sha256 $BootstrapGoalSha256 -JournalText $JournalText | Out-Null
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($stateBootstrapHash)) {
+        throw "Bootstrap goal rejeitado: contexto autenticado do supervisor ausente."
+    }
     if ([string]$State.branch -ne $CurrentBranch) { throw "Branch atual nao corresponde ao checkpoint." }
     if ([string]$State.base_branch -ne [string]$Metadata["Base branch"]) { throw "Base do state nao corresponde ao goal." }
     $prefix = [string]$Metadata["Branch prefix"]
@@ -335,9 +463,10 @@ function Test-AgenticReadiness {
     foreach ($path in $ChangedPaths) {
         $normalized = ([string]$path).Replace('\', '/')
         if (Test-AgenticSupervisorPath -Path $normalized) { continue }
+        if ($null -ne $bootstrapGoalPath -and $normalized -ceq $bootstrapGoalPath) { continue }
         if (-not $allowedSet.ContainsKey($normalized.ToLowerInvariant())) { throw "Working tree contem arquivo fora do escopo permitido pelo goal." }
     }
-    $functionalPaths = @($ChangedPaths | ForEach-Object { ([string]$_).Replace('\', '/') } | Where-Object { $_ -and -not (Test-AgenticSupervisorPath -Path $_) })
+    $functionalPaths = @(Get-AgenticCommitPaths -ChangedPaths $ChangedPaths | Where-Object { $null -eq $bootstrapGoalPath -or $_ -cne $bootstrapGoalPath })
     Assert-AgenticFunctionalDiffCheck -Paths $functionalPaths | Out-Null
     if ($functionalPaths.Count -gt 0) {
         if ([string]::IsNullOrWhiteSpace($JournalText)) { $JournalText = [System.IO.File]::ReadAllText($script:AgenticJournalPath, [System.Text.UTF8Encoding]::new($false)) }
@@ -810,7 +939,149 @@ Sem produção, deploy ou merge automático.
     $state.pr_url = $null
     if (-not (Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal)) { throw "Fixture fluxo valido: READY_TO_COMMIT foi bloqueado." }
 
-    return "PASS: fixtures A-J + whitespace A-H + goal_id"
+    # Bootstrap fixtures use the checked-in front-door goal as an immutable fixture input.
+    $bootstrapGoalFile = Join-Path $script:AgenticRepoRoot "agentic/goals/codex-desktop-front-door.md"
+    $bootstrapMetadata = Get-AgenticGoalMetadata -Path $bootstrapGoalFile
+    $bootstrapGoalId = [string]$bootstrapMetadata["ID"]
+    $bootstrapCanonicalPath = "agentic/goals/{0}.md" -f $bootstrapGoalId
+    $bootstrapHash = Get-AgenticFileSha256 -Path $bootstrapGoalFile
+    if ((Get-AgenticAllowedGoalFiles -Metadata $bootstrapMetadata) -contains $bootstrapCanonicalPath) { throw "Fixture 1: goal bootstrap foi listado como arquivo funcional permitido." }
+    $bootstrapJournal = @"
+## 2026-10-19T10:00:00Z - $bootstrapGoalId - iteracao 1
+- state: DISCOVERY
+- controller: supervisor
+- actor: supervisor
+- delegated_agent: n/a
+- action: Materializar goal bootstrap autenticado
+- files_changed: $bootstrapCanonicalPath
+- decision: materialização após validar branch de trabalho
+- gate: bootstrap_goal_sha256=$bootstrapHash
+- result: PASS
+- failure: n/a
+- retry: n/a
+- quota: n/a
+- memory: AVAILABLE
+"@
+    $bootstrapState = [pscustomobject]@{
+        state = "READY_TO_COMMIT"
+        goal_id = $bootstrapGoalId
+        goal_file = $bootstrapCanonicalPath
+        bootstrap_goal_sha256 = $bootstrapHash
+        branch = "feature/$bootstrapGoalId"
+        base_branch = "develop"
+        quality_gates = [pscustomobject]@{ diff_check = "PASS"; lint = "PASS"; build = "PASS"; typecheck = "PASS" }
+        security_review_status = "PASS"
+        code_review_status = "PASS"
+    }
+    $wrongCaseBootstrapState = $bootstrapState | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $wrongCaseBootstrapState.bootstrap_goal_sha256 = $bootstrapHash.ToUpperInvariant()
+    $wrongCaseHashRejected = $false
+    try { Assert-AgenticBootstrapGoalIntegrity -State $wrongCaseBootstrapState -Metadata $bootstrapMetadata -ExpectedSha256 $bootstrapHash | Out-Null } catch { $wrongCaseHashRejected = $true }
+    if (-not $wrongCaseHashRejected) { throw "Fixture 4: SHA-256 com casing diferente foi aceito." }
+    $bootstrapChangedPaths = @($bootstrapCanonicalPath, "scripts/agentic-common.ps1")
+    if (-not (Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath) -JournalText $bootstrapJournal -BootstrapGoalSha256 $bootstrapHash)) { throw "Fixture 2: goal bootstrap canônico exigiu provenance funcional." }
+    $bootstrapCommitPaths = @(Get-AgenticCommitPaths -ChangedPaths @($bootstrapCanonicalPath, "agentic/state/loop-state.json", "agentic/journal/current.md", "scripts/agentic-common.ps1"))
+    if ($bootstrapCommitPaths -notcontains $bootstrapCanonicalPath) { throw "Fixture 3: goal bootstrap canônico não entrou no conjunto a stagear." }
+    if ($bootstrapCommitPaths -contains "agentic/state/loop-state.json" -or $bootstrapCommitPaths -contains "agentic/journal/current.md") { throw "Fixture 9: state/journal entraram no conjunto a stagear." }
+
+    $tamperRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-bootstrap-integrity-{0}" -f [guid]::NewGuid().ToString("N"))
+    $tamperGoalPath = Join-Path $tamperRoot "agentic/goals/bootstrap-fixture.md"
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $tamperGoalPath)) | Out-Null
+    try {
+        $initResult = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $tamperRoot, 'init', '--quiet')
+        Assert-AgenticNativeProcessSucceeded -Result $initResult -CommandName 'git init fixture'
+        [IO.File]::WriteAllText($tamperGoalPath, "original materialized bytes", [Text.UTF8Encoding]::new($false))
+        $originalHash = Get-AgenticFileSha256 -Path $tamperGoalPath
+        Write-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -Sha256 $originalHash -BasePath $tamperRoot | Out-Null
+        Assert-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -ExpectedSha256 $originalHash -BasePath $tamperRoot | Out-Null
+        $tamperState = [pscustomobject]@{ goal_id = "bootstrap-fixture"; goal_file = "agentic/goals/bootstrap-fixture.md"; bootstrap_goal_sha256 = $originalHash }
+        [IO.File]::WriteAllText($tamperGoalPath, "changed after materialization", [Text.UTF8Encoding]::new($false))
+        $tamperRejected = $false
+        try { Assert-AgenticBootstrapGoalIntegrity -State $tamperState -Metadata @{ ID = "bootstrap-fixture" } -ExpectedSha256 $originalHash -BasePath $tamperRoot | Out-Null } catch { $tamperRejected = $true }
+        if (-not $tamperRejected) { throw "Fixture 4: alteração do goal bootstrap após materialização foi aceita." }
+        $tamperState.bootstrap_goal_sha256 = Get-AgenticFileSha256 -Path $tamperGoalPath
+        $stateHashReplacementRejected = $false
+        try { Assert-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -ExpectedSha256 $tamperState.bootstrap_goal_sha256 -BasePath $tamperRoot | Out-Null } catch { $stateHashReplacementRejected = $true }
+        if (-not $stateHashReplacementRejected) { throw "Fixture 4: hash do checkpoint foi silenciosamente substituído após alteração do goal." }
+    }
+    finally { Remove-Item -LiteralPath $tamperRoot -Recurse -Force -ErrorAction SilentlyContinue }
+
+    $bootstrapSupervisorOnlyJournal = $bootstrapJournal
+    $bootstrapWithImplementerJournal = @"
+$bootstrapJournal
+
+## 2026-10-19T10:01:00Z - $bootstrapGoalId - iteracao 1
+- state: PLANNING
+- controller: orchestrator
+- actor: orchestrator
+- delegated_agent: implementer
+- action: Delegar atualização do supervisor
+- files_changed: nenhum
+- decision: iniciar implementação permitida
+- gate: n/a
+- result: PASS
+- failure: n/a
+- retry: n/a
+- quota: AVAILABLE
+- memory: AVAILABLE
+
+## 2026-10-19T10:02:00Z - $bootstrapGoalId - iteracao 1
+- state: IMPLEMENTING
+- controller: orchestrator
+- actor: implementer
+- delegated_agent: n/a
+- action: Atualizar validação de bootstrap
+- files_changed: scripts/agentic-common.ps1
+- decision: implementação no escopo
+- gate: n/a
+- result: PASS
+- failure: n/a
+- retry: n/a
+- quota: AVAILABLE
+- memory: AVAILABLE
+"@
+    foreach ($untrustedGoalPath in @("agentic/goals/another-id.md", "agentic/goals/arbitrary.md")) {
+        $rejectedGoalPath = $false
+        try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, $untrustedGoalPath) -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $rejectedGoalPath = $true }
+        if (-not $rejectedGoalPath) { throw "Fixture 5/6: arquivo goal não canônico '$untrustedGoalPath' foi aceito." }
+    }
+    $explicitArbitraryGoalMetadata = @{
+        "ID" = $bootstrapGoalId
+        "Title" = $bootstrapMetadata["Title"]
+        "Base branch" = $bootstrapMetadata["Base branch"]
+        "Branch prefix" = $bootstrapMetadata["Branch prefix"]
+        "Allowed files" = "agentic/goals/arbitrary.md"
+    }
+    $arbitraryGoalFile = Join-Path $script:AgenticRepoRoot "agentic/goals/arbitrary.md"
+    if (Test-Path -LiteralPath $arbitraryGoalFile) { throw "Fixture 6: arquivo temporário arbitrário já existe; teste não irá sobrescrevê-lo." }
+    try {
+        [IO.File]::WriteAllText($arbitraryGoalFile, "fixture goal file`n", [Text.UTF8Encoding]::new($false))
+        $arbitraryGoalWithoutImplementerRejected = $false
+        try { Test-AgenticReadiness -State $bootstrapState -Metadata $explicitArbitraryGoalMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @("agentic/goals/arbitrary.md") -JournalText $bootstrapSupervisorOnlyJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $arbitraryGoalWithoutImplementerRejected = $true }
+        if (-not $arbitraryGoalWithoutImplementerRejected) { throw "Fixture 6: arquivo agentic/goals arbitrário recebeu confiança bootstrap sem provenance funcional." }
+    }
+    finally { Remove-Item -LiteralPath $arbitraryGoalFile -Force -ErrorAction SilentlyContinue }
+    $outsideAllowedRejected = $false
+    try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, "functional/not-allowed.ts") -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $outsideAllowedRejected = $true }
+    if (-not $outsideAllowedRejected) { throw "Fixture 7: arquivo funcional fora de Allowed files foi aceito." }
+    $missingFunctionalProvenanceRejected = $false
+    try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, "scripts/agentic-common.ps1") -JournalText $bootstrapSupervisorOnlyJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $missingFunctionalProvenanceRejected = $true }
+    if (-not $missingFunctionalProvenanceRejected) { throw "Fixture 8: arquivo funcional sem provenance do implementer foi aceito." }
+    if ($supervisorSource -notmatch 'Test-AgenticReadiness[^\r\n]+BootstrapGoalSha256' -or $supervisorSource -notmatch 'Get-AgenticCommitPaths') { throw "Fixture 3/12: finalização não integra autenticação bootstrap ao readiness/stage." }
+
+    # Fixture 10: manual loop remains functional and receives no bootstrap classification.
+    $manualState = $state | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $manualState.goal_id = "agentic-fixture"
+    if ($null -eq $manualState.PSObject.Properties["goal_file"]) { $manualState | Add-Member -NotePropertyName goal_file -NotePropertyValue "agentic/goals/agentic-fixture.md" }
+    else { $manualState.goal_file = "agentic/goals/agentic-fixture.md" }
+    if ($null -eq $manualState.PSObject.Properties["bootstrap_goal_sha256"]) { $manualState | Add-Member -NotePropertyName bootstrap_goal_sha256 -NotePropertyValue $null }
+    else { $manualState.bootstrap_goal_sha256 = $null }
+    if (-not (Test-AgenticReadiness -State $manualState -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal)) { throw "Fixture 10: fluxo manual sem bootstrap autenticado deixou de ser compatível." }
+
+    # Fixture 12: front-door handoff can reach READY_TO_COMMIT with bootstrap + functional provenance.
+    if (-not (Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths $bootstrapChangedPaths -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash)) { throw "Fixture 12: bootstrap válido bloqueou READY_TO_COMMIT." }
+
+    return "PASS: fixtures A-N + whitespace A-H + goal_id + bootstrap 1-12"
 }
 
 function Write-AgenticState {
@@ -1025,13 +1296,15 @@ function Assert-AgenticPreparedHandoff {
         $reader = [IO.StreamReader]::new($client, [Text.Encoding]::UTF8, $false, 1024, $true)
         $token = [string]$env:GERIT_AGENTIC_HANDOFF_TOKEN
         if ($token -notmatch '^[0-9a-f]{64}$') { throw "Handoff preparado bloqueado: token temporário inválido." }
-        $expectedMessage = "prepared|$($Metadata['ID'])|$($Metadata['Branch prefix'])/$($Metadata['ID'])|agentic/goals/$($Metadata['ID']).md|$token"
         $received = $reader.ReadLine()
         $reader.Dispose()
-        if ($received -cne $expectedMessage) { throw "Handoff preparado bloqueado: autorização do supervisor inválida." }
+        $parts = @(([string]$received) -split '\|', 6)
+        if ($parts.Count -ne 6 -or $parts[0] -cne 'prepared' -or $parts[1] -cne [string]$Metadata['ID'] -or $parts[2] -cne ("{0}/{1}" -f $Metadata['Branch prefix'], $Metadata['ID']) -or $parts[3] -cne ("agentic/goals/{0}.md" -f $Metadata['ID']) -or $parts[4] -notmatch '^[0-9a-f]{64}$' -or $parts[5] -cne $token) { throw "Handoff preparado bloqueado: autorização do supervisor inválida." }
+        Assert-AgenticNoReparsePoints -Path $expectedGoal -BasePath $script:AgenticRepoRoot -RequireLeaf | Out-Null
+        if ((Get-AgenticFileSha256 -Path $expectedGoal) -cne $parts[4]) { throw "Handoff preparado bloqueado: SHA-256 do goal difere do conteúdo materializado." }
         Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue
         Remove-Item Env:GERIT_AGENTIC_HANDOFF_TOKEN -ErrorAction SilentlyContinue
-        return $true
+        return [pscustomobject]@{ GoalPath = "agentic/goals/{0}.md" -f $Metadata['ID']; Sha256 = $parts[4] }
     }
     catch { throw "Handoff preparado bloqueado: conexão temporária do supervisor indisponível." }
     finally { if ($null -ne $client) { $client.Dispose() } }
@@ -1151,9 +1424,11 @@ function Write-AgenticPreparedGoal {
         [Parameter(Mandatory = $true)][string]$CurrentBranch,
         [string]$BasePath = $script:AgenticRepoRoot
     )
-    $expectedBranch = "$($Metadata['Branch prefix'])/$($Metadata['ID'])"
+    $goalId = [string]$Metadata['ID']
+    if ($goalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $goalId -match '--|-$') { throw "Goal não pode ser materializado: ID não é canônico." }
+    $expectedBranch = "$($Metadata['Branch prefix'])/$goalId"
     if ($CurrentBranch -cne $expectedBranch -or $CurrentBranch -in @("develop", "main")) { throw "Goal não pode ser materializado fora da branch de trabalho validada." }
-    $expectedPath = [IO.Path]::GetFullPath((Join-Path $BasePath ("agentic/goals/{0}.md" -f $Metadata["ID"])))
+    $expectedPath = [IO.Path]::GetFullPath((Join-Path $BasePath ("agentic/goals/{0}.md" -f $goalId)))
     $actualPath = Assert-AgenticNoReparsePoints -Path $Path -BasePath $BasePath
     $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
     if (-not [string]::Equals($actualPath, $expectedPath, $comparison)) { throw "Goal não pode ser materializado fora do caminho canônico." }
@@ -1169,5 +1444,8 @@ function Write-AgenticPreparedGoal {
         $stream.Write($bytes, 0, $bytes.Length)
     }
     finally { $stream.Dispose() }
-    return $actualPath
+    $sha256 = [Security.Cryptography.SHA256]::Create()
+    try { $digest = ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() }
+    finally { $sha256.Dispose() }
+    return [pscustomobject]@{ Path = $actualPath; Sha256 = $digest }
 }

@@ -28,7 +28,9 @@ try {
     if (-not [string]::IsNullOrWhiteSpace(($changes -join ""))) { throw "Bootstrap bloqueado: a árvore deve estar limpa depois de remover o intake." }
     $branch = Start-GoalBranch -Metadata $metadata
     $checkedOutBranch = ([string](@(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))[0])).Trim()
-    Write-AgenticPreparedGoal -Path $goalPath -Text $goalText -Metadata $metadata -CurrentBranch $checkedOutBranch | Out-Null
+    $materializedGoal = Write-AgenticPreparedGoal -Path $goalPath -Text $goalText -Metadata $metadata -CurrentBranch $checkedOutBranch
+    $bootstrapGoalSha256 = [string]$materializedGoal.Sha256
+    Write-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID']) -Sha256 $bootstrapGoalSha256 | Out-Null
     $engine = if (Test-Path -LiteralPath (Join-Path $PSHOME "pwsh.exe")) { Join-Path $PSHOME "pwsh.exe" } else { Join-Path $PSHOME "powershell.exe" }
     $pipeName = "gerit-agentic-{0}" -f [guid]::NewGuid().ToString("N")
     $tokenBytes = New-Object byte[] 32
@@ -74,7 +76,7 @@ public static class GeritAgenticPipeNative {
         [uint32]$clientPid = 0
         if (-not [GeritAgenticPipeNative]::GetNamedPipeClientProcessId($pipe.SafePipeHandle, [ref]$clientPid) -or $clientPid -ne [uint32]$process.Id) { throw "Handoff bloqueado: cliente do pipe não corresponde ao processo do loop iniciado." }
         $writer = [IO.StreamWriter]::new($pipe, [Text.UTF8Encoding]::new($false), 1024, $true)
-        $writer.WriteLine("prepared|$($metadata['ID'])|$branch|agentic/goals/$($metadata['ID']).md|$handoffToken")
+        $writer.WriteLine("prepared|$($metadata['ID'])|$branch|agentic/goals/$($metadata['ID']).md|$bootstrapGoalSha256|$handoffToken")
         $writer.Flush()
         $writer.Dispose()
         $process.WaitForExit()

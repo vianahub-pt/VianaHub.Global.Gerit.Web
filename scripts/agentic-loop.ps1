@@ -133,7 +133,7 @@ function Invoke-SmokeTest {
     }
 
     $fixtureResult = Invoke-AgenticSupervisorFixtures
-    Invoke-Assert ($fixtureResult -eq "PASS: fixtures A-J + whitespace A-H + goal_id") "Fixtures do supervisor nao passaram."
+    Invoke-Assert ($fixtureResult -eq "PASS: fixtures A-N + whitespace A-H + goal_id + bootstrap 1-12") "Fixtures do supervisor nao passaram."
 
     $state.state = "IDLE"
     $state.active_agent = $null
@@ -154,7 +154,7 @@ function Invoke-SmokeTest {
     Write-Output "- fixtures de quota e erro de codigo classificadas"
     Write-Output "- retomada validou repositorio, branch, goal e journal local"
     Write-Output "- MEMORY_UNAVAILABLE simulado sem bloquear o fluxo"
-    Write-Output "- fixtures A-J de roles, provenance, Git mutavel, gates e handoff; whitespace A-H; goal_id"
+    Write-Output "- fixtures A-N de bootstrap, roles, provenance, Git mutavel, gates e handoff; whitespace A-H; goal_id"
     Write-Output "- state atomico persistido e journal arquivado em agentic/journal/history/$historyName"
     Write-Output "- nenhuma chamada Codex, PR ou acao de producao executada"
 }
@@ -194,8 +194,9 @@ function Invoke-AgenticFinalization {
         $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
         $currentBranch = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
         $allChangedPaths = @(Get-AgenticWorkingTreePaths)
-        $goalPaths = @($allChangedPaths | Where-Object { -not (Test-AgenticSupervisorPath -Path ([string]$_)) })
-        Test-AgenticReadiness -State $State -Metadata $Metadata -CurrentBranch $currentBranch -ChangedPaths $allChangedPaths | Out-Null
+        $goalPaths = @(Get-AgenticCommitPaths -ChangedPaths $allChangedPaths)
+        if (-not [string]::IsNullOrWhiteSpace([string]$script:AgenticBootstrapGoalSha256)) { Assert-AgenticBootstrapAnchor -GoalId ([string]$State.goal_id) -ExpectedSha256 $script:AgenticBootstrapGoalSha256 | Out-Null }
+        Test-AgenticReadiness -State $State -Metadata $Metadata -CurrentBranch $currentBranch -ChangedPaths $allChangedPaths -BootstrapGoalSha256 $script:AgenticBootstrapGoalSha256 | Out-Null
         if (-not (Test-AgenticPushTarget -Branch $currentBranch)) { throw "Destino de push nao e uma branch de trabalho permitida." }
 
         $step = "validacao da base remota"
@@ -313,6 +314,8 @@ function Invoke-CodexOrchestrator {
 }
 
 try {
+    $script:AgenticBootstrapGoalSha256 = $null
+    $preparedHandoff = $null
     $resolvedGoal = (Resolve-Path -LiteralPath $Goal).Path
     $repoPrefix = $script:AgenticRepoRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) + [System.IO.Path]::DirectorySeparatorChar
     Invoke-Assert ($resolvedGoal.StartsWith($repoPrefix, [System.StringComparison]::OrdinalIgnoreCase)) "Goal precisa estar dentro do repositorio."
@@ -326,13 +329,27 @@ try {
     }
     if ($PreparedBranch) {
         if ($Resume) { throw "PreparedBranch não pode ser combinado com Resume." }
-        Assert-AgenticPreparedHandoff -GoalPath $resolvedGoal -Metadata $metadata | Out-Null
+        $preparedHandoff = Assert-AgenticPreparedHandoff -GoalPath $resolvedGoal -Metadata $metadata
+        $script:AgenticBootstrapGoalSha256 = [string]$preparedHandoff.Sha256
+        Assert-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID']) -ExpectedSha256 $script:AgenticBootstrapGoalSha256 | Out-Null
     }
 
     $state = Get-AgenticState
     if ($Resume) {
         if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Nao ha goal ativo retomavel no estado '$($state.state)'." }
         if ($state.goal_id -ne $metadata["ID"]) { throw "O goal fornecido nao corresponde ao checkpoint existente." }
+        $bootstrapHashProperty = $state.PSObject.Properties["bootstrap_goal_sha256"]
+        $hasBootstrapStateHash = $null -ne $bootstrapHashProperty -and -not [string]::IsNullOrWhiteSpace([string]$bootstrapHashProperty.Value)
+        $hasBootstrapAnchor = Test-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID'])
+        if ($hasBootstrapAnchor) {
+            $script:AgenticBootstrapGoalSha256 = Get-AgenticBootstrapAnchorSha256 -GoalId ([string]$metadata['ID'])
+            if (-not $hasBootstrapStateHash -or [string]$bootstrapHashProperty.Value -cne $script:AgenticBootstrapGoalSha256) { throw "Bootstrap goal rejeitado: checkpoint difere da âncora imutável do supervisor." }
+            Assert-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID']) -ExpectedSha256 $script:AgenticBootstrapGoalSha256 | Out-Null
+            $bootstrapPath = Assert-AgenticBootstrapGoalIntegrity -State $state -Metadata $metadata -ExpectedSha256 $script:AgenticBootstrapGoalSha256
+            $bootstrapJournal = [System.IO.File]::ReadAllText($script:AgenticJournalPath, [System.Text.UTF8Encoding]::new($false))
+            Test-AgenticBootstrapGoalProvenance -GoalId ([string]$metadata["ID"]) -CanonicalPath $bootstrapPath -Sha256 $script:AgenticBootstrapGoalSha256 -JournalText $bootstrapJournal | Out-Null
+        }
+        elseif ($hasBootstrapStateHash) { throw "Bootstrap goal rejeitado: âncora imutável do supervisor ausente." }
         $branchOutput = @(Invoke-Git -GitArguments @("branch", "--show-current"))
         $branch = if ($branchOutput.Count -gt 0) { ([string]$branchOutput[0]).Trim() } else { "" }
         if ($branch -ne $state.branch) { throw "Branch atual '$branch' difere do checkpoint '$($state.branch)'." }
@@ -365,6 +382,7 @@ try {
         $state = Get-AgenticStateTemplate
         $state.goal_id = $metadata["ID"]
         $state.goal_file = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $resolvedGoal
+        $state.bootstrap_goal_sha256 = if ($PreparedBranch) { [string]$preparedHandoff.Sha256 } else { $null }
         $state.branch = $branchName
         $state.base_branch = $metadata["Base branch"]
         $state.started_at = [DateTime]::UtcNow.ToString("o")
@@ -372,6 +390,9 @@ try {
         $state.pending_action = "Executar discovery e retomar conforme state/journal"
     }
     Write-AgenticState -State $state
+    if ($PreparedBranch) {
+        Add-AgenticJournalEvent -Goal $metadata["ID"] -State "DISCOVERY" -Agent "supervisor" -Controller "supervisor" -Actor "supervisor" -Action "Materializar goal bootstrap autenticado" -FilesChanged @([string]$state.goal_file) -Gate ("bootstrap_goal_sha256={0}" -f $script:AgenticBootstrapGoalSha256) -Result "PASS" -Failure "n/a" -Memory ([string]$state.memory_status)
+    }
     Add-AgenticJournalEvent -Goal $metadata["ID"] -State ([string]$state.state) -Agent "orchestrator" -Action "Checkpoint antes da chamada Codex" -Result "PENDING" -Memory ([string]$state.memory_status)
 
     while ($true) {
@@ -415,6 +436,9 @@ try {
 
         $result = Invoke-CodexOrchestrator -State $state -GoalPath $resolvedGoal
         $state = Get-AgenticState
+        if (-not [string]::IsNullOrWhiteSpace([string]$script:AgenticBootstrapGoalSha256)) {
+            Assert-AgenticBootstrapGoalIntegrity -State $state -Metadata $metadata -ExpectedSha256 $script:AgenticBootstrapGoalSha256 | Out-Null
+        }
         $classification = if ($result.ExitCode -ne 0) {
             Get-AgenticQuotaClassification -Text $result.Output
         }

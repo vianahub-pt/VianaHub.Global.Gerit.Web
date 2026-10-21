@@ -39,7 +39,6 @@ try {
     $bootstrapGoalSha256 = [string]$materializedGoal.Sha256
     Write-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID']) -Sha256 $bootstrapGoalSha256 | Out-Null
     $engine = Resolve-AgenticPowerShellEngine
-    Reset-AgenticStateForNewGoal -PreviousState $checkpoint | Out-Null
     $preparedState = Get-AgenticStateTemplate
     $preparedState.goal_id = [string]$metadata['ID']
     $preparedState.goal_file = Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $goalPath
@@ -51,9 +50,12 @@ try {
     $preparedState.pending_phase = 'DISCOVERY'
     $preparedState.pending_action = 'Start prepared goal with architect discovery'
     $preparedState.supervisor_runtime = [pscustomobject]@{ edition = $engine.Edition; version = $engine.Version; path = [IO.Path]::GetFileName($engine.Path) }
-    Write-AgenticState -State $preparedState
-    Initialize-AgenticJournalForGoal -GoalId $preparedState.goal_id -Branch $preparedState.branch -BaseBranch $preparedState.base_branch
+    $preparedState = Initialize-AgenticNewGoalCheckpoint -PreviousState $checkpoint -NextState $preparedState -Metadata $metadata -Branch $branch -Sha256 $bootstrapGoalSha256
     Add-AgenticJournalEvent -Goal $preparedState.goal_id -State 'DISCOVERY' -Agent 'supervisor' -Controller 'supervisor' -Actor 'supervisor' -Action 'Materializar goal bootstrap autenticado' -FilesChanged @([string]$preparedState.goal_file) -Gate ("bootstrap_goal_sha256={0}" -f $bootstrapGoalSha256) -Result 'PASS'
+    $preparedState = Get-AgenticState
+    Assert-AgenticPreparedCheckpoint -State $preparedState -Metadata $metadata -Branch $branch -Sha256 $bootstrapGoalSha256 | Out-Null
+    Assert-AgenticJournalMatchesState -State $preparedState | Out-Null
+    Assert-AgenticBootstrapAnchor -GoalId ([string]$metadata['ID']) -ExpectedSha256 $bootstrapGoalSha256 | Out-Null
     $pipeName = "gerit-agentic-{0}" -f [guid]::NewGuid().ToString("N")
     $tokenBytes = New-Object byte[] 32
     $random = [Security.Cryptography.RandomNumberGenerator]::Create()

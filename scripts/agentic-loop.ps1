@@ -446,9 +446,7 @@ try {
     else {
         if ($PreparedBranch) {
             $branchName = ([string](@(Invoke-Git -GitArguments @('branch', '--show-current'))[0])).Trim()
-            $expected = "$($metadata['Branch prefix'])/$($metadata['ID'])"
-            if ($branchName -cne $expected -or $branchName -in @('develop', 'main')) { throw 'Prepared branch does not match validated intake.' }
-            if ([string]$state.state -ne 'DISCOVERY' -or [string]$state.goal_id -cne [string]$metadata['ID'] -or [string]$state.branch -cne $branchName -or [string]$state.base_branch -cne [string]$metadata['Base branch'] -or [string]$state.bootstrap_goal_sha256 -cne [string]$preparedHandoff.Sha256) { throw 'Prepared branch checkpoint is missing or differs from authenticated handoff.' }
+            Assert-AgenticPreparedCheckpoint -State $state -Metadata $metadata -Branch $branchName -Sha256 ([string]$preparedHandoff.Sha256) | Out-Null
             if ([string]$state.goal_file -cne (Get-AgenticRelativePath -BasePath $script:AgenticRepoRoot -TargetPath $resolvedGoal)) { throw 'Prepared branch checkpoint goal path differs from authenticated handoff.' }
             Assert-AgenticJournalMatchesState -State $state | Out-Null
         }

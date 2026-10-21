@@ -5,42 +5,45 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "agentic-common.ps1")
 
+$preferredEngine = Resolve-AgenticPowerShellEngine
+if ($preferredEngine.Edition -eq 'Core' -and $PSVersionTable.PSEdition -ne 'Core') {
+    & $preferredEngine.Path -NoProfile -ExecutionPolicy Bypass -File $PSCommandPath
+    exit $LASTEXITCODE
+}
+
 try {
     $state = Get-AgenticState
-    if ([string]::IsNullOrWhiteSpace([string]$state.goal_file)) { throw "State nao contem goal para retomada." }
+    Assert-AgenticResumeCheckpoint -State $state | Out-Null
     $goalPath = Join-Path $script:AgenticRepoRoot ([string]$state.goal_file)
     if (-not (Test-Path -LiteralPath $goalPath -PathType Leaf)) { throw "Arquivo do goal do checkpoint nao existe." }
-    if (-not (Test-Path -LiteralPath $script:AgenticJournalPath -PathType Leaf)) { throw "Journal do checkpoint nao existe." }
+    $metadata = Get-AgenticGoalMetadata -Path $goalPath
+    if ([string]$metadata['ID'] -cne [string]$state.goal_id -or [string]$metadata['Base branch'] -cne [string]$state.base_branch) { throw 'Goal metadata diverge do checkpoint.' }
+    Assert-AgenticJournalMatchesState -State $state | Out-Null
     $currentBranchOutput = @(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))
     $currentBranch = if ($currentBranchOutput.Count -gt 0) { ([string]$currentBranchOutput[0]).Trim() } else { "" }
-    if ($currentBranch -ne $state.branch) { throw "Branch atual nao corresponde ao checkpoint; nenhum arquivo foi alterado." }
-    $localChanges = @(Invoke-AgenticGit -GitArguments @("status", "--porcelain"))
-    if ($state.state -in @("IDLE", "WAITING_HUMAN_MERGE", "FAILED")) { throw "Estado '$($state.state)' nao esta aguardando retomada." }
-    if ($state.state -eq "WAITING_FOR_QUOTA") {
-        $resumeAt = if ($state.resume_after) {
-            [DateTime]::Parse([string]$state.resume_after).ToUniversalTime()
-        }
-        else {
-            $waitMinutes = if ($state.quota_type -eq "weekly") { 360 } else { 15 }
-            [DateTime]::UtcNow.AddMinutes($waitMinutes)
-        }
-        $remaining = [int][Math]::Ceiling(($resumeAt - [DateTime]::UtcNow).TotalSeconds)
-        if ($remaining -gt 0) {
-            Write-Output "Aguardando ate $($resumeAt.ToString('u')) antes de uma unica tentativa."
-            Start-Sleep -Seconds $remaining
-        }
-    }
-
-    $state.state = "RESUMING"
-    $state.pending_action = "Validar checkpoint e continuar do goal/journal atuais"
-    $state.active_agent = "orchestrator"
-    $state.last_successful_step = "Checkpoint, branch e git status validados; alteracoes locais preservadas: $($localChanges.Count)"
-    Write-AgenticState -State $state
-    Add-AgenticJournalEvent -Goal ([string]$state.goal_id) -State "RESUMING" -Agent "orchestrator" -Action "Retomada manual/local do checkpoint" -Result "PENDING" -Quota ([string]$state.quota_type) -Memory ([string]$state.memory_status)
+    if ($currentBranch -cne $state.branch) { throw "Branch atual nao corresponde ao checkpoint; nenhum arquivo foi alterado." }
     & (Join-Path $PSScriptRoot "agentic-loop.ps1") -Goal $goalPath -Resume
     exit $LASTEXITCODE
 }
 catch {
-    Write-Error $_.Exception.Message
+    $errorRecord = $_
+    $scriptName = $PSCommandPath
+    $functionName = 'agentic resume'
+    $line = 0
+    if ($null -ne $errorRecord.InvocationInfo) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$errorRecord.InvocationInfo.ScriptName)) { $scriptName = [string]$errorRecord.InvocationInfo.ScriptName }
+        if ($null -ne $errorRecord.InvocationInfo.MyCommand -and -not [string]::IsNullOrWhiteSpace([string]$errorRecord.InvocationInfo.MyCommand.Name)) { $functionName = [string]$errorRecord.InvocationInfo.MyCommand.Name }
+        if ($null -ne $errorRecord.InvocationInfo.ScriptLineNumber) { $line = [int]$errorRecord.InvocationInfo.ScriptLineNumber }
+    }
+    try {
+        $checkpoint = Get-AgenticState
+        if ($checkpoint.state -notin @('IDLE', 'FAILED', 'WAITING_HUMAN_MERGE')) {
+            $diagnostic = New-AgenticFailureDiagnostic -Category 'resume' -Message $errorRecord.Exception.Message -Operation 'resume existing checkpoint' -ScriptPath $scriptName -FunctionName $functionName -Line $line -StateBefore ([string]$checkpoint.state) -Phase ([string]$checkpoint.pending_phase) -Retryable $false
+            $failedCheckpoint = New-AgenticFailedCheckpoint -State $checkpoint -Reason $diagnostic.message -Diagnostic $diagnostic
+            Write-AgenticState -State $failedCheckpoint
+        }
+    }
+    catch { Write-Warning ("Falha ao persistir checkpoint de erro: " + (ConvertTo-AgenticSanitizedText -Text $_.Exception.Message)) }
+    Write-Error (ConvertTo-AgenticSanitizedText -Text $errorRecord.Exception.Message)
     exit 1
 }

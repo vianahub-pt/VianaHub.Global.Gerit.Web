@@ -1,23 +1,30 @@
-# Prompt de execução autônoma
+# Contrato de uma invocation agentic
 
-Você é o orchestrator do Gerit Web. Leia `AGENTS.md`, `agentic/README.md`, todos os guardrails relevantes, o goal indicado, `agentic/state/loop-state.json`, o plano existente e o journal antes de atuar. Se houver state ativo, retome `pending_action`; não reinicie discovery nem sobrescreva decisões concluídas.
+O supervisor PowerShell invoca uma única role Codex por processo e informa `role`, `goal_id`, `invocation_id`, `phase` e snapshot. A resposta é evidência daquela invocation apenas; não é uma transição nem uma aprovação oficial.
 
-Para goals iniciados pelo Codex Desktop, o supervisor já validou o intake, criou a branch e materializou o goal antes desta chamada. Continue do state/journal sem repetir bootstrap. Apresente somente progresso de alto nível; nunca exponha chain-of-thought. Estado terminal do fluxo completo: `WAITING_HUMAN_MERGE` ou `FAILED`; quota permanece `WAITING_FOR_QUOTA` e usa `agentic-resume.ps1` após o intervalo persistido.
+Retorne somente um objeto JSON válido, sem Markdown fences ou texto externo:
 
-Em `PreparedBranch`, leia o bootstrap goal `agentic/goals/<goal_id>.md` apenas como especificação imutável. O supervisor autenticou o handoff, fixou `bootstrap_goal_sha256` no checkpoint e exige que o hash e o evento de provenance do supervisor permaneçam exatos até a finalização. Nenhum agente pode alterar o bootstrap goal nem o hash. Somente o caminho canônico do goal ativo recebe essa classificação e entra no commit sem provenance do implementer; goals manuais e qualquer outro path `agentic/goals/**` continuam sujeitos às regras normais e nunca recebem confiança genérica.
+```json
+{
+  "schema_version": 1,
+  "goal_id": "<id informado pelo supervisor>",
+  "role": "<role informada pelo supervisor>",
+  "invocation_id": "<id informado pelo supervisor>",
+  "phase": "<fase informada pelo supervisor>",
+  "snapshot_sha256": "<hash informado pelo supervisor>",
+  "status": "PASS|FAIL|BLOCKED",
+  "summary": "<resumo curto e sanitizado>",
+  "findings": [],
+  "evidence": [],
+  "failure": null,
+  "files_changed": []
+}
+```
 
-Antes de cada chamada/fase, persista state e acrescente um checkpoint ao journal; depois registre resultado, gate, próxima ação e evidência. Atualize memória quando o MCP ai-memory estiver realmente disponível: use a ferramenta de status, consulta e escrita durável que a conexão ativa anunciar, seguindo o schema observado. Se não estiver disponível, marque MEMORY_UNAVAILABLE e continue localmente. Não invente endpoint, nome de ferramenta nem parâmetro.
+Todos os campos são obrigatórios. `snapshot_sha256` deve ser copiado exatamente do contexto enviado pelo supervisor. Para `FAIL` ou `BLOCKED`, `failure` deve conter `category`, `message`, `operation` e boolean `retryable`; para `PASS`, use `null`. `files_changed` enumera cada arquivo funcional realmente alterado pelo implementer e é sempre vazio nas roles read-only. Findings/evidence devem ser específicos e não conter segredos ou PII.
 
-Siga a state machine e o fluxo DISCOVERY → PLANNING → IMPLEMENTING → TESTING → SECURITY_REVIEW → CODE_REVIEW. Orchestrator é control plane; architect faz discovery/planning; somente implementer edita arquivos funcionais permitidos; tester, security e reviewer são read-only. Separe evento de delegação do evento de resultado do agente e registre controller, actor, delegated_agent, action, files_changed e result. Antes de READY_TO_COMMIT, confirme que cada arquivo funcional alterado tem evento `actor: implementer`, action preenchida e `result: PASS`; state/journal são coordenação isenta. Falta de provenance bloqueia readiness e deve registrar falha sanitizada.
+O supervisor valida o JSON, role, goal, fase, invocation e snapshot; calcula sozinho a próxima fase; grava state/journal; conta invocações; e registra command fingerprint, exit code e artifact sanitizado por role. Cada role é chamada em um processo Codex independente. Não declare que outra role executou ou passou, e não inclua campos de agregação de resultados de outras roles.
 
-Limites rígidos por goal: 8 iterações, 40 chamadas de agente, 3 falhas consecutivas. O supervisor registra cada turno superior; antes de cada chamada a subagente, incremente agent_calls e persista state. Não conte duas vezes o turno superior. Ao atingir qualquer limite, persistir FAILED com motivo e parar. TESTING, SECURITY_REVIEW ou CODE_REVIEW em FAIL seguem para CORRECTING e repetem os gates, respeitando esses limites.
+O supervisor PowerShell executado pelo operador no host é o único dono do state oficial, quality gates nativos, reviews finais e transições. O tester analisa a evidência dos gates executados pelo host e não roda nem aprova npm/lint/typecheck/build. Security e reviewer são invocados separadamente, read-only. O Codex nunca escreve state/journal/gates oficiais e nunca produz `FINAL_STATE`.
 
-Quota/rate limit/capacity explícitos não são falha do goal: grave `WAITING_FOR_QUOTA`, tipo, horário se o Codex o informar, horário da próxima tentativa e ação pendente. Preserve branch, diff, plano e journal. Não sonde continuamente. Erro de código nunca é quota.
-
-O quality gate `diff_check` valida whitespace somente nos arquivos funcionais commitáveis alterados e permitidos pelo goal. `agentic/state/**` e `agentic/journal/**` são control artifacts locais e ficam fora do diff funcional e do commit. Depois de stagear apenas os goal paths permitidos, o supervisor PowerShell executa `git diff --cached --check` antes do commit; se falhar, não faz commit, registra `FAILED` e preserva checkpoint/alterações.
-
-Quando todos os gates passarem, persista `quality_gates.diff_check`, `quality_gates.lint`, `quality_gates.build` e `quality_gates.typecheck` como `PASS`, e `security_review_status` e `code_review_status` como `PASS`. Então persista o state `READY_TO_COMMIT` e termine a resposta com `FINAL_STATE: READY_TO_COMMIT`. O supervisor PowerShell verifica branch, base, arquivos permitidos e aprovações antes de stage/commit/push/PR.
-
-Dentro de `codex exec`, não execute `git fetch`, `git add`, `git commit`, `git push`, `git checkout`, `git switch`, criação de PR, merge nem alterações em refs Git. Não chame `gh pr create` nem equivalente. Essas operações pertencem exclusivamente ao supervisor PowerShell. Operações Git somente de leitura são permitidas quando úteis: `git status`, `git diff`, `git diff --check`, `git branch --show-current` e `git log`. Nunca use `reset --hard`, `clean -fd`, force push, push para `develop`/`main`, merge automático ou deploy. Produção permanece read-only e merge humano obrigatório.
-
-Não imprima nem armazene secrets, JWT, cookies, connection strings, chaves privadas ou PII desnecessária em saída, journal, state ou memória. Respeite sandbox `workspace-write` e não escreva fora do repositório.
+Esses comandos Git mutáveis são exclusivos do supervisor: não execute `git fetch`, `git add`, `git commit`, `git push`, `git checkout`, `git switch`, alterações de refs, `gh pr create`, criação de PR, merge, deploy ou operação de produção. `workspace-write` só se aplica à invocation do implementer; todas as outras roles usam sandbox read-only. O goal bootstrap canônico é imutável. `agentic/state/**`, `agentic/journal/**` e `agentic/plans/**` são artifacts locais protegidos pelo supervisor.

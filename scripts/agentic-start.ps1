@@ -34,6 +34,11 @@ try {
     $changes = @(Invoke-AgenticGit -GitArguments @("status", "--porcelain", "--untracked-files=all"))
     Assert-AgenticBootstrapStatus -StatusLines $changes -AllowMissingIntake | Out-Null
     $branch = Start-GoalBranch -Metadata $metadata
+    # Switching to origin/<base> may replace tracked control-plane files. Re-read
+    # the checkpoint from the checked-out tree so archive eligibility and identity
+    # correspond to the state that will be replaced, not the pre-fetch checkout.
+    $checkpoint = Get-AgenticState
+    if ($checkpoint.state -notin @("IDLE", "FAILED", "WAITING_HUMAN_MERGE")) { throw "A branch checkout exposed an active goal checkpoint; bootstrap will not replace it." }
     $checkedOutBranch = ([string](@(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))[0])).Trim()
     $materializedGoal = Write-AgenticPreparedGoal -Path $goalPath -Text $goalText -Metadata $metadata -CurrentBranch $checkedOutBranch
     $bootstrapGoalSha256 = [string]$materializedGoal.Sha256

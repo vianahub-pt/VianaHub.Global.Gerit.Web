@@ -533,19 +533,27 @@ No production changes, merge, or deployment.
         $oldJournal = New-AgenticJournalHeader -GoalId $previous.goal_id -Branch $previous.branch -BaseBranch $previous.base_branch
         [IO.File]::WriteAllText($script:AgenticJournalPath, ($oldJournal + "`n## old goal event`n"), [Text.UTF8Encoding]::new($false))
 
+        # Simulate checkout replacing the tracked state after the pre-fetch snapshot:
+        # archive the checkpoint from the selected base branch, then initialize the new goal.
+        $checkoutState = Get-AgenticStateTemplate
+        $checkoutState.goal_id = 'smoke-test'; $checkoutState.goal_file = 'agentic/goals/smoke-test.md'
+        $checkoutState.branch = 'feature/smoke-test'; $checkoutState.base_branch = 'develop'; $checkoutState.state = 'IDLE'
+        $checkoutState.iteration = 3; $checkoutState.agent_calls = 5; $checkoutState.consecutive_failures = 1
+        Write-AgenticState -State $checkoutState
+
         $sha256 = Get-AgenticFileSha256 -Path $goalPath -BasePath $fixtureRoot
         Write-AgenticBootstrapAnchor -GoalId $goalId -Sha256 $sha256 -BasePath $fixtureRoot | Out-Null
         $next = Get-AgenticStateTemplate
         $next.goal_id = $goalId; $next.goal_file = "agentic/goals/$goalId.md"
         $next.branch = "fix/$goalId"; $next.base_branch = 'develop'; $next.bootstrap_goal_sha256 = $sha256
         $next.state = 'DISCOVERY'; $next.pending_phase = 'DISCOVERY'; $next.pending_action = 'Start prepared goal'
-        $initialized = Initialize-AgenticNewGoalCheckpoint -PreviousState $previous -NextState $next -Metadata $metadata -Branch $next.branch -Sha256 $sha256 -JournalPath $script:AgenticJournalPath -BasePath $fixtureRoot
+        $initialized = Initialize-AgenticNewGoalCheckpoint -PreviousState (Get-AgenticState) -NextState $next -Metadata $metadata -Branch $next.branch -Sha256 $sha256 -JournalPath $script:AgenticJournalPath -BasePath $fixtureRoot
 
         # A-G: replacing a stale IDLE checkpoint writes a complete new checkpoint, fresh counters, isolated journal, and matching immutable anchor.
         Assert-AgenticPreparedCheckpoint -State $initialized -Metadata $metadata -Branch $next.branch -Sha256 $sha256 | Out-Null
         if ([int]$initialized.iteration -ne 0 -or [int]$initialized.agent_calls -ne 0 -or [int]$initialized.consecutive_failures -ne 0) { throw 'Bootstrap fixture C: counters do not start at zero.' }
         $stateArchives = @(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'agentic/state/history') -File)
-        if ($stateArchives.Count -ne 1 -or [string](Get-AgenticState).goal_id -cne $goalId) { throw 'Bootstrap fixture A/B/G: previous IDLE checkpoint was not archived and replaced.' }
+        if ($stateArchives.Count -ne 1 -or $stateArchives[0].Name -notlike 'smoke-test-*.json' -or [string](Get-AgenticState).goal_id -cne $goalId) { throw 'Bootstrap fixture A/B/G: post-checkout IDLE checkpoint was not archived and replaced.' }
         $journalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath -BasePath $fixtureRoot
         if ((Get-AgenticJournalHeader -JournalText $journalText).goal_id -cne $goalId -or $journalText -match 'old goal event') { throw 'Bootstrap fixture D: journal was not isolated to the new goal.' }
         if ((Get-AgenticBootstrapAnchorSha256 -GoalId $goalId -BasePath $fixtureRoot) -cne $sha256) { throw 'Bootstrap fixture E: anchor/hash diverged from the materialized goal.' }
@@ -1403,8 +1411,10 @@ Sem produção, deploy ou merge automático.
     $intakeIndex = $frontDoorSource.IndexOf('intake completo')
     if ($preflightIndex -lt 0 -or $intakeIndex -le $preflightIndex -or $frontDoorSource -notmatch 'allowlist curta e concreta') { throw 'Lifecycle G: preflight sem paths concretos não está documentado antes do intake.' }
     $preparedCheckpointIndex = $startSource.IndexOf('Initialize-AgenticNewGoalCheckpoint -PreviousState $checkpoint')
+    $branchCheckpointRefreshIndex = $startSource.IndexOf('$checkpoint = Get-AgenticState', $startSource.IndexOf('$branch = Start-GoalBranch -Metadata $metadata'))
     $preparedJournalIndex = $startSource.IndexOf('Add-AgenticJournalEvent -Goal $preparedState.goal_id -State ''DISCOVERY''')
     $preparedProcessIndex = $startSource.IndexOf('[Diagnostics.Process]::Start($startInfo)')
+    if ($branchCheckpointRefreshIndex -lt 0 -or $branchCheckpointRefreshIndex -ge $preparedCheckpointIndex) { throw 'Bootstrap fixture A/G: start precisa reler o checkpoint do checkout novo antes de arquivar/substituir.' }
     if ($preparedCheckpointIndex -lt 0 -or $preparedJournalIndex -le $preparedCheckpointIndex -or $preparedProcessIndex -le $preparedJournalIndex -or $startSource.IndexOf('Assert-AgenticPreparedCheckpoint -State $preparedState') -le $preparedJournalIndex) { throw 'Lifecycle U: start deve persistir e validar checkpoint/journal antes do subprocesso.' }
     $branchCreationIndex = $startSource.IndexOf('Start-GoalBranch -Metadata $metadata')
     $goalWriterIndex = $startSource.IndexOf('Write-AgenticPreparedGoal -Path $goalPath')

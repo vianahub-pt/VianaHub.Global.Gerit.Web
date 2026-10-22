@@ -156,6 +156,9 @@ function Get-AgenticStateTemplate {
         observability_status = "PENDING"
         requirement_status = "PENDING"
         scope_status = "PENDING"
+        observability_verification_path = $null
+        requirement_verification_path = $null
+        scope_verification_path = $null
         no_changes = $false
         quality_gate_snapshot = @()
         failure_diagnostic = $null
@@ -582,6 +585,102 @@ function Write-AgenticImmutableJsonArtifact {
     return [pscustomobject]@{ Path = $RelativePath; Sha256 = Get-AgenticFileSha256 -Path $fullPath }
 }
 
+function Get-AgenticVerificationDigest {
+    param([Parameter(Mandatory=$true)]$Artifact)
+    $body=[ordered]@{}
+    foreach($property in $Artifact.PSObject.Properties){if($property.Name -cne 'artifact_sha256'){$body[$property.Name]=$property.Value}}
+    return Get-AgenticTextSha256 -Text ($body|ConvertTo-Json -Depth 20 -Compress)
+}
+
+function New-AgenticVerificationArtifact {
+    param([Parameter(Mandatory=$true)][string]$VerificationType,[Parameter(Mandatory=$true)][string]$RequestId,[Parameter(Mandatory=$true)][string]$InvocationId,[Parameter(Mandatory=$true)][string]$SnapshotSha256,[Parameter(Mandatory=$true)][ValidateSet('PASS','FAIL','BLOCKED')][string]$Status,[Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Evidence,[Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Findings,[string]$Failure)
+    if($VerificationType -cnotin @('OBSERVABILITY_VERIFICATION','REQUIREMENT_VERIFICATION','SCOPE_DIFF_VERIFICATION')){throw 'Unknown verification type.'}
+    if($RequestId -cnotmatch '^req-[0-9a-f]{32}$' -or $InvocationId -cnotmatch '^[0-9a-f]{32}$' -or $SnapshotSha256 -cnotmatch '^[0-9a-f]{64}$'){throw 'Verification identity or snapshot is invalid.'}
+    if($Status -eq 'PASS' -and $Evidence.Count -eq 0){throw 'Verification PASS requires evidence.'}
+    if($Status -eq 'FAIL' -and $Findings.Count -eq 0){throw 'Verification FAIL requires findings.'}
+    if($Status -eq 'BLOCKED' -and [string]::IsNullOrWhiteSpace($Failure)){throw 'Verification BLOCKED requires an objective external condition.'}
+    $body=[ordered]@{schema_version=1;verification_type=$VerificationType;request_id=$RequestId;invocation_id=$InvocationId;snapshot_sha256=$SnapshotSha256;status=$Status;evidence=@($Evidence|ForEach-Object{ConvertTo-AgenticSanitizedText -Text $_ -MaximumLength 1000});findings=@($Findings|ForEach-Object{ConvertTo-AgenticSanitizedText -Text $_ -MaximumLength 1000});failure=$(if($Failure){ConvertTo-AgenticSanitizedText -Text $Failure -MaximumLength 500}else{$null});timestamp=[DateTimeOffset]::UtcNow.ToString('o')}
+    $artifact=[pscustomobject]$body
+    $artifact|Add-Member -NotePropertyName artifact_sha256 -NotePropertyValue (Get-AgenticVerificationDigest $artifact)
+    return $artifact
+}
+
+function Assert-AgenticVerificationArtifact {
+    param([Parameter(Mandatory=$true)]$Artifact,[Parameter(Mandatory=$true)][string]$RequestId,[Parameter(Mandatory=$true)][string]$SnapshotSha256,[string]$VerificationType)
+    $required=@('schema_version','verification_type','request_id','invocation_id','snapshot_sha256','status','evidence','findings','failure','timestamp','artifact_sha256')
+    $names=@($Artifact.PSObject.Properties.Name)
+    if(@($names|Where-Object{$_ -cnotin $required}).Count -gt 0 -or @($required|Where-Object{$_ -cnotin $names}).Count -gt 0){throw 'Verification artifact fields are invalid.'}
+    if([int]$Artifact.schema_version -ne 1 -or [string]$Artifact.request_id -cne $RequestId -or [string]$Artifact.snapshot_sha256 -cne $SnapshotSha256 -or [string]$Artifact.verification_type -notin @('OBSERVABILITY_VERIFICATION','REQUIREMENT_VERIFICATION','SCOPE_DIFF_VERIFICATION')){throw 'Verification artifact identity or snapshot mismatch.'}
+    if($VerificationType -and [string]$Artifact.verification_type -cne $VerificationType){throw 'Verification type mismatch.'}
+    if([string]$Artifact.status -cnotin @('PASS','FAIL','BLOCKED') -or [string]$Artifact.invocation_id -cnotmatch '^[0-9a-f]{32}$' -or [string]$Artifact.artifact_sha256 -cne (Get-AgenticVerificationDigest $Artifact)){throw 'Verification artifact integrity/status is invalid.'}
+    if($Artifact.status -eq 'PASS' -and @($Artifact.evidence).Count -eq 0){throw 'Verification PASS has no evidence.'}
+    if($Artifact.status -eq 'FAIL' -and @($Artifact.findings).Count -eq 0){throw 'Verification FAIL has no findings.'}
+    if($Artifact.status -eq 'BLOCKED' -and [string]::IsNullOrWhiteSpace([string]$Artifact.failure)){throw 'Verification BLOCKED has no external cause.'}
+    return $true
+}
+
+function Assert-AgenticStateVerification {
+    param($State,[string]$Type,[string]$ExpectedStatus='PASS')
+    $field=switch($Type){'OBSERVABILITY_VERIFICATION'{'observability_verification_path'}'REQUIREMENT_VERIFICATION'{'requirement_verification_path'}'SCOPE_DIFF_VERIFICATION'{'scope_verification_path'}default{throw 'Unknown verification type.'}}
+    $relative=[string]$State.$field
+    if([string]::IsNullOrWhiteSpace($relative)){throw "Missing persisted $Type evidence."}
+    $path=Join-Path $script:AgenticRepoRoot $relative
+    $artifact=Read-AgenticTextSafely -Path $path|ConvertFrom-Json
+    Assert-AgenticVerificationArtifact -Artifact $artifact -RequestId ([string]$State.request_id) -SnapshotSha256 ([string]$State.approved_snapshot_sha256) -VerificationType $Type|Out-Null
+    if([string]$artifact.status -cne $ExpectedStatus -or [string]$State.($Type -replace '_VERIFICATION','_status') -cne $ExpectedStatus){throw "$Type status is not validated $ExpectedStatus evidence."}
+    return $artifact
+}
+
+function Invoke-AgenticVerificationEngine {
+    param([Parameter(Mandatory=$true)][string]$VerificationType,[Parameter(Mandatory=$true)]$State,[Parameter(Mandatory=$true)][string]$InvocationId,[Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Evidence,[Parameter(Mandatory=$true)][AllowEmptyCollection()][string[]]$Findings,[string]$Failure)
+    $status=if($Failure){'BLOCKED'}elseif($Findings.Count -gt 0){'FAIL'}else{'PASS'}
+    $artifact=New-AgenticVerificationArtifact -VerificationType $VerificationType -RequestId ([string]$State.request_id) -InvocationId $InvocationId -SnapshotSha256 ([string]$State.approved_snapshot_sha256) -Status $status -Evidence $Evidence -Findings $Findings -Failure $Failure
+    Assert-AgenticVerificationArtifact -Artifact $artifact -RequestId ([string]$State.request_id) -SnapshotSha256 ([string]$State.approved_snapshot_sha256) -VerificationType $VerificationType|Out-Null
+    $relative="agentic/state/verifications/$($State.request_id)/$InvocationId-$VerificationType.json"
+    $persisted=Write-AgenticImmutableJsonArtifact -RelativePath $relative -Value $artifact
+    if($persisted.Sha256 -ne (Get-AgenticFileSha256 -Path (Join-Path $script:AgenticRepoRoot $relative))){throw 'Persisted verification artifact hash mismatch.'}
+    return [pscustomobject]@{artifact=$artifact;path=$relative;file_sha256=$persisted.Sha256}
+}
+
+function Invoke-AgenticRequirementVerification {
+    param($State,[string]$InvocationId,[string[]]$AcceptanceCriteria,[string[]]$DodCriteria,$TesterEvidence,$Envelope)
+    $findings=[Collections.Generic.List[string]]::new();$evidence=[Collections.Generic.List[string]]::new()
+    if($null -eq $Envelope){$findings.Add('Immutable Request Envelope is unavailable for independent verification.')}else{Assert-AgenticRequestEnvelope -Envelope $Envelope|Out-Null;if([string]$Envelope.request_id -cne [string]$State.request_id){$findings.Add('Request Envelope identity differs from active request.')}else{$evidence.Add("request_sha256=$($Envelope.content_sha256)");$evidence.Add("requirement_present=$(-not [string]::IsNullOrWhiteSpace([string]$Envelope.user_requirement_verbatim))")}}
+    foreach($criterion in @($AcceptanceCriteria)+@($DodCriteria)){
+        $id=([string]$criterion -split ':',2)[0].Trim()
+        $proof=@($TesterEvidence|Where-Object{[string]$_.criterion_id -ceq $id -and [string]$_.status -ceq 'PASS' -and -not [string]::IsNullOrWhiteSpace([string]$_.evidence)}|Select-Object -First 1)
+        if($proof.Count -eq 0){$findings.Add("Missing passing implementation evidence for $id.")}else{$evidence.Add("$id => $($proof[0].evidence)")}
+    }
+    if(@($AcceptanceCriteria).Count+@($DodCriteria).Count -eq 0){$findings.Add('Specification contains no acceptance or DOD criteria.')}
+    return Invoke-AgenticVerificationEngine -VerificationType 'REQUIREMENT_VERIFICATION' -State $State -InvocationId $InvocationId -Evidence @($evidence) -Findings @($findings)
+}
+
+function Invoke-AgenticScopeVerification {
+    param($State,[string]$InvocationId,[string[]]$ActualPaths,[string[]]$ApprovedPaths,[string]$ActualSnapshotSha256)
+    $findings=[Collections.Generic.List[string]]::new();$normalizedActual=@($ActualPaths|ForEach-Object{([string]$_).Replace('\','/')}|Sort-Object -Unique);$normalizedApproved=@($ApprovedPaths|ForEach-Object{([string]$_).Replace('\','/')}|Sort-Object -Unique)
+    foreach($path in $normalizedActual){if($path -notin $normalizedApproved){$findings.Add("Unapproved changed path: $path")}}
+    foreach($path in $normalizedApproved){if($path -notin $normalizedActual){$findings.Add("Approved path missing from actual diff: $path")}}
+    if($normalizedActual.Count -eq 0){$findings.Add('No changed paths were provided for scope verification.')}
+    if($ActualSnapshotSha256 -cne [string]$State.approved_snapshot_sha256){$findings.Add('Actual diff snapshot differs from approved snapshot.')}
+    $evidence=@("actual_paths=$($normalizedActual -join ',')","approved_paths=$($normalizedApproved -join ',')","actual_snapshot=$ActualSnapshotSha256","approved_snapshot=$($State.approved_snapshot_sha256)")
+    return Invoke-AgenticVerificationEngine -VerificationType 'SCOPE_DIFF_VERIFICATION' -State $State -InvocationId $InvocationId -Evidence $evidence -Findings @($findings)
+}
+
+function Invoke-AgenticObservabilityVerification {
+    param($State,[string]$InvocationId,[string[]]$Paths,[string[]]$RequiredDiagnostics=@())
+    $evidence=[Collections.Generic.List[string]]::new();$findings=[Collections.Generic.List[string]]::new()
+    foreach($relative in $Paths){
+        $full=Join-Path $script:AgenticRepoRoot $relative
+        if(-not(Test-Path -LiteralPath $full -PathType Leaf)){$findings.Add("Changed file unavailable for observability inspection: $relative");continue}
+        $content=Read-AgenticTextSafely -Path $full;$evidence.Add("inspected=$relative;sha256=$(Get-AgenticFileSha256 $full)")
+        if($content -match '(?im)\b(?:console\.(?:log|debug)|Write-Host)\s*\([^\r\n]*(?:token|password|secret|authorization|email)'){ $findings.Add("Potential sensitive/debug logging in $relative") }
+        if($content -match '(?is)catch\s*(?:\([^)]*\))?\s*\{\s*\}'){$findings.Add("Swallowed empty catch block in $relative")}
+        foreach($required in $RequiredDiagnostics){if($content -notmatch [regex]::Escape($required)){$findings.Add("Required diagnosability marker absent from ${relative}: $required")}}
+    }
+    if($Paths.Count -eq 0){$findings.Add('No changed files were inspected.')}
+    return Invoke-AgenticVerificationEngine -VerificationType 'OBSERVABILITY_VERIFICATION' -State $State -InvocationId $InvocationId -Evidence @($evidence) -Findings @($findings)
+}
+
 function New-AgenticPreflightResultArtifact {
     param([Parameter(Mandatory = $true)]$Envelope, [Parameter(Mandatory = $true)][string]$BaseBranch, [Parameter(Mandatory = $true)][string]$BaseSha, [Parameter(Mandatory = $true)][string]$InvocationId, [Parameter(Mandatory = $true)][string]$Status, [Parameter(Mandatory = $true)][string[]]$Evidence)
     if ($Status -cnotin @('SATISFIED', 'NOT_SATISFIED', 'BLOCKED')) { throw 'Preflight status inválido.' }
@@ -991,7 +1090,9 @@ function Test-AgenticReadiness {
         if ($record.Count -eq 0 -or [string]$record[0].status -cne 'NOT_APPLICABLE' -or [string]::IsNullOrWhiteSpace([string]$record[0].reason)) { throw "NOT_APPLICABLE sem motivo para '$($skip.name)'." }
     }
     if ([string]$State.tester_status -cne 'PASS' -or [string]$State.security_review_status -cne 'PASS' -or [string]$State.code_review_status -cne 'PASS') { throw 'Tester, Security e Reviewer precisam de PASS independente.' }
-    if ([string]$State.observability_status -cnotin @('PASS','NOT_APPLICABLE') -or [string]$State.requirement_status -cne 'PASS' -or [string]$State.scope_status -cne 'PASS') { throw 'Verificação final de observabilidade, requisito ou scope incompleta.' }
+    Assert-AgenticStateVerification -State $State -Type 'OBSERVABILITY_VERIFICATION'|Out-Null
+    Assert-AgenticStateVerification -State $State -Type 'REQUIREMENT_VERIFICATION'|Out-Null
+    Assert-AgenticStateVerification -State $State -Type 'SCOPE_DIFF_VERIFICATION'|Out-Null
     $snapshot = @(Get-AgenticCommitSnapshot -Paths $functionalPaths)
     $snapshotHash = Get-AgenticStableSnapshotSha256 -Snapshot $snapshot
     if ([string]$State.approved_snapshot_sha256 -cne $snapshotHash) { throw 'Snapshot atual não é o snapshot aprovado.' }
@@ -1247,8 +1348,7 @@ function ConvertFrom-AgenticRoleResult {
     if ($ExpectedRole -eq 'orchestrator') {
         $decision = $result.PSObject.Properties['decision']
         if ($result.status -cne 'PASS' -or $null -eq $decision -or $null -eq $decision.Value) { throw 'Orchestrator precisa retornar somente sua decisão estruturada.' }
-        foreach ($name in @('next_state', 'next_roles', 'correction_routing', 'terminal_outcome', 'rationale', 'evidence')) { if ($null -eq $decision.Value.PSObject.Properties[$name]) { throw "Decision do Orchestrator ausente: $name." } }
-        if ([string]::IsNullOrWhiteSpace([string]$decision.Value.rationale) -or @($decision.Value.evidence).Count -eq 0) { throw 'Decision do Orchestrator requer rationale e evidence.' }
+        Assert-AgenticOrchestratorDecision -Decision $decision.Value -CurrentState ([string]$State.state) | Out-Null
     }
     if ($ExpectedRole -eq 'architect' -and $ExpectedPhase -eq 'PREFLIGHT_ANALYZING') {
         if ($null -eq $result.PSObject.Properties['semantic_status'] -or [string]$result.semantic_status -cnotin @('SATISFIED','NOT_SATISFIED','BLOCKED')) { throw 'Architect preflight precisa de semantic_status válido.' }
@@ -1260,6 +1360,27 @@ function ConvertFrom-AgenticRoleResult {
         if ($null -eq $result.PSObject.Properties['test_actions'] -or $result.test_actions -is [string] -or $result.test_actions -isnot [System.Collections.IEnumerable]) { throw 'Tester precisa solicitar ações de teste limitadas.' }
     }
     return $result
+}
+
+function Assert-AgenticOrchestratorDecision {
+    param([Parameter(Mandatory=$true)]$Decision,[Parameter(Mandatory=$true)][string]$CurrentState)
+    $fields=@('next_state','next_roles','correction_routing','terminal_outcome','rationale','evidence')
+    if($Decision -is [string] -or $null -eq $Decision.PSObject){throw 'Orchestrator decision must be an object.'}
+    $actual=@($Decision.PSObject.Properties.Name)
+    if(@($actual|Where-Object{$_ -cnotin $fields}).Count -gt 0 -or @($fields|Where-Object{$_ -cnotin $actual}).Count -gt 0){throw 'Orchestrator decision fields must exactly match the canonical contract.'}
+    $next=[string]$Decision.next_state
+    if($script:AgenticStates -cnotcontains $next){throw 'Orchestrator decision contains an unknown lifecycle state.'}
+    if($Decision.next_roles -is [string] -or $Decision.next_roles -isnot [System.Collections.IEnumerable]){throw 'Orchestrator next_roles must be a list.'}
+    $roles=@($Decision.next_roles);$allowed=@('architect','implementer','tester','reviewer','security')
+    if(@($roles|Where-Object{$_ -isnot [string] -or [string]$_ -cnotin $allowed}).Count -gt 0 -or @($roles|Sort-Object -Unique).Count -ne $roles.Count){throw 'Orchestrator next_roles contains an invalid or duplicate role.'}
+    if([string]::IsNullOrWhiteSpace([string]$Decision.rationale) -or ([string]$Decision.rationale).Length -gt 2000){throw 'Orchestrator rationale is required and bounded.'}
+    if($Decision.evidence -is [string] -or $Decision.evidence -isnot [System.Collections.IEnumerable] -or @($Decision.evidence).Count -eq 0 -or @($Decision.evidence|Where-Object{$_ -isnot [string] -or [string]::IsNullOrWhiteSpace([string]$_)}).Count -gt 0){throw 'Orchestrator evidence must be a nonempty list of concrete references.'}
+    $correction=[string]$Decision.correction_routing;$terminal=[string]$Decision.terminal_outcome
+    if($next -eq 'CORRECTING') { if($correction -cnotin @('implementer','architect')){throw 'CORRECTING requires an allowed correction_routing.'} }
+    elseif(-not [string]::IsNullOrEmpty($correction)){throw 'correction_routing is allowed only for CORRECTING.'}
+    if($next -in @('ALREADY_SATISFIED','WAITING_HUMAN_MERGE','FAILED','BLOCKED')) { if($terminal -cne $next){throw 'Terminal outcome must match the selected terminal or blocked state.'};if($roles.Count -ne 0){throw 'Terminal decisions cannot dispatch additional roles.'} }
+    elseif(-not [string]::IsNullOrEmpty($terminal)){throw 'terminal_outcome is allowed only for terminal or blocked decisions.'}
+    return $Decision
 }
 
 function Get-AgenticControlPlaneSnapshot {

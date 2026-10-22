@@ -1,6 +1,10 @@
 function Invoke-AgenticWorkflowDecision {
     param($State,[hashtable]$Metadata,[string]$Phase,[string]$Context)
-    if([int]$State.agent_calls -ge [int]$State.max_agent_calls){throw 'Agent invocation hard limit reached.'}
+    if([int]$State.agent_calls -ge [int]$State.max_agent_calls){
+        $State.failure_diagnostic=[pscustomobject]@{category='INVOCATION_LIMIT';message='Agent invocation hard limit reached before Orchestrator decision.';operation='workflow-decision';retryable=$false;evidence=@($Phase)}
+        if(Test-AgenticTransition -From ([string]$State.state) -To 'FAILED'){Set-AgenticSupervisorTransition -State $State -To 'FAILED' -PendingAction 'Agent invocation hard limit reached'|Out-Null;Write-AgenticState $State}
+        throw 'Agent invocation hard limit reached; execution terminated FAILED.'
+    }
     $State.active_agent='orchestrator';$State.execution_id=[guid]::NewGuid().ToString('N');$State.agent_calls++
     Write-AgenticState $State
     $decisionContext = @"
@@ -14,20 +18,19 @@ Select next_state, next_roles, correction_routing, terminal_outcome, rationale a
     Add-AgenticRoleInvocationEvidence -State $State -Invocation $call -Metadata $Metadata
     if($call.ExitCode -ne 0 -or $null -eq $call.Result -or $call.Result.status -ne 'PASS'){throw ('Orchestrator returned no valid workflow decision. '+(ConvertTo-AgenticSanitizedText -Text ([string]$call.Output) -MaximumLength 500))}
     $next=[string]$call.Result.decision.next_state
+    Assert-AgenticOrchestratorDecision -Decision $call.Result.decision -CurrentState ([string]$State.state) | Out-Null
     if(-not (Test-AgenticTransition -From ([string]$State.state) -To $next)){throw "Orchestrator proposed an illegal transition for $Phase."}
-    $allowedRoles=@('orchestrator','architect','implementer','tester','reviewer','security','supervisor')
-    if(@($call.Result.decision.next_roles|Where-Object{[string]$_ -notin $allowedRoles}).Count -gt 0){throw 'Orchestrator proposed an unknown role.'}
-    if($next -eq 'CORRECTING' -and [string]::IsNullOrWhiteSpace([string]$call.Result.decision.correction_routing)){throw 'Correction decision requires explicit correction routing.'}
-    if($next -in @('ALREADY_SATISFIED','WAITING_HUMAN_MERGE','FAILED','BLOCKED') -and [string]::IsNullOrWhiteSpace([string]$call.Result.decision.terminal_outcome)){throw 'Terminal decision requires an explicit terminal outcome.'}
     return $call.Result.decision
 }
 
 function Reset-AgenticDownstreamApprovals {
     param($State)
+    foreach($field in @('observability_verification_path','requirement_verification_path','scope_verification_path')){if($null -eq $State.PSObject.Properties[$field]){$State|Add-Member -NotePropertyName $field -NotePropertyValue $null}}
     $State.tester_status='PENDING';$State.tester_invocation_id=$null
     $State.code_review_status='PENDING';$State.reviewer_invocation_id=$null
     $State.security_review_status='PENDING';$State.security_invocation_id=$null
     $State.observability_status='PENDING';$State.requirement_status='PENDING';$State.scope_status='PENDING'
+    $State.observability_verification_path=$null;$State.requirement_verification_path=$null;$State.scope_verification_path=$null
     $State.approved_snapshot_sha256=$null;$State.gate_results=@();$State.quality_gate_snapshot=@();$State.brokered_test_results=@()
     return $State
 }
@@ -173,6 +176,54 @@ Invoke-CodexAgentRole -State `$stateValue -GoalPath `$goalPath -Role `$roleName 
     finally { foreach($entry in $jobs){Remove-Job -Job $entry.job -Force -ErrorAction SilentlyContinue} }
 }
 
+function Invoke-AgenticWorkflowDispatcher {
+    param([Parameter(Mandatory=$true)]$State,[Parameter(Mandatory=$true)]$Decision,[Parameter(Mandatory=$true)][scriptblock]$RoleInvoker,[Parameter(Mandatory=$true)][scriptblock]$ParallelInvoker,[scriptblock]$VerificationInvoker,[string]$Phase)
+    Assert-AgenticOrchestratorDecision -Decision $Decision -CurrentState ([string]$State.state)|Out-Null
+    if([string]$State.state -cne [string]$Decision.next_state -and -not(Test-AgenticTransition -From ([string]$State.state) -To ([string]$Decision.next_state))){throw "Dispatcher rejected illegal transition $($State.state) -> $($Decision.next_state)."}
+    if([string]$Decision.next_state -in @('ALREADY_SATISFIED','WAITING_HUMAN_MERGE','FAILED','BLOCKED')){return @()}
+    if($null -ne $State.PSObject.Properties['agent_calls'] -and [int]$State.agent_calls -gt [int]$State.max_agent_calls){
+        $State.failure_diagnostic=[pscustomobject]@{category='INVOCATION_LIMIT';message='Agent invocation hard limit reached before role dispatch.';operation='workflow-dispatch';retryable=$false;evidence=@($Decision.evidence)}
+        if(Test-AgenticTransition -From ([string]$State.state) -To 'FAILED'){Set-AgenticSupervisorTransition -State $State -To 'FAILED' -PendingAction 'Agent invocation hard limit reached'|Out-Null;Write-AgenticState $State}
+        throw 'Agent invocation hard limit reached; execution terminated FAILED.'
+    }
+    if([string]$Decision.next_state -eq 'CORRECTING'){
+        $route=[string]$Decision.correction_routing
+        if(@($Decision.next_roles).Count -ne 1 -or [string]$Decision.next_roles[0] -cne $route){throw 'Correction routing must select the sole dispatched correction role.'}
+        return @(& $RoleInvoker $route $Phase)
+    }
+    $roles=@($Decision.next_roles)
+    if($roles.Count -eq 2 -and @($roles|Where-Object{$_ -in @('reviewer','security')}).Count -eq 2){return @(& $ParallelInvoker $roles)}
+    if($roles.Count -gt 1){throw 'Dispatcher supports only the independent reviewer/security pair as parallel roles.'}
+    if($roles.Count -eq 1){return @(& $RoleInvoker ([string]$roles[0]) $Phase)}
+    if([string]$Decision.next_state -in @('OBSERVABILITY_VERIFICATION','REQUIREMENT_VERIFICATION','SCOPE_DIFF_VERIFICATION')){
+        if($null -eq $VerificationInvoker){throw 'Verification decision has no verification executor.'}
+        return @(& $VerificationInvoker ([string]$Decision.next_state))
+    }
+    throw 'Nonterminal Orchestrator decision did not authorize a role or verification action.'
+}
+
+function Complete-AgenticAutonomousCorrection {
+    param($State,[hashtable]$Metadata,$Decision,[string]$Failure)
+    if([string]$Decision.next_state -cne 'CORRECTING' -or [string]$Decision.correction_routing -cne 'implementer' -or @($Decision.next_roles).Count -ne 1 -or [string]$Decision.next_roles[0] -cne 'implementer'){throw 'Correction decision must route the bounded functional correction to Implementer.'}
+    Set-AgenticSupervisorTransition -State $State -To 'CORRECTING' -PendingAction $Failure|Out-Null
+    Reset-AgenticDownstreamApprovals -State $State|Out-Null
+    $State.iteration++
+    if([int]$State.iteration -gt [int]$State.max_iterations){
+        $State.failure_diagnostic=[pscustomobject]@{category='CORRECTION_LIMIT';message='Correction iteration hard limit reached.';operation='autonomous-correction';retryable=$false;evidence=@($Failure)}
+        Set-AgenticSupervisorTransition -State $State -To 'FAILED' -PendingAction 'Bounded correction limit reached'|Out-Null;Write-AgenticState $State;return $null
+    }
+    if([int]$State.agent_calls -ge [int]$State.max_agent_calls){
+        $State.failure_diagnostic=[pscustomobject]@{category='INVOCATION_LIMIT';message='Agent invocation hard limit reached during autonomous correction.';operation='autonomous-correction';retryable=$false;evidence=@($Failure)}
+        Set-AgenticSupervisorTransition -State $State -To 'FAILED' -PendingAction 'Bounded invocation limit reached'|Out-Null;Write-AgenticState $State;return $null
+    }
+    Write-AgenticState $State
+    $next=Invoke-AgenticWorkflowDecision -State $State -Metadata $Metadata -Phase 'CORRECTING' -Context "Dispatch implementer correction from validated finding: $Failure. Prior downstream snapshot evidence was invalidated."
+    if([string]$next.next_state -cne 'IMPLEMENTING' -or @($next.next_roles).Count -ne 1 -or [string]$next.next_roles[0] -cne 'implementer'){throw 'Orchestrator did not authorize the bounded Implementer correction action.'}
+    Set-AgenticSupervisorTransition -State $State -To 'IMPLEMENTING' -PendingAction 'Autonomous correction continues within the current execution'|Out-Null
+    Write-AgenticState $State
+    return $next
+}
+
 function Invoke-AgenticVNextLifecycle {
     param([Parameter(Mandatory=$true)][string]$RequestId, [switch]$Resume)
     if ($RequestId -cnotmatch '^req-[0-9a-f]{32}$') { throw 'Request ID inválido.' }
@@ -263,9 +314,6 @@ function Invoke-AgenticVNextLifecycle {
     $state.base_sha = $baseSha
     $engine = Resolve-AgenticPowerShellEngine
     $state.supervisor_runtime = [pscustomobject]@{ edition=$engine.Edition; version=$engine.Version; path=[IO.Path]::GetFileName($engine.Path) }
-    Set-AgenticSupervisorTransition -State $state -To 'PREFLIGHT_ANALYZING' -PendingAction 'Architect semantic preflight against captured remote tree' | Out-Null
-    Write-AgenticState $state
-
     $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ('gerit-agentic-preflight-' + [guid]::NewGuid().ToString('N'))
     $archivePath = "$temporaryRoot.tar"
     [IO.Directory]::CreateDirectory($temporaryRoot) | Out-Null
@@ -279,12 +327,15 @@ function Invoke-AgenticVNextLifecycle {
         $treeLines = @(Invoke-AgenticGit -GitArguments @('rev-parse',"$baseSha^{tree}"))
         $baseSnapshot = Get-AgenticTextSha256 -Text ([string]$treeLines[0])
         $state.execution_snapshot_sha256 = $baseSnapshot
+        $metadata = @{ ID=$RequestId; Title=([string]$envelope.user_requirement_verbatim.Substring(0,[Math]::Min(80,$envelope.user_requirement_verbatim.Length))); 'Base branch'=$base; 'Branch prefix'=[string]$envelope.request_type_hint; 'Allowed files'='none' }
+        $preflightDispatchDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'PREFLIGHT_PREPARING' -Context "Trusted remote base snapshot is prepared: base=$base; base_sha=$baseSha; snapshot=$baseSnapshot. Dispatch Architect semantic preflight."
+        if([string]$preflightDispatchDecision.next_state -cne 'PREFLIGHT_ANALYZING' -or @($preflightDispatchDecision.next_roles).Count -ne 1 -or [string]$preflightDispatchDecision.next_roles[0] -cne 'architect'){throw 'Orchestrator did not authorize Architect preflight dispatch.'}
+        Set-AgenticSupervisorTransition -State $state -To ([string]$preflightDispatchDecision.next_state) -PendingAction 'Dispatch Architect semantic preflight against captured base'|Out-Null
         $state.execution_id = [guid]::NewGuid().ToString('N')
         $state.agent_calls++; $state.active_agent='architect'
         Write-AgenticState $state
         $context = "Mode: preflight. Assess this exact trusted base snapshot semantically. Request Envelope file: $requestRelative. User requirement verbatim: $($envelope.user_requirement_verbatim). Envelope SHA256: $($state.request_envelope_sha256). Base branch: $base. Base SHA: $baseSha. Return semantic_status SATISFIED, NOT_SATISFIED, or BLOCKED and concrete evidence. Do not create a Specification in this mode."
-        $metadata = @{ ID=$RequestId; Title=([string]$envelope.user_requirement_verbatim.Substring(0,[Math]::Min(80,$envelope.user_requirement_verbatim.Length))); 'Base branch'=$base; 'Branch prefix'=[string]$envelope.request_type_hint; 'Allowed files'='none' }
-        $architect = Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role 'architect' -Phase 'PREFLIGHT_ANALYZING' -InvocationId $state.execution_id -Mode 'preflight' -ExecutionRoot $temporaryRoot -AdditionalContext $context
+        $architect=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $preflightDispatchDecision -Phase 'PREFLIGHT_ANALYZING' -RoleInvoker {param($role,$dispatchPhase) Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role $role -Phase $dispatchPhase -InvocationId $state.execution_id -Mode 'preflight' -ExecutionRoot $temporaryRoot -AdditionalContext $context} -ParallelInvoker {param($roles) throw 'Architect preflight cannot be parallel-dispatched.'})[0]
         Add-AgenticRoleInvocationEvidence -State $state -Invocation $architect -Metadata $metadata
         if ($architect.ExitCode -ne 0 -or $null -eq $architect.Result -or $architect.Result.status -ne 'PASS') { throw ('Architect preflight não produziu resultado válido. '+(ConvertTo-AgenticSanitizedText -Text ([string]$architect.Output) -MaximumLength 500)) }
         $semantic = [string]$architect.Result.semantic_status
@@ -324,7 +375,7 @@ function Invoke-AgenticVNextLifecycle {
         $state.execution_id=[guid]::NewGuid().ToString('N'); $state.execution_snapshot_sha256=Get-AgenticTextSha256 -Text $baseSha
         $state.active_agent='architect'; $state.agent_calls++; Write-AgenticState $state
         $archContext="Mode: specification. Read the full repository patterns and Request Envelope $requestRelative, plus Preflight Result $preflightRelative. Return the complete Specification payload defined in docs/agentic/4-execution-specification.md. No functional edits."
-        $specInvocation=Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role 'architect' -Phase 'ARCHITECTURE' -InvocationId $state.execution_id -Mode 'specification' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext $archContext
+        $specInvocation=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $architectureDecision -Phase 'ARCHITECTURE' -RoleInvoker {param($role,$dispatchPhase) Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role $role -Phase $dispatchPhase -InvocationId $state.execution_id -Mode 'specification' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext $archContext} -ParallelInvoker {param($roles) throw 'Architect specification cannot be parallel-dispatched.'})[0]
         Add-AgenticRoleInvocationEvidence -State $state -Invocation $specInvocation -Metadata $metadata
         if($specInvocation.ExitCode -ne 0 -or $null -eq $specInvocation.Result -or $specInvocation.Result.status -ne 'PASS'){throw ('Architect specification result inválido. '+(ConvertTo-AgenticSanitizedText -Text ([string]$specInvocation.Output) -MaximumLength 500))}
         $payload=$specInvocation.Result.payload
@@ -356,11 +407,13 @@ function Invoke-AgenticVNextLifecycle {
         Set-AgenticSupervisorTransition -State $state -To ([string]$decision.next_state) -PendingAction 'DOR validated; implementation authorized' | Out-Null
     }
 
+        if([int]$state.iteration -eq 0){$state.iteration=1}
+        while($true){
         $state.active_agent='implementer';$state.execution_id=[guid]::NewGuid().ToString('N')
         $initial=@(Get-AgenticCommitSnapshot -Paths $scopePaths);$state.execution_snapshot_sha256=Get-AgenticStableSnapshotSha256 -Snapshot $initial
         $state.agent_calls++;Write-AgenticState $state
         Add-AgenticJournalEvent -Goal $RequestId -State 'IMPLEMENTING' -Agent 'supervisor' -Controller 'supervisor' -Actor 'supervisor' -DelegatedAgent 'implementer' -Action 'Invoke implementer against validated Specification and bounded scope' -Gate $state.execution_snapshot_sha256 -Result 'PENDING'
-        $implementer=Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role 'implementer' -Phase 'IMPLEMENTING' -InvocationId $state.execution_id -Mode 'implementation' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext "Read the complete Specification at $specRelative and implement only its concrete scope paths: $($scopePaths -join ', '). Active correction findings: $($state.last_failure)"
+        $implementer=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $decision -Phase 'IMPLEMENTING' -RoleInvoker {param($role,$dispatchPhase) Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role $role -Phase $dispatchPhase -InvocationId $state.execution_id -Mode 'implementation' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext "Read the complete Specification at $specRelative and implement only its concrete scope paths: $($scopePaths -join ', '). Active correction findings: $($state.last_failure)"} -ParallelInvoker {param($roles) throw 'Parallel dispatch is not valid for this decision.'})[0]
         Add-AgenticRoleInvocationEvidence -State $state -Invocation $implementer -Metadata $metadata
         if($implementer.ExitCode -ne 0 -or $null -eq $implementer.Result -or $implementer.Result.status -ne 'PASS'){throw ('Implementer did not return a validated PASS artifact. '+(ConvertTo-AgenticSanitizedText -Text ([string]$implementer.Output) -MaximumLength 500))}
         $actual=@(Get-AgenticCommitPaths -ChangedPaths @(Get-AgenticWorkingTreePaths))
@@ -377,7 +430,7 @@ function Invoke-AgenticVNextLifecycle {
         $functional=@(Get-AgenticCommitPaths -ChangedPaths @(Get-AgenticWorkingTreePaths));$snapshot=@(Get-AgenticCommitSnapshot -Paths $functional)
         $state.execution_snapshot_sha256=Get-AgenticStableSnapshotSha256 -Snapshot $snapshot;$state.approved_snapshot_sha256=$state.execution_snapshot_sha256
         $state.agent_calls++;Write-AgenticState $state
-        $qa=Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role 'tester' -Phase 'TESTING' -InvocationId $state.execution_id -Mode 'qa-plan' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext "Read the full Specification $specRelative, derive AC/DOD test plan, and request required bounded actions only."
+        $qa=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $testingDecision -Phase 'TESTING' -RoleInvoker {param($role,$dispatchPhase) Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role $role -Phase $dispatchPhase -InvocationId $state.execution_id -Mode 'qa-plan' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext "Read the full Specification $specRelative, derive AC/DOD test plan, and request required bounded actions only."} -ParallelInvoker {param($roles) throw 'Parallel dispatch is not valid for this decision.'})[0]
         Add-AgenticRoleInvocationEvidence -State $state -Invocation $qa -Metadata $metadata
         if($qa.ExitCode -ne 0 -or $null -eq $qa.Result -or $qa.Result.status -ne 'PASS'){throw ('Tester QA plan failed or is blocked. '+(ConvertTo-AgenticSanitizedText -Text ([string]$qa.Output) -MaximumLength 500))}
         $broker=@()
@@ -387,19 +440,19 @@ function Invoke-AgenticVNextLifecycle {
         $state.brokered_test_results=@($broker);$evalId=[guid]::NewGuid().ToString('N');$state.execution_id=$evalId;$state.agent_calls++
         Write-AgenticState $state
         $evalContext="Evaluate each acceptance criterion and DOD against brokered host evidence. Evidence JSON: $(@($broker|ConvertTo-Json -Depth 10 -Compress) -join ''). Return PASS/FAIL/BLOCKED and an empty test_actions array."
-        $evaluation=Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role 'tester' -Phase 'TESTING_EVALUATE' -InvocationId $evalId -Mode 'qa-evaluation' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext $evalContext
+        $evaluation=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $testingDecision -Phase 'TESTING_EVALUATE' -RoleInvoker {param($role,$dispatchPhase) Invoke-CodexAgentRole -State $state -GoalPath $requestPath -Role $role -Phase $dispatchPhase -InvocationId $evalId -Mode 'qa-evaluation' -ExecutionRoot $script:AgenticRepoRoot -AdditionalContext $evalContext} -ParallelInvoker {param($roles) throw 'Parallel dispatch is not valid for this decision.'})[0]
         Add-AgenticRoleInvocationEvidence -State $state -Invocation $evaluation -Metadata $metadata
         if($evaluation.ExitCode -ne 0 -or $null -eq $evaluation.Result){throw ('Tester evaluation artifact invalid. '+(ConvertTo-AgenticSanitizedText -Text ([string]$evaluation.Output) -MaximumLength 500))}
         if(@($evaluation.Result.test_actions).Count -gt 0){throw 'Tester evaluation cannot request additional actions after evidence evaluation.'}
         if($evaluation.Result.status -eq 'BLOCKED'){$state.failure_diagnostic=$evaluation.Result.failure;$blockedDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'TESTING' -Context "Tester evidence requires an unavailable external capability: $($evaluation.Result.failure.message).";Set-AgenticSupervisorTransition -State $state -To ([string]$blockedDecision.next_state) -PendingAction ([string]$evaluation.Result.failure.message)|Out-Null;Write-AgenticState $state;return $state}
-        if($evaluation.Result.status -eq 'FAIL'){$state.last_failure=[string]$evaluation.Result.summary;$correctionDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'TESTING' -Context "Tester found functional acceptance failures. Findings: $($evaluation.Result.summary). Invalidate old snapshot approvals.";Set-AgenticSupervisorTransition -State $state -To ([string]$correctionDecision.next_state) -PendingAction 'Tester reported functional findings; invalidate downstream results'|Out-Null;Reset-AgenticDownstreamApprovals -State $state|Out-Null;Write-AgenticState $state;return $state}
+        if($evaluation.Result.status -eq 'FAIL'){$state.last_failure=[string]$evaluation.Result.summary;$correctionDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'TESTING' -Context "Tester found functional acceptance failures. Findings: $($evaluation.Result.summary). Invalidate old snapshot approvals.";$decision=Complete-AgenticAutonomousCorrection -State $state -Metadata $metadata -Decision $correctionDecision -Failure $state.last_failure;if($null -eq $decision){return $state};continue}
         $state.tester_status='PASS';$state.tester_invocation_id=$evalId;$state.active_agent=$null
         Set-AgenticSpecificationProjection -State $state -Section 'Tester Result' -Value ([pscustomobject]@{status='PASS';summary=$evaluation.Result.summary;artifact=$evaluation.ArtifactPath;brokered_actions=$broker;snapshot_sha256=$state.approved_snapshot_sha256})|Out-Null
         $decision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'TESTING' -Context 'Tester PASS artifact is present and bound to approved snapshot.'
         Set-AgenticSupervisorTransition -State $state -To ([string]$decision.next_state) -PendingAction 'Tester PASS; start independent Reviewer and Security'|Out-Null
         Write-AgenticState $state
         $state.execution_snapshot_sha256=$state.approved_snapshot_sha256
-        $parallel=Invoke-AgenticParallelReviews -State $state -RequestPath $requestPath -SnapshotSha $state.approved_snapshot_sha256
+        $parallel=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $decision -Phase 'REVIEWING' -RoleInvoker {param($role,$dispatchPhase) throw 'Reviewer and Security must be dispatched together.'} -ParallelInvoker {param($roles) Invoke-AgenticParallelReviews -State $state -RequestPath $requestPath -SnapshotSha $state.approved_snapshot_sha256})
         foreach($review in $parallel){
             if($review.ExitCode -ne 0 -or $null -eq $review.Result){throw ("Independent $($review.Role) result invalid. "+(ConvertTo-AgenticSanitizedText -Text ([string]$review.Output) -MaximumLength 500))}
             Add-AgenticRoleInvocationEvidence -State $state -Invocation $review -Metadata $metadata
@@ -413,9 +466,7 @@ function Invoke-AgenticVNextLifecycle {
         if($reviewer.Result.status -eq 'FAIL' -or $security.Result.status -eq 'FAIL'){
             $state.last_failure='Reviewer or Security reported correction findings.'
             $correctionReviewDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'REVIEWING' -Context "Independent review findings require a full correction cycle. reviewer=$($reviewer.Result.status); security=$($security.Result.status)."
-            Set-AgenticSupervisorTransition -State $state -To ([string]$correctionReviewDecision.next_state) -PendingAction 'Reviewer/Security finding invalidates all downstream approvals'|Out-Null
-            Reset-AgenticDownstreamApprovals -State $state|Out-Null
-            Write-AgenticState $state;return $state
+            $decision=Complete-AgenticAutonomousCorrection -State $state -Metadata $metadata -Decision $correctionReviewDecision -Failure $state.last_failure;if($null -eq $decision){return $state};continue
         }
         $state.security_review_status='PASS';$state.code_review_status='PASS'
         Set-AgenticSpecificationProjection -State $state -Section 'Reviewer Result' -Value ([pscustomobject]@{status='PASS';artifact=$reviewer.ArtifactPath;snapshot_sha256=$state.approved_snapshot_sha256})|Out-Null
@@ -428,22 +479,40 @@ function Invoke-AgenticVNextLifecycle {
         Set-AgenticSpecificationProjection -State $state -Section 'Quality Gates' -Value @($state.gate_results)|Out-Null
         $current=@(Get-AgenticCommitSnapshot -Paths $functional);$currentHash=Get-AgenticStableSnapshotSha256 -Snapshot $current
         if($currentHash -cne [string]$state.approved_snapshot_sha256){throw 'Snapshot changed after Tester/Review approval; downstream approvals stale.'}
-        Set-AgenticSupervisorTransition -State $state -To 'OBSERVABILITY_VERIFICATION' -PendingAction 'Verify observability risks and sensitive logging'|Out-Null
-        $obs=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'OBSERVABILITY_VERIFICATION' -Context "Review changed files $($functional -join ', ') for swallowed errors, unsafe logging, secrets/PII, debug noise and diagnosability; return evidence."
-        $state.observability_status='PASS';Set-AgenticSpecificationProjection -State $state -Section 'Observability Verification' -Value $obs|Out-Null;Set-AgenticSupervisorTransition -State $state -To ([string]$obs.next_state) -PendingAction 'Observability verification passed'|Out-Null
-        $req=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'REQUIREMENT_VERIFICATION' -Context "Compare final implementation to immutable Request Envelope $requestRelative and Specification AC/DOD. Detect missing/invented/partial behavior."
-        $state.requirement_status='PASS';Set-AgenticSpecificationProjection -State $state -Section 'Requirement Verification' -Value $req|Out-Null;Set-AgenticSupervisorTransition -State $state -To ([string]$req.next_state) -PendingAction 'Requirement verification passed'|Out-Null
+        $obsDispatchDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'QUALITY_GATES' -Context 'Required native gates passed for the approved snapshot; select the next verification action.'
+        if([string]$obsDispatchDecision.next_state -cne 'OBSERVABILITY_VERIFICATION'){throw 'Orchestrator did not select observability verification after required gates.'}
+        Set-AgenticSupervisorTransition -State $state -To ([string]$obsDispatchDecision.next_state) -PendingAction 'Dispatch observability verification'|Out-Null
+        $obsId=[guid]::NewGuid().ToString('N');$obs=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $obsDispatchDecision -Phase 'OBSERVABILITY_VERIFICATION' -RoleInvoker {param($role,$dispatchPhase) throw 'Verification action cannot dispatch a specialized role.'} -ParallelInvoker {param($roles) throw 'Verification action cannot dispatch parallel roles.'} -VerificationInvoker {param($type) Invoke-AgenticObservabilityVerification -State $state -InvocationId $obsId -Paths $functional})[0]
+        $state.observability_status=[string]$obs.artifact.status;$state.observability_verification_path=$obs.path
+        Set-AgenticSpecificationProjection -State $state -Section 'Observability Verification' -Value $obs.artifact|Out-Null
+        $obsDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'OBSERVABILITY_VERIFICATION' -Context "Validated verification artifact $($obs.path): status=$($obs.artifact.status); findings=$(@($obs.artifact.findings)-join '; ')."
+        if($obs.artifact.status -ne 'PASS'){$state.last_failure="Observability verification: $(@($obs.artifact.findings)-join '; ')";$decision=Complete-AgenticAutonomousCorrection -State $state -Metadata $metadata -Decision $obsDecision -Failure $state.last_failure;if($null -eq $decision){return $state};continue}
+        $reqDispatchDecision=$obsDecision
+        if([string]$reqDispatchDecision.next_state -cne 'REQUIREMENT_VERIFICATION'){throw 'Orchestrator did not select requirement verification after observability PASS.'}
+        Set-AgenticSupervisorTransition -State $state -To ([string]$reqDispatchDecision.next_state) -PendingAction 'Dispatch requirement verification'|Out-Null
+        $reqId=[guid]::NewGuid().ToString('N');$acceptance=@($payload.acceptance_criteria|ForEach-Object{[string]$_});$dodCriteria=@($payload.dod|ForEach-Object{[string]$_})
+        $requirementEvidence=@($evaluation.Result.evidence|ForEach-Object{if($_ -isnot [string]){$_}elseif([regex]::Match([string]$_,'^(?<id>(?:AC|DOD)-[A-Za-z0-9._-]+)\s*[:=]\s*PASS\s*[-:]\s*(?<proof>.+)$').Success){$match=[regex]::Match([string]$_,'^(?<id>(?:AC|DOD)-[A-Za-z0-9._-]+)\s*[:=]\s*PASS\s*[-:]\s*(?<proof>.+)$');[pscustomobject]@{criterion_id=$match.Groups['id'].Value;status='PASS';evidence=$match.Groups['proof'].Value}}})
+        $req=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $reqDispatchDecision -Phase 'REQUIREMENT_VERIFICATION' -RoleInvoker {param($role,$dispatchPhase) throw 'Verification action cannot dispatch a specialized role.'} -ParallelInvoker {param($roles) throw 'Verification action cannot dispatch parallel roles.'} -VerificationInvoker {param($type) Invoke-AgenticRequirementVerification -State $state -InvocationId $reqId -AcceptanceCriteria $acceptance -DodCriteria $dodCriteria -TesterEvidence $requirementEvidence -Envelope $envelope})[0]
+        $state.requirement_status=[string]$req.artifact.status;$state.requirement_verification_path=$req.path
+        Set-AgenticSpecificationProjection -State $state -Section 'Requirement Verification' -Value $req.artifact|Out-Null
+        $reqDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'REQUIREMENT_VERIFICATION' -Context "Validated verification artifact $($req.path): status=$($req.artifact.status); findings=$(@($req.artifact.findings)-join '; ')."
+        if($req.artifact.status -ne 'PASS'){$state.last_failure="Requirement verification: $(@($req.artifact.findings)-join '; ')";$decision=Complete-AgenticAutonomousCorrection -State $state -Metadata $metadata -Decision $reqDecision -Failure $state.last_failure;if($null -eq $decision){return $state};continue}
         $scopeNow=@(Get-AgenticCommitPaths -ChangedPaths @(Get-AgenticWorkingTreePaths))
-        if(@($scopeNow|Where-Object{$_ -notin $scopePaths}).Count -gt 0){throw 'Scope verification found unapproved files.'}
         $finalSnapshot=@(Get-AgenticCommitSnapshot -Paths $scopeNow);$finalHash=Get-AgenticStableSnapshotSha256 -Snapshot $finalSnapshot
-        if($finalHash -cne [string]$state.approved_snapshot_sha256){throw 'Scope/diff snapshot differs from the approved Tester/Review snapshot.'}
-        $scopeDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'SCOPE_DIFF_VERIFICATION' -Context 'Actual changed paths equal Specification scope and approved snapshot; no staged/unstaged divergence.'
-        $state.scope_status='PASS';Set-AgenticSpecificationProjection -State $state -Section 'Scope Verification' -Value ([pscustomobject]@{status='PASS';paths=$scopeNow;snapshot_sha256=$finalHash;decision=$scopeDecision})|Out-Null
+        $scopeId=[guid]::NewGuid().ToString('N');$scopeDispatchDecision=$reqDecision
+        if([string]$scopeDispatchDecision.next_state -cne 'SCOPE_DIFF_VERIFICATION'){throw 'Orchestrator did not select scope/diff verification after requirement PASS.'}
+        Set-AgenticSupervisorTransition -State $state -To ([string]$scopeDispatchDecision.next_state) -PendingAction 'Dispatch scope/diff verification'|Out-Null
+        $scopeResult=@(Invoke-AgenticWorkflowDispatcher -State $state -Decision $scopeDispatchDecision -Phase 'SCOPE_DIFF_VERIFICATION' -RoleInvoker {param($role,$dispatchPhase) throw 'Verification action cannot dispatch a specialized role.'} -ParallelInvoker {param($roles) throw 'Verification action cannot dispatch parallel roles.'} -VerificationInvoker {param($type) Invoke-AgenticScopeVerification -State $state -InvocationId $scopeId -ActualPaths $scopeNow -ApprovedPaths $scopePaths -ActualSnapshotSha256 $finalHash})[0]
+        $scopeDecision=Invoke-AgenticWorkflowDecision -State $state -Metadata $metadata -Phase 'SCOPE_DIFF_VERIFICATION' -Context "Validated verification artifact $($scopeResult.path): status=$($scopeResult.artifact.status); findings=$(@($scopeResult.artifact.findings)-join '; ')."
+        $state.scope_status=[string]$scopeResult.artifact.status;$state.scope_verification_path=$scopeResult.path
+        Set-AgenticSpecificationProjection -State $state -Section 'Scope Verification' -Value $scopeResult.artifact|Out-Null
+        if($scopeResult.artifact.status -ne 'PASS'){$state.last_failure="Scope/diff verification: $(@($scopeResult.artifact.findings)-join '; ')";$decision=Complete-AgenticAutonomousCorrection -State $state -Metadata $metadata -Decision $scopeDecision -Failure $state.last_failure;if($null -eq $decision){return $state};continue}
         Set-AgenticSupervisorTransition -State $state -To ([string]$scopeDecision.next_state) -PendingAction 'All vNext readiness evidence validated'|Out-Null
         Set-AgenticSpecificationProjection -State $state -Section 'Final Status' -Value ([pscustomobject]@{status='READY_TO_COMMIT';snapshot_sha256=$finalHash})|Out-Null
         Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch $state.branch -ChangedPaths @(Get-AgenticWorkingTreePaths)|Out-Null
         $state.active_agent=$null;Write-AgenticState $state
         return (Invoke-AgenticVNextFinalization -State $state -Metadata $metadata)
+        }
     }
     finally {
         if (-not [string]::IsNullOrWhiteSpace([string]$archivePath) -and (Test-Path -LiteralPath $archivePath)) { Remove-Item -LiteralPath $archivePath -Force }

@@ -1,19 +1,19 @@
-# Contrato de uma invocation agentic
+# Agentic vNext role invocation contract
 
-O supervisor PowerShell invoca uma única role Codex por processo e informa `role`, `goal_id`, `invocation_id`, `phase` e snapshot. A resposta é evidência daquela invocation apenas; não é uma transição nem uma aprovação oficial.
+The trusted Supervisor invokes one isolated role process and supplies `request_id`, `goal_id`, `role`, `mode`, `invocation_id`, `phase`, branch/base provenance, Request Envelope and Specification references, and `snapshot_sha256`.
 
-Retorne somente um objeto JSON válido, sem Markdown fences ou texto externo:
+Return one JSON object only:
 
 ```json
 {
   "schema_version": 1,
-  "goal_id": "<id informado pelo supervisor>",
-  "role": "<role informada pelo supervisor>",
-  "invocation_id": "<id informado pelo supervisor>",
-  "phase": "<fase informada pelo supervisor>",
-  "snapshot_sha256": "<hash informado pelo supervisor>",
+  "goal_id": "<provided>",
+  "role": "<provided>",
+  "invocation_id": "<provided>",
+  "phase": "<provided>",
+  "snapshot_sha256": "<provided>",
   "status": "PASS|FAIL|BLOCKED",
-  "summary": "<resumo curto e sanitizado>",
+  "summary": "sanitized concise result",
   "findings": [],
   "evidence": [],
   "failure": null,
@@ -21,10 +21,8 @@ Retorne somente um objeto JSON válido, sem Markdown fences ou texto externo:
 }
 ```
 
-Todos os campos são obrigatórios. `snapshot_sha256` deve ser copiado exatamente do contexto enviado pelo supervisor. Para `FAIL` ou `BLOCKED`, `failure` deve conter `category`, `message`, `operation` e boolean `retryable`; para `PASS`, use `null`. `files_changed` enumera cada arquivo funcional realmente alterado pelo implementer e é sempre vazio nas roles read-only. Findings/evidence devem ser específicos e não conter segredos ou PII.
+All fields are required. `failure` is required for FAIL/BLOCKED and null for PASS. Read-only roles always return empty `files_changed`. Architect preflight adds `semantic_status: SATISFIED|NOT_SATISFIED|BLOCKED`; Architect specification adds `payload`; Orchestrator adds `decision: {next_state,rationale,evidence}`; Tester may add bounded `test_actions` with action ID, approved type/identifier, purpose and expected evidence. No extra fields, secrets, or personal data.
 
-O supervisor valida o JSON, role, goal, fase, invocation e snapshot; calcula sozinho a próxima fase; grava state/journal; conta invocações; e registra command fingerprint, exit code e artifact sanitizado por role. Cada role é chamada em um processo Codex independente. Não declare que outra role executou ou passou, e não inclua campos de agregação de resultados de outras roles.
+The Orchestrator decides workflow transitions but never fabricates role evidence. The Supervisor validates transition legality and owns Git, native execution, state/journal, immutable artifacts, and the physical Specification writer. Architect alone determines semantic satisfaction. Implementer alone edits approved functional files. Tester owns QA and requests only bounded broker actions. Reviewer and Security are independent, read-only, and share one snapshot. A functional correction invalidates every downstream approval.
 
-O supervisor PowerShell executado pelo operador no host é o único dono do state oficial, quality gates nativos, reviews finais e transições. O tester analisa a evidência dos gates executados pelo host e não roda nem aprova npm/lint/typecheck/build. Security e reviewer são invocados separadamente, read-only. O Codex nunca escreve state/journal/gates oficiais e nunca produz `FINAL_STATE`.
-
-Esses comandos Git mutáveis são exclusivos do supervisor: não execute `git fetch`, `git add`, `git commit`, `git push`, `git checkout`, `git switch`, alterações de refs, `gh pr create`, criação de PR, merge, deploy ou operação de produção. `workspace-write` só se aplica à invocation do implementer; todas as outras roles usam sandbox read-only. O goal bootstrap canônico é imutável. `agentic/state/**`, `agentic/journal/**` e `agentic/plans/**` são artifacts locais protegidos pelo supervisor.
+Roles must not mutate Git, state, journal, canonical Specification, or run privileged host commands. No role merges or deploys.

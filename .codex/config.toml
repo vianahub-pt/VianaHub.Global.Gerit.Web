@@ -9,3 +9,11 @@ model = "gpt-6-luna"
 url = "http://127.0.0.1:49374/mcp"
 enabled = true
 default_tools_approval_mode = "approve"
+
+[mcp_servers.agentic-supervisor]
+command = "node"
+args = ["scripts/agentic-supervisor-mcp.js"]
+cwd = "."
+enabled = true
+default_tools_approval_mode = "approve"
+enabled_tools = ["start_request", "resume_request", "get_status"]

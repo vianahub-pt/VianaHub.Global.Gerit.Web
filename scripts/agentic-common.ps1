@@ -6,14 +6,16 @@ $script:AgenticStatePath = Join-Path $script:AgenticRepoRoot "agentic/state/loop
 $script:AgenticJournalPath = Join-Path $script:AgenticRepoRoot "agentic/journal/current.md"
 $script:AgenticFixturePlanRoot = $null
 $script:AgenticLastNativeExitCode = $null
-$script:AgenticBootstrapGoalSha256 = $null
 $script:AgenticLastDiagnostic = $null
 $script:AgenticLastErrorRecord = $null
 $script:AgenticFixtureArtifactPaths = @()
 $script:AgenticStates = @(
-    "IDLE", "DISCOVERY", "PLANNING", "IMPLEMENTING", "TESTING", "SECURITY_REVIEW",
-    "CODE_REVIEW", "CORRECTING", "READY_TO_COMMIT", "READY_TO_PR", "WAITING_FOR_QUOTA",
-    "RESUMING", "WAITING_HUMAN_MERGE", "FAILED"
+    "IDLE", "REQUEST_ACCEPTED", "PREFLIGHT_PREPARING", "PREFLIGHT_ANALYZING",
+    "ALREADY_SATISFIED", "BRANCH_PREPARED", "ARCHITECTURE", "DOR_VALIDATION",
+    "IMPLEMENTING", "TESTING", "REVIEWING", "CORRECTING", "QUALITY_GATES",
+    "OBSERVABILITY_VERIFICATION", "REQUIREMENT_VERIFICATION", "SCOPE_DIFF_VERIFICATION",
+    "READY_TO_COMMIT", "READY_TO_PR", "WAITING_FOR_QUOTA", "BLOCKED", "RESUMING",
+    "WAITING_HUMAN_MERGE", "FAILED"
 )
 
 function Invoke-AgenticNativeProcess {
@@ -38,7 +40,8 @@ function Invoke-AgenticNativeProcess {
         else {
             $output = @(& $commandPath @Arguments 2>$null)
         }
-        $exitCode = $LASTEXITCODE
+        $lastExitCodeVariable = Get-Variable -Name 'LASTEXITCODE' -ErrorAction SilentlyContinue
+        $exitCode = if ($null -eq $lastExitCodeVariable) { 0 } else { [int]$lastExitCodeVariable.Value }
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
@@ -92,11 +95,28 @@ function Get-AgenticRelativePath {
 
 function Get-AgenticStateTemplate {
     [pscustomobject]@{
-        goal_id = $null
-        goal_file = $null
+        schema_version = 2
+        request_id = $null
+        request_envelope_path = $null
+        request_envelope_sha256 = $null
+        request_envelope_file_sha256 = $null
+        request_type_hint = $null
+        preflight_result_path = $null
+        preflight_result_sha256 = $null
+        base_sha = $null
+        preflight_status = $null
+        work_branch = $null
+        origin_branch = $null
+        specification_path = $null
+        specification_sha256 = $null
+        specification_payload_path = $null
+        specification_payload_sha256 = $null
+        allowed_functional_files = @()
+        specification_version = 0
+        approved_snapshot_sha256 = $null
         pending_phase = $null
+        goal_id = $null
         supervisor_runtime = $null
-        bootstrap_goal_sha256 = $null
         branch = $null
         base_branch = "develop"
         iteration = 0
@@ -128,6 +148,15 @@ function Get-AgenticStateTemplate {
         execution_id = $null
         execution_snapshot_sha256 = $null
         role_invocations = @()
+        reviewer_invocation_id = $null
+        security_invocation_id = $null
+        tester_invocation_id = $null
+        brokered_test_results = @()
+        tester_status = "PENDING"
+        observability_status = "PENDING"
+        requirement_status = "PENDING"
+        scope_status = "PENDING"
+        no_changes = $false
         quality_gate_snapshot = @()
         failure_diagnostic = $null
         security_review_status = "PENDING"
@@ -165,8 +194,10 @@ function Get-AgenticState {
     if ($script:AgenticStates -cnotcontains [string]$state.state) {
         throw "O arquivo de estado contem um estado nao permitido."
     }
-    if ([string]$state.state -notin @('IDLE', 'FAILED', 'WAITING_HUMAN_MERGE')) {
-        foreach ($required in @('goal_id', 'goal_file', 'branch', 'base_branch', 'pending_action', 'pending_phase')) {
+    if ([string]$state.state -notin @('IDLE', 'ALREADY_SATISFIED', 'FAILED', 'WAITING_HUMAN_MERGE')) {
+        $requiredCheckpointFields = @('request_id', 'request_envelope_path', 'request_envelope_sha256', 'goal_id', 'base_branch', 'pending_action', 'pending_phase')
+        if ([string]$state.state -notin @('REQUEST_ACCEPTED', 'PREFLIGHT_PREPARING', 'PREFLIGHT_ANALYZING', 'RESUMING', 'BLOCKED', 'WAITING_FOR_QUOTA')) { $requiredCheckpointFields += 'branch' }
+        foreach ($required in $requiredCheckpointFields) {
             $property = $state.PSObject.Properties[$required]
             if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) { throw "Checkpoint inválido: campo obrigatório '$required' ausente." }
         }
@@ -184,8 +215,10 @@ function Get-AgenticState {
 
 function Assert-AgenticResumeCheckpoint {
     param([Parameter(Mandatory = $true)]$State)
-    if ([string]$State.state -in @('IDLE', 'FAILED', 'WAITING_HUMAN_MERGE')) { throw "Estado '$($State.state)' não está aguardando retomada." }
-    foreach ($field in @('goal_id', 'goal_file', 'branch', 'base_branch', 'pending_action', 'pending_phase')) {
+    if ([string]$State.state -in @('IDLE', 'ALREADY_SATISFIED', 'FAILED', 'WAITING_HUMAN_MERGE')) { throw "Estado '$($State.state)' não está aguardando retomada." }
+    $requiredFields = @('request_id', 'request_envelope_path', 'request_envelope_sha256', 'goal_id', 'base_branch', 'pending_action', 'pending_phase')
+    if ([string]$State.state -notin @('REQUEST_ACCEPTED', 'PREFLIGHT_PREPARING', 'PREFLIGHT_ANALYZING', 'RESUMING', 'BLOCKED', 'WAITING_FOR_QUOTA')) { $requiredFields += 'branch' }
+    foreach ($field in $requiredFields) {
         $property = $State.PSObject.Properties[$field]
         if ($null -eq $property -or [string]::IsNullOrWhiteSpace([string]$property.Value)) { throw "State não contém campo obrigatório '$field' para retomada." }
     }
@@ -222,18 +255,27 @@ function Test-AgenticTransition {
 
     if ($script:AgenticStates -cnotcontains $From -or $script:AgenticStates -cnotcontains $To) { return $false }
     $valid = @{
-        IDLE = @("DISCOVERY")
-        DISCOVERY = @("PLANNING", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        PLANNING = @("IMPLEMENTING", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        IMPLEMENTING = @("TESTING", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        TESTING = @("SECURITY_REVIEW", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        SECURITY_REVIEW = @("CODE_REVIEW", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        CODE_REVIEW = @("READY_TO_COMMIT", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        CORRECTING = @("PLANNING", "IMPLEMENTING", "TESTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        READY_TO_COMMIT = @("READY_TO_PR", "TESTING", "CORRECTING", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
-        READY_TO_PR = @("WAITING_HUMAN_MERGE", "RESUMING", "WAITING_FOR_QUOTA", "FAILED")
+        IDLE = @("REQUEST_ACCEPTED")
+        REQUEST_ACCEPTED = @("PREFLIGHT_PREPARING", "BLOCKED", "FAILED")
+        PREFLIGHT_PREPARING = @("PREFLIGHT_ANALYZING", "BLOCKED", "FAILED")
+        PREFLIGHT_ANALYZING = @("ALREADY_SATISFIED", "BRANCH_PREPARED", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        ALREADY_SATISFIED = @()
+        BRANCH_PREPARED = @("ARCHITECTURE", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        ARCHITECTURE = @("DOR_VALIDATION", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        DOR_VALIDATION = @("IMPLEMENTING", "ARCHITECTURE", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        IMPLEMENTING = @("TESTING", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        TESTING = @("REVIEWING", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        REVIEWING = @("QUALITY_GATES", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        CORRECTING = @("IMPLEMENTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        QUALITY_GATES = @("OBSERVABILITY_VERIFICATION", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        OBSERVABILITY_VERIFICATION = @("REQUIREMENT_VERIFICATION", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        REQUIREMENT_VERIFICATION = @("SCOPE_DIFF_VERIFICATION", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        SCOPE_DIFF_VERIFICATION = @("READY_TO_COMMIT", "CORRECTING", "BLOCKED", "WAITING_FOR_QUOTA", "FAILED")
+        READY_TO_COMMIT = @("READY_TO_PR", "TESTING", "WAITING_FOR_QUOTA", "FAILED")
+        READY_TO_PR = @("WAITING_HUMAN_MERGE", "WAITING_FOR_QUOTA", "FAILED")
         WAITING_FOR_QUOTA = @("RESUMING", "FAILED")
-        RESUMING = @("DISCOVERY", "PLANNING", "IMPLEMENTING", "TESTING", "SECURITY_REVIEW", "CODE_REVIEW", "CORRECTING", "READY_TO_COMMIT", "READY_TO_PR", "WAITING_FOR_QUOTA", "WAITING_HUMAN_MERGE", "FAILED")
+        BLOCKED = @("RESUMING", "FAILED")
+        RESUMING = @("PREFLIGHT_PREPARING", "PREFLIGHT_ANALYZING", "BRANCH_PREPARED", "ARCHITECTURE", "DOR_VALIDATION", "IMPLEMENTING", "TESTING", "REVIEWING", "CORRECTING", "QUALITY_GATES", "OBSERVABILITY_VERIFICATION", "REQUIREMENT_VERIFICATION", "SCOPE_DIFF_VERIFICATION", "READY_TO_COMMIT", "READY_TO_PR", "WAITING_FOR_QUOTA", "BLOCKED", "FAILED")
         WAITING_HUMAN_MERGE = @()
         FAILED = @()
     }
@@ -248,19 +290,12 @@ function Test-AgenticSupervisorPath {
     param([Parameter(Mandatory = $true)][string]$Path)
 
     $normalized = $Path.Replace('\', '/')
-    return ($normalized -match '^agentic/(state|journal|plans)(/|$)')
+    return ($normalized -match '^agentic/(state|journal|specifications)(/|$)')
 }
 
 function Test-AgenticLocalResultArtifactPath {
     param([Parameter(Mandatory = $true)][string]$Path)
     return ($Path.Replace('\', '/') -cmatch '^agentic/state/results/[a-z][a-z0-9-]{2,63}/[0-9a-f]{32}\.json$')
-}
-
-function Get-AgenticPlanPath {
-    param([Parameter(Mandatory = $true)][string]$GoalId)
-    $fixtureRoot = Get-AgenticOptionalScriptValue -Name 'AgenticFixturePlanRoot'
-    $root = if (-not [string]::IsNullOrWhiteSpace([string]$fixtureRoot)) { [string]$fixtureRoot } else { $script:AgenticRepoRoot }
-    return Join-Path $root ('agentic/plans/{0}.md' -f $GoalId)
 }
 
 function Get-AgenticChangeClassification {
@@ -352,6 +387,17 @@ function Initialize-AgenticJournalForGoal {
     Write-AgenticBytesSafely -Path $JournalPath -Bytes $headerBytes -BasePath $BasePath
 }
 
+function Set-AgenticJournalBranch {
+    param([Parameter(Mandatory=$true)][string]$GoalId,[Parameter(Mandatory=$true)][string]$Branch)
+    if($Branch -notmatch '^(feature|fix|hotfix)/[a-z0-9][a-z0-9-]*$'){throw 'Journal branch identity is invalid.'}
+    $text=Read-AgenticTextSafely -Path $script:AgenticJournalPath
+    $header=Get-AgenticJournalHeader -JournalText $text
+    if([string]$header.goal_id -cne $GoalId){throw 'Journal goal identity mismatch while preparing branch.'}
+    $updated=[regex]::Replace($text,'(?m)^- branch: [^\r\n]*$',('- branch: '+$Branch),1)
+    if($updated -ceq $text){throw 'Journal branch header was not updated.'}
+    Write-AgenticBytesSafely -Path $script:AgenticJournalPath -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($updated))
+}
+
 function Assert-AgenticJournalMatchesState {
     param([Parameter(Mandatory = $true)]$State, [string]$JournalPath = $script:AgenticJournalPath, [string]$BasePath = $script:AgenticRepoRoot)
     Assert-AgenticNoReparsePoints -Path $JournalPath -BasePath $BasePath -RequireLeaf | Out-Null
@@ -402,227 +448,6 @@ function Save-AgenticTerminalJournal {
     return $target
 }
 
-function Reset-AgenticStateForNewGoal {
-    param(
-        [Parameter(Mandatory = $true)]$PreviousState,
-        [string]$StatePath = $script:AgenticStatePath,
-        $NextState
-    )
-    if ([string]$PreviousState.state -notin @('IDLE', 'FAILED', 'WAITING_HUMAN_MERGE')) { throw 'Não é permitido substituir checkpoint de goal ativo.' }
-    if (-not [string]::IsNullOrWhiteSpace([string]$PreviousState.goal_id)) {
-        $archiveDirectory = Join-Path (Split-Path -Parent $StatePath) 'history'
-        [IO.Directory]::CreateDirectory($archiveDirectory) | Out-Null
-        $raw = Read-AgenticTextSafely -Path $StatePath
-        $digest = Get-AgenticTextSha256 -Text $raw
-        $archivePath = Join-Path $archiveDirectory ('{0}-{1}.json' -f $PreviousState.goal_id, $digest.Substring(0, 12))
-        if (-not (Test-Path -LiteralPath $archivePath -PathType Leaf)) { Write-AgenticBytesSafely -Path $archivePath -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($raw)) }
-    }
-    $replacement = if ($null -eq $NextState) { Get-AgenticStateTemplate } else { $NextState }
-    Write-AgenticState -State $replacement
-    $persisted = Get-AgenticState
-    if ($null -ne $NextState) {
-        foreach ($field in @('goal_id', 'goal_file', 'branch', 'base_branch', 'state', 'pending_phase', 'bootstrap_goal_sha256')) {
-            if ([string]$persisted.$field -cne [string]$NextState.$field) { throw "Checkpoint novo não persistiu o campo '$field'." }
-        }
-        foreach ($counter in @('iteration', 'agent_calls', 'consecutive_failures')) {
-            if ([int]$persisted.$counter -ne 0) { throw "Checkpoint novo não reinicializou o contador '$counter'." }
-        }
-    }
-    return $persisted
-}
-
-function Assert-AgenticPreparedCheckpoint {
-    param(
-        [Parameter(Mandatory = $true)]$State,
-        [Parameter(Mandatory = $true)][hashtable]$Metadata,
-        [Parameter(Mandatory = $true)][string]$Branch,
-        [Parameter(Mandatory = $true)][string]$Sha256
-    )
-
-    $goalId = [string]$Metadata['ID']
-    $canonicalGoalPath = 'agentic/goals/{0}.md' -f $goalId
-    $expectedBranch = '{0}/{1}' -f [string]$Metadata['Branch prefix'], $goalId
-    foreach ($pair in @(
-        @('goal_id', $goalId),
-        @('goal_file', $canonicalGoalPath),
-        @('branch', $expectedBranch),
-        @('base_branch', [string]$Metadata['Base branch']),
-        @('state', 'DISCOVERY'),
-        @('pending_phase', 'DISCOVERY'),
-        @('bootstrap_goal_sha256', $Sha256)
-    )) {
-        $property = $State.PSObject.Properties[[string]$pair[0]]
-        if ($null -eq $property -or [string]$property.Value -cne [string]$pair[1]) { throw "Checkpoint preparado diverge do handoff autenticado no campo '$($pair[0])'." }
-    }
-    if ($Branch -cne $expectedBranch -or $Branch -in @('develop', 'main')) { throw 'Branch preparada diverge da identidade autenticada.' }
-    foreach ($counter in @('iteration', 'agent_calls', 'consecutive_failures')) {
-        $property = $State.PSObject.Properties[$counter]
-        if ($null -eq $property -or [int]$property.Value -ne 0) { throw "Checkpoint preparado herdou ou não inicializou o contador '$counter'." }
-    }
-    return $true
-}
-
-function Initialize-AgenticNewGoalCheckpoint {
-    param(
-        [Parameter(Mandatory = $true)]$PreviousState,
-        [Parameter(Mandatory = $true)]$NextState,
-        [Parameter(Mandatory = $true)][hashtable]$Metadata,
-        [Parameter(Mandatory = $true)][string]$Branch,
-        [Parameter(Mandatory = $true)][string]$Sha256,
-        [string]$JournalPath = $script:AgenticJournalPath,
-        [string]$BasePath = $script:AgenticRepoRoot
-    )
-
-    Assert-AgenticPreparedCheckpoint -State $NextState -Metadata $Metadata -Branch $Branch -Sha256 $Sha256 | Out-Null
-    $persisted = Reset-AgenticStateForNewGoal -PreviousState $PreviousState -NextState $NextState
-    Assert-AgenticPreparedCheckpoint -State $persisted -Metadata $Metadata -Branch $Branch -Sha256 $Sha256 | Out-Null
-    Initialize-AgenticJournalForGoal -GoalId ([string]$Metadata['ID']) -Branch $Branch -BaseBranch ([string]$Metadata['Base branch']) -JournalPath $JournalPath -BasePath $BasePath
-    Assert-AgenticJournalMatchesState -State $persisted -JournalPath $JournalPath -BasePath $BasePath | Out-Null
-    return $persisted
-}
-
-function Invoke-AgenticBootstrapStateIsolationFixture {
-    $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ('agentic-bootstrap-state-{0}' -f [guid]::NewGuid().ToString('N'))
-    $commonPath = Join-Path $script:AgenticRepoRoot 'scripts/agentic-common.ps1'
-    $childPath = Join-Path ([IO.Path]::GetTempPath()) ('agentic-bootstrap-child-{0}.ps1' -f [guid]::NewGuid().ToString('N'))
-    $savedRepoRoot = $script:AgenticRepoRoot
-    $savedStatePath = $script:AgenticStatePath
-    $savedJournalPath = $script:AgenticJournalPath
-    $savedPipe = [string]$env:GERIT_AGENTIC_HANDOFF_PIPE
-    $savedToken = [string]$env:GERIT_AGENTIC_HANDOFF_TOKEN
-    $pipe = $null
-    $child = $null
-    try {
-        foreach ($directory in @('agentic/state', 'agentic/journal', 'agentic/goals')) { [IO.Directory]::CreateDirectory((Join-Path $fixtureRoot $directory)) | Out-Null }
-        $gitInit = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $fixtureRoot, 'init', '--quiet')
-        Assert-AgenticNativeProcessSucceeded -Result $gitInit -CommandName 'bootstrap state fixture git init'
-        $script:AgenticRepoRoot = $fixtureRoot
-        $script:AgenticStatePath = Join-Path $fixtureRoot 'agentic/state/loop-state.json'
-        $script:AgenticJournalPath = Join-Path $fixtureRoot 'agentic/journal/current.md'
-
-        $goalId = 'bootstrap-state-fixture'
-        $goalPath = Join-Path $fixtureRoot ('agentic/goals/{0}.md' -f $goalId)
-        $goalText = @'
-# Goal
-
-- ID: bootstrap-state-fixture
-- Title: Bootstrap state isolation fixture
-- Base branch: develop
-- Branch prefix: fix
-- Allowed files: scripts/agentic-common.ps1
-
-## Objective
-Verify a new prepared goal receives an isolated checkpoint.
-## Discovery requirements
-Inspect the state bootstrap.
-## Acceptance criteria
-The child accepts only the matching authenticated checkpoint.
-## Validation requirements
-Run deterministic supervisor fixtures.
-## Security/production restrictions
-No production changes, merge, or deployment.
-'@
-        [IO.File]::WriteAllText($goalPath, $goalText, [Text.UTF8Encoding]::new($false))
-        $metadata = Assert-AgenticIntake -Path $goalPath -BasePath $fixtureRoot
-
-        $previous = Get-AgenticStateTemplate
-        $previous.goal_id = 'previous-smoke-goal'; $previous.goal_file = 'agentic/goals/previous-smoke-goal.md'
-        $previous.branch = 'feature/previous-smoke-goal'; $previous.base_branch = 'develop'; $previous.state = 'IDLE'
-        $previous.iteration = 7; $previous.agent_calls = 11; $previous.consecutive_failures = 2
-        Write-AgenticState -State $previous
-        $oldJournal = New-AgenticJournalHeader -GoalId $previous.goal_id -Branch $previous.branch -BaseBranch $previous.base_branch
-        [IO.File]::WriteAllText($script:AgenticJournalPath, ($oldJournal + "`n## old goal event`n"), [Text.UTF8Encoding]::new($false))
-
-        $sha256 = Get-AgenticFileSha256 -Path $goalPath -BasePath $fixtureRoot
-        Write-AgenticBootstrapAnchor -GoalId $goalId -Sha256 $sha256 -BasePath $fixtureRoot | Out-Null
-        $next = Get-AgenticStateTemplate
-        $next.goal_id = $goalId; $next.goal_file = "agentic/goals/$goalId.md"
-        $next.branch = "fix/$goalId"; $next.base_branch = 'develop'; $next.bootstrap_goal_sha256 = $sha256
-        $next.state = 'DISCOVERY'; $next.pending_phase = 'DISCOVERY'; $next.pending_action = 'Start prepared goal'
-        $initialized = Initialize-AgenticNewGoalCheckpoint -PreviousState $previous -NextState $next -Metadata $metadata -Branch $next.branch -Sha256 $sha256 -JournalPath $script:AgenticJournalPath -BasePath $fixtureRoot
-
-        # A-G: replacing a stale IDLE checkpoint writes a complete new checkpoint, fresh counters, isolated journal, and matching immutable anchor.
-        Assert-AgenticPreparedCheckpoint -State $initialized -Metadata $metadata -Branch $next.branch -Sha256 $sha256 | Out-Null
-        if ([int]$initialized.iteration -ne 0 -or [int]$initialized.agent_calls -ne 0 -or [int]$initialized.consecutive_failures -ne 0) { throw 'Bootstrap fixture C: counters do not start at zero.' }
-        $stateArchives = @(Get-ChildItem -LiteralPath (Join-Path $fixtureRoot 'agentic/state/history') -File)
-        if ($stateArchives.Count -ne 1 -or [string](Get-AgenticState).goal_id -cne $goalId) { throw 'Bootstrap fixture A/B/G: previous IDLE checkpoint was not archived and replaced.' }
-        $journalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath -BasePath $fixtureRoot
-        if ((Get-AgenticJournalHeader -JournalText $journalText).goal_id -cne $goalId -or $journalText -match 'old goal event') { throw 'Bootstrap fixture D: journal was not isolated to the new goal.' }
-        if ((Get-AgenticBootstrapAnchorSha256 -GoalId $goalId -BasePath $fixtureRoot) -cne $sha256) { throw 'Bootstrap fixture E: anchor/hash diverged from the materialized goal.' }
-        Add-AgenticJournalEvent -Goal $goalId -State 'DISCOVERY' -Agent 'supervisor' -Controller 'supervisor' -Actor 'supervisor' -Action 'Materializar goal bootstrap autenticado' -FilesChanged @("agentic/goals/$goalId.md") -Gate ("bootstrap_goal_sha256={0}" -f $sha256) -Result 'PASS'
-
-        # K: a stale checkpoint with a different goal ID remains rejected; the identity check is not weakened.
-        $stale = $initialized | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-        $stale.goal_id = 'previous-smoke-goal'
-        $staleRejected = $false
-        try { Assert-AgenticPreparedCheckpoint -State $stale -Metadata $metadata -Branch $next.branch -Sha256 $sha256 | Out-Null } catch { $staleRejected = $true }
-        if (-not $staleRejected) { throw 'Bootstrap fixture K: checkpoint mismatch was accepted.' }
-
-        # H-J: resume validation preserves the active goal and counters and never starts a new goal.
-        $resumeState = $initialized | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-        $resumeState.state = 'IMPLEMENTING'; $resumeState.pending_phase = 'IMPLEMENTING'; $resumeState.pending_action = 'Continue existing goal'
-        $resumeState.iteration = 4; $resumeState.agent_calls = 9
-        $resumeGoalId = [string]$resumeState.goal_id; $resumeIteration = [int]$resumeState.iteration; $resumeCalls = [int]$resumeState.agent_calls
-        Assert-AgenticResumeCheckpoint -State $resumeState | Out-Null
-        if ([string]$resumeState.goal_id -cne $resumeGoalId -or [int]$resumeState.iteration -ne $resumeIteration -or [int]$resumeState.agent_calls -ne $resumeCalls) { throw 'Bootstrap fixture H/I: resume changed goal identity or counters.' }
-        $resumeSource = [IO.File]::ReadAllText((Join-Path $savedRepoRoot 'scripts/agentic-resume.ps1'), [Text.UTF8Encoding]::new($false))
-        if ($resumeSource -match 'Reset-AgenticStateForNewGoal|Initialize-AgenticNewGoalCheckpoint' -or $resumeSource -notmatch 'agentic-loop.ps1.*-Resume') { throw 'Bootstrap fixture J: resume initializes a new goal or omits the resume path.' }
-
-        # L: execute the real child handoff parser against the isolated checkpoint over the authenticated pipe protocol.
-        $pipeName = 'gerit-agentic-{0}' -f [guid]::NewGuid().ToString('N')
-        $token = 'a' * 64
-        $childScript = @'
-[CmdletBinding()]
-param([string]$CommonPath, [string]$FixtureRoot, [string]$GoalPath)
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-. $CommonPath
-$script:AgenticRepoRoot = $FixtureRoot
-$script:AgenticStatePath = Join-Path $FixtureRoot 'agentic/state/loop-state.json'
-$script:AgenticJournalPath = Join-Path $FixtureRoot 'agentic/journal/current.md'
-$metadata = Assert-AgenticIntake -Path $GoalPath -BasePath $FixtureRoot
-$handoff = Assert-AgenticPreparedHandoff -GoalPath $GoalPath -Metadata $metadata
-$state = Get-AgenticState
-Assert-AgenticPreparedCheckpoint -State $state -Metadata $metadata -Branch $state.branch -Sha256 $handoff.Sha256 | Out-Null
-Assert-AgenticJournalMatchesState -State $state -JournalPath $script:AgenticJournalPath -BasePath $FixtureRoot | Out-Null
-if ([string]$state.goal_id -cne 'bootstrap-state-fixture' -or [int]$state.agent_calls -ne 0) { throw 'Child received stale bootstrap checkpoint.' }
-'child-bootstrap-pass'
-'@
-        [IO.File]::WriteAllText($childPath, $childScript, [Text.UTF8Encoding]::new($false))
-        $pipe = [IO.Pipes.NamedPipeServerStream]::new($pipeName, [IO.Pipes.PipeDirection]::Out, 1, [IO.Pipes.PipeTransmissionMode]::Byte, [IO.Pipes.PipeOptions]::Asynchronous, 4096, 4096)
-        $wait = $pipe.BeginWaitForConnection($null, $null)
-        $engine = Resolve-AgenticPowerShellEngine
-        $startInfo = [Diagnostics.ProcessStartInfo]::new()
-        $startInfo.FileName = $engine.Path; $startInfo.UseShellExecute = $false; $startInfo.WorkingDirectory = $fixtureRoot
-        $startInfo.RedirectStandardOutput = $true; $startInfo.RedirectStandardError = $true
-        $quote = { param([string]$value) '"' + $value.Replace('"', '\"') + '"' }
-        $startInfo.Arguments = '-NoProfile -ExecutionPolicy Bypass -File {0} -CommonPath {1} -FixtureRoot {2} -GoalPath {3}' -f (& $quote $childPath), (& $quote $commonPath), (& $quote $fixtureRoot), (& $quote $goalPath)
-        $startInfo.EnvironmentVariables['GERIT_AGENTIC_HANDOFF_PIPE'] = $pipeName
-        $startInfo.EnvironmentVariables['GERIT_AGENTIC_HANDOFF_TOKEN'] = $token
-        $child = [Diagnostics.Process]::Start($startInfo)
-        if (-not $wait.AsyncWaitHandle.WaitOne(15000)) { throw 'Bootstrap fixture L: child did not connect to the supervisor pipe.' }
-        $pipe.EndWaitForConnection($wait)
-        $writer = [IO.StreamWriter]::new($pipe, [Text.UTF8Encoding]::new($false), 1024, $true)
-        try { $writer.WriteLine("prepared|$goalId|$($next.branch)|agentic/goals/$goalId.md|$sha256|$token"); $writer.Flush() }
-        finally { $writer.Dispose() }
-        if (-not $child.WaitForExit(15000)) { $child.Kill(); throw 'Bootstrap fixture L: child did not finish validation.' }
-        $childOutput = $child.StandardOutput.ReadToEnd() + $child.StandardError.ReadToEnd()
-        if ($child.ExitCode -ne 0 -or $childOutput -notmatch 'child-bootstrap-pass') { throw ("Bootstrap fixture L: child rejected the matching checkpoint. {0}" -f (ConvertTo-AgenticSanitizedText -Text $childOutput)) }
-        return $true
-    }
-    finally {
-        if ($null -ne $child) { $child.Dispose() }
-        if ($null -ne $pipe) { $pipe.Dispose() }
-        if ($null -eq $savedPipe) { Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_HANDOFF_PIPE = $savedPipe }
-        if ($null -eq $savedToken) { Remove-Item Env:GERIT_AGENTIC_HANDOFF_TOKEN -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_HANDOFF_TOKEN = $savedToken }
-        $script:AgenticRepoRoot = $savedRepoRoot
-        $script:AgenticStatePath = $savedStatePath
-        $script:AgenticJournalPath = $savedJournalPath
-        if (Test-Path -LiteralPath $childPath) { Remove-Item -LiteralPath $childPath -Force -ErrorAction SilentlyContinue }
-        if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot -Recurse -Force -ErrorAction SilentlyContinue }
-    }
-}
-
 function Get-AgenticCommitPaths {
     param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$ChangedPaths)
 
@@ -640,123 +465,6 @@ function Get-AgenticFileSha256 {
         return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()
     }
     finally { $stream.Dispose(); $sha256.Dispose() }
-}
-
-function Get-AgenticBootstrapAnchorPath {
-    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
-
-    if ($GoalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $GoalId -match '--|-$') { throw 'Bootstrap goal anchor rejeitado: ID não é canônico.' }
-    $gitPath = Join-Path $BasePath '.git'
-    if (-not (Test-Path -LiteralPath $gitPath)) { throw 'Bootstrap goal anchor indisponível: metadados Git ausentes.' }
-    $gitDirResult = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $BasePath, 'rev-parse', '--git-path', 'agentic-bootstrap-goals')
-    Assert-AgenticNativeProcessSucceeded -Result $gitDirResult -CommandName 'git rev-parse'
-    $relativeGitPath = ([string]@($gitDirResult.Output)[0]).Trim()
-    if ([string]::IsNullOrWhiteSpace($relativeGitPath)) { throw 'Bootstrap goal anchor indisponível: caminho Git vazio.' }
-    $anchorDirectory = if ([IO.Path]::IsPathRooted($relativeGitPath)) { $relativeGitPath } else { Join-Path $BasePath $relativeGitPath }
-    return Join-Path $anchorDirectory ("{0}.sha256" -f $GoalId)
-}
-
-function Write-AgenticBootstrapAnchor {
-    param([Parameter(Mandatory = $true)][string]$GoalId, [Parameter(Mandatory = $true)][string]$Sha256, [string]$BasePath = $script:AgenticRepoRoot)
-
-    if ($Sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal anchor rejeitado: SHA-256 inválido.' }
-    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $anchorPath)) | Out-Null
-    try {
-        $stream = [IO.File]::Open($anchorPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-        try {
-            $bytes = [Text.Encoding]::ASCII.GetBytes($Sha256 + "`n")
-            $stream.Write($bytes, 0, $bytes.Length)
-            $stream.Flush($true)
-        }
-        finally { $stream.Dispose() }
-    }
-    catch [IO.IOException] {
-        if (-not (Test-Path -LiteralPath $anchorPath -PathType Leaf) -or (Get-AgenticBootstrapAnchorSha256 -GoalId $GoalId -BasePath $BasePath) -cne $Sha256) { throw 'Bootstrap goal anchor já existe com conteúdo diferente.' }
-    }
-    return $anchorPath
-}
-
-function Get-AgenticBootstrapAnchorSha256 {
-    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
-
-    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
-    if (-not (Test-Path -LiteralPath $anchorPath -PathType Leaf)) { throw 'Bootstrap goal rejeitado: âncora autenticada do supervisor ausente.' }
-    $sha256 = [IO.File]::ReadAllText($anchorPath, [Text.Encoding]::ASCII).TrimEnd("`r", "`n")
-    if ($sha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal rejeitado: âncora autenticada inválida.' }
-    return $sha256
-}
-
-function Test-AgenticBootstrapAnchor {
-    param([Parameter(Mandatory = $true)][string]$GoalId, [string]$BasePath = $script:AgenticRepoRoot)
-
-    $anchorPath = Get-AgenticBootstrapAnchorPath -GoalId $GoalId -BasePath $BasePath
-    return (Test-Path -LiteralPath $anchorPath -PathType Leaf)
-}
-
-function Assert-AgenticBootstrapAnchor {
-    param([Parameter(Mandatory = $true)][string]$GoalId, [Parameter(Mandatory = $true)][string]$ExpectedSha256, [string]$BasePath = $script:AgenticRepoRoot)
-
-    $anchoredSha256 = Get-AgenticBootstrapAnchorSha256 -GoalId $GoalId -BasePath $BasePath
-    if ($anchoredSha256 -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: hash diverge da âncora imutável do supervisor.' }
-    return $anchoredSha256
-}
-
-function Assert-AgenticBootstrapGoalIntegrity {
-    param(
-        [Parameter(Mandatory = $true)]$State,
-        [Parameter(Mandatory = $true)][hashtable]$Metadata,
-        [Parameter(Mandatory = $true)][string]$ExpectedSha256,
-        [string]$BasePath = $script:AgenticRepoRoot
-    )
-
-    $goalId = [string]$Metadata['ID']
-    if ($goalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $goalId -match '--|-$') { throw 'Bootstrap goal rejeitado: ID não é canônico.' }
-    $stateGoalIdProperty = $State.PSObject.Properties['goal_id']
-    if ($null -eq $stateGoalIdProperty -or [string]$stateGoalIdProperty.Value -cne $goalId) { throw 'Bootstrap goal rejeitado: goal_id não corresponde ao goal ativo.' }
-    if ($ExpectedSha256 -notmatch '^[0-9a-f]{64}$') { throw 'Bootstrap goal rejeitado: SHA-256 autenticado ausente ou inválido.' }
-    $stateHashProperty = $State.PSObject.Properties['bootstrap_goal_sha256']
-    if ($null -eq $stateHashProperty -or [string]$stateHashProperty.Value -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: hash do checkpoint difere do handoff do supervisor.' }
-
-    $canonicalPath = 'agentic/goals/{0}.md' -f $goalId
-    $stateGoalFileProperty = $State.PSObject.Properties['goal_file']
-    if ($null -eq $stateGoalFileProperty -or [string]$stateGoalFileProperty.Value -cne $canonicalPath) { throw 'Bootstrap goal rejeitado: goal_file não é o caminho canônico.' }
-    $fullPath = Join-Path $BasePath ($canonicalPath.Replace('/', [IO.Path]::DirectorySeparatorChar))
-    Assert-AgenticNoReparsePoints -Path $fullPath -BasePath $BasePath -RequireLeaf | Out-Null
-    if ((Get-AgenticFileSha256 -Path $fullPath -BasePath $BasePath) -cne $ExpectedSha256) { throw 'Bootstrap goal rejeitado: conteúdo mudou após a materialização.' }
-    return $canonicalPath
-}
-
-function Get-AgenticAuthenticatedBootstrapPath {
-    param([Parameter(Mandatory = $true)]$State)
-    $hashProperty = $State.PSObject.Properties['bootstrap_goal_sha256']
-    if ($null -eq $hashProperty -or [string]::IsNullOrWhiteSpace([string]$hashProperty.Value)) { return $null }
-    $goalIdProperty = $State.PSObject.Properties['goal_id']
-    if ($null -eq $goalIdProperty -or [string]::IsNullOrWhiteSpace([string]$goalIdProperty.Value)) { throw 'Bootstrap goal rejeitado: checkpoint sem goal_id.' }
-    $goalId = [string]$goalIdProperty.Value
-    $goalPath = Join-Path $script:AgenticRepoRoot ('agentic/goals/{0}.md' -f $goalId)
-    if (-not (Test-Path -LiteralPath $goalPath -PathType Leaf)) { throw 'Bootstrap goal rejeitado: goal canônico ausente.' }
-    $metadata = Get-AgenticGoalMetadata -Path $goalPath
-    $canonicalPath = Assert-AgenticBootstrapGoalIntegrity -State $State -Metadata $metadata -ExpectedSha256 ([string]$hashProperty.Value)
-    Assert-AgenticBootstrapAnchor -GoalId $goalId -ExpectedSha256 ([string]$hashProperty.Value) | Out-Null
-    $journalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath
-    Test-AgenticBootstrapGoalProvenance -GoalId $goalId -CanonicalPath $canonicalPath -Sha256 ([string]$hashProperty.Value) -JournalText $journalText | Out-Null
-    return $canonicalPath
-}
-
-function Test-AgenticBootstrapGoalProvenance {
-    param(
-        [Parameter(Mandatory = $true)][string]$GoalId,
-        [Parameter(Mandatory = $true)][string]$CanonicalPath,
-        [Parameter(Mandatory = $true)][string]$Sha256,
-        [Parameter(Mandatory = $true)][string]$JournalText
-    )
-
-    foreach ($event in @(Get-AgenticJournalEvents -JournalText $JournalText)) {
-        $eventPaths = @(([string]$event.files_changed -split '\s*[,;]\s*') | ForEach-Object { $_.Replace('\', '/') })
-        if ($event.goal -ceq $GoalId -and $event.state -ceq 'DISCOVERY' -and $event.controller -ceq 'supervisor' -and $event.actor -ceq 'supervisor' -and $event.action -ceq 'Materializar goal bootstrap autenticado' -and $event.result -ceq 'PASS' -and $event.gate -ceq "bootstrap_goal_sha256=$Sha256" -and $eventPaths -ccontains $CanonicalPath) { return $true }
-    }
-    throw 'Bootstrap goal rejeitado: provenance explícita do supervisor ausente.'
 }
 
 function Get-AgenticJournalEvents {
@@ -814,6 +522,178 @@ function Get-AgenticAllowedGoalFiles {
     $raw = [string]$Metadata["Allowed files"]
     if ([string]::IsNullOrWhiteSpace($raw) -or $raw -eq "none") { return @() }
     return @($raw -split "," | ForEach-Object { $_.Trim().Replace('\', '/') } | Where-Object { $_ })
+}
+
+function Get-AgenticRequestEnvelopeHash {
+    param([Parameter(Mandatory = $true)]$Envelope)
+    $receivedAt = [string]$Envelope.received_at
+    if ($Envelope.received_at -is [DateTime]) { $receivedAt = $Envelope.received_at.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [Globalization.CultureInfo]::InvariantCulture) }
+    elseif ($Envelope.received_at -is [DateTimeOffset]) { $receivedAt = $Envelope.received_at.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [Globalization.CultureInfo]::InvariantCulture) }
+    $values = @(
+        [string]$Envelope.schema_version,
+        [string]$Envelope.request_id,
+        $receivedAt,
+        [string]$Envelope.target_repository,
+        [string]$Envelope.request_type_hint,
+        [string]$Envelope.user_requirement_verbatim,
+        [string]$Envelope.source
+    )
+    $canonical = @($values | ForEach-Object { [Convert]::ToBase64String([Text.UTF8Encoding]::new($false).GetBytes($_)) }) -join "."
+    return Get-AgenticTextSha256 -Text $canonical
+}
+
+function Assert-AgenticRequestEnvelope {
+    param([Parameter(Mandatory = $true)]$Envelope, [string]$RepositoryName = (Split-Path -Leaf $script:AgenticRepoRoot))
+    $required = @('schema_version', 'request_id', 'received_at', 'target_repository', 'request_type_hint', 'user_requirement_verbatim', 'source', 'content_sha256')
+    foreach ($field in $required) { if ($null -eq $Envelope.PSObject.Properties[$field]) { throw "Request Envelope inválido: campo '$field' ausente." } }
+    $unknown = @($Envelope.PSObject.Properties.Name | Where-Object { $_ -cnotin $required })
+    if ($unknown.Count -gt 0) { throw 'Request Envelope contém campos não permitidos.' }
+    if ([int]$Envelope.schema_version -ne 1) { throw 'Request Envelope schema_version não suportada.' }
+    if ([string]$Envelope.request_id -cnotmatch '^req-[0-9a-f]{32}$') { throw 'Request Envelope request_id não é canônico.' }
+    if ([string]$Envelope.target_repository -cne $RepositoryName) { throw 'Request Envelope direcionado a outro repositório.' }
+    if ([string]$Envelope.request_type_hint -cnotin @('feature', 'fix', 'hotfix')) { throw 'Request Envelope request_type_hint inválido.' }
+    if ([string]$Envelope.source -cne 'codex-desktop') { throw 'Request Envelope source não confiável.' }
+    if ([string]::IsNullOrWhiteSpace([string]$Envelope.user_requirement_verbatim) -or ([string]$Envelope.user_requirement_verbatim).Length -gt 100000) { throw 'Request Envelope requirement ausente ou excede o limite.' }
+    $receivedAt = [DateTimeOffset]::MinValue
+    $timestampText = if ($Envelope.received_at -is [DateTime]) { $Envelope.received_at.ToUniversalTime().ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", [Globalization.CultureInfo]::InvariantCulture) } else { [string]$Envelope.received_at }
+    if ($timestampText -cnotmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' -or -not [DateTimeOffset]::TryParse($timestampText, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$receivedAt)) { throw 'Request Envelope received_at inválido.' }
+    if ([string]$Envelope.content_sha256 -cnotmatch '^[0-9a-f]{64}$' -or (Get-AgenticRequestEnvelopeHash -Envelope $Envelope) -cne [string]$Envelope.content_sha256) { throw 'Request Envelope hash inválido.' }
+    $sensitivePatterns = @(
+        '(?i)\b(?:authorization\s*:\s*)?(?:bearer|basic)\s+[A-Za-z0-9._~+/-]{8,}={0,2}',
+        '(?i)\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}',
+        '(?i)\b(?:password|passwd|secret|token|jwt|api[_ -]?key|private[_ -]?key|connection[_ -]?string)\s*[:=]\s*\S+',
+        '(?i)-----BEGIN\s+(?:[A-Z0-9 ]+\s+)?PRIVATE KEY-----',
+        '(?i)\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@'
+    )
+    foreach ($pattern in $sensitivePatterns) { if ([string]$Envelope.user_requirement_verbatim -match $pattern) { throw 'Request Envelope rejeitado: conteúdo sensível detectado; valor omitido.' } }
+    return $Envelope
+}
+
+function Write-AgenticImmutableJsonArtifact {
+    param([Parameter(Mandatory = $true)][string]$RelativePath, [Parameter(Mandatory = $true)]$Value)
+    if ($RelativePath -match '[*?]|(^|/)\.\.?(/|$)|^/|^[A-Za-z]:|\\|(^|/)\.git(/|$)') { throw 'Artifact path inválido.' }
+    $fullPath = Join-Path $script:AgenticRepoRoot ($RelativePath.Replace('/', [IO.Path]::DirectorySeparatorChar))
+    $bytes = [Text.UTF8Encoding]::new($false).GetBytes(($Value | ConvertTo-Json -Depth 30) + [Environment]::NewLine)
+    if (Test-Path -LiteralPath $fullPath -PathType Leaf) {
+        $existing = Read-AgenticBytesSafely -Path $fullPath
+        if ((Get-AgenticBytesSha256 -Bytes $existing) -cne (Get-AgenticBytesSha256 -Bytes $bytes)) { throw 'Artifact imutável já existe com conteúdo diferente.' }
+    }
+    else { Write-AgenticBytesSafely -Path $fullPath -Bytes $bytes }
+    return [pscustomobject]@{ Path = $RelativePath; Sha256 = Get-AgenticFileSha256 -Path $fullPath }
+}
+
+function New-AgenticPreflightResultArtifact {
+    param([Parameter(Mandatory = $true)]$Envelope, [Parameter(Mandatory = $true)][string]$BaseBranch, [Parameter(Mandatory = $true)][string]$BaseSha, [Parameter(Mandatory = $true)][string]$InvocationId, [Parameter(Mandatory = $true)][string]$Status, [Parameter(Mandatory = $true)][string[]]$Evidence)
+    if ($Status -cnotin @('SATISFIED', 'NOT_SATISFIED', 'BLOCKED')) { throw 'Preflight status inválido.' }
+    if ($BaseSha -cnotmatch '^[0-9a-f]{40,64}$' -or $InvocationId -cnotmatch '^[0-9a-f]{32}$') { throw 'Preflight provenance inválida.' }
+    if ($Evidence.Count -eq 0 -or @($Evidence | Where-Object { [string]::IsNullOrWhiteSpace([string]$_) }).Count -gt 0) { throw 'Preflight evidence é obrigatória.' }
+    $artifact = [ordered]@{
+        schema_version = 1; request_id = [string]$Envelope.request_id; base_branch = $BaseBranch; base_sha = $BaseSha
+        evaluator_role = 'architect'; invocation_id = $InvocationId; status = $Status
+        evidence = @($Evidence | ForEach-Object { ConvertTo-AgenticSanitizedText -Text ([string]$_) -MaximumLength 500 })
+        timestamp = [DateTimeOffset]::UtcNow.ToString('o')
+    }
+    $digestInput = $artifact | ConvertTo-Json -Depth 10 -Compress
+    $artifact.artifact_sha256 = Get-AgenticTextSha256 -Text $digestInput
+    return [pscustomobject]$artifact
+}
+
+function Assert-AgenticPreflightResultArtifact {
+    param([Parameter(Mandatory = $true)]$Artifact, [Parameter(Mandatory = $true)]$Envelope, [Parameter(Mandatory = $true)][string]$BaseBranch, [Parameter(Mandatory = $true)][string]$BaseSha)
+    foreach ($pair in @(@('request_id', [string]$Envelope.request_id), @('base_branch', $BaseBranch), @('base_sha', $BaseSha), @('evaluator_role', 'architect'))) {
+        if ([string]$Artifact.($pair[0]) -cne [string]$pair[1]) { throw "Preflight artifact identity mismatch: $($pair[0])." }
+    }
+    if ([string]$Artifact.status -cnotin @('SATISFIED', 'NOT_SATISFIED', 'BLOCKED') -or @($Artifact.evidence).Count -eq 0 -or [string]$Artifact.invocation_id -cnotmatch '^[0-9a-f]{32}$') { throw 'Preflight artifact incompleto ou inválido.' }
+    $copy = [ordered]@{}
+    foreach ($property in $Artifact.PSObject.Properties) { if ($property.Name -cne 'artifact_sha256') { $copy[$property.Name] = $property.Value } }
+    $expectedHash = Get-AgenticTextSha256 -Text ($copy | ConvertTo-Json -Depth 10 -Compress)
+    if ([string]$Artifact.artifact_sha256 -cne $expectedHash) { throw 'Preflight artifact SHA-256 inválido.' }
+    return $true
+}
+
+function Assert-AgenticDor {
+    param([Parameter(Mandatory = $true)]$Specification)
+    $requiredIds = @('DOR-01','DOR-02','DOR-03','DOR-04','DOR-05','DOR-06','DOR-07','DOR-08','DOR-09','DOR-10')
+    $items = @($Specification.dor)
+    if($items.Count -ne $requiredIds.Count){throw 'DOR must contain each of the ten canonical items exactly once.'}
+    foreach ($id in $requiredIds) {
+        $matches = @($items | Where-Object { [string]$_.id -ceq $id })
+        if ($matches.Count -ne 1) { throw "DOR validation failed at ${id}: item ausente ou duplicado." }
+        $item = $matches[0]
+        if([string]$item.status -cnotin @('PASS','FAIL','BLOCKED','NOT_APPLICABLE')){throw "DOR status invalid at ${id}."}
+        if ([string]$item.status -ceq 'PASS') { continue }
+        if ([string]$item.status -cne 'NOT_APPLICABLE' -or [bool]$item.required -or [string]::IsNullOrWhiteSpace([string]$item.rationale)) { throw "DOR validation failed at $id." }
+    }
+    if ([string]$Specification.complexity -cnotin @('MM','ME','CX','TR')) { throw 'Specification complexity inválida.' }
+    foreach ($field in @('requirement','context','architecture','dependencies','scope','out_of_scope','acceptance_criteria','dod','implementation_plan','test_strategy','security_requirements','observability_requirements')) {
+        $property = $Specification.PSObject.Properties[$field]
+        if ($null -eq $property -or ($property.Value -is [string] -and [string]::IsNullOrWhiteSpace([string]$property.Value)) -or ($property.Value -is [System.Collections.IEnumerable] -and $property.Value -isnot [string] -and @($property.Value).Count -eq 0)) { throw "Specification missing required section/data: $field." }
+    }
+    return $true
+}
+
+function New-AgenticSpecificationMarkdown {
+    param([Parameter(Mandatory = $true)]$Payload, [Parameter(Mandatory = $true)]$State, [Parameter(Mandatory = $true)][string]$Title)
+    Assert-AgenticDor -Specification $Payload | Out-Null
+    $lines = [System.Collections.Generic.List[string]]::new()
+    $lines.Add('# Execution Specification'); $lines.Add(''); $lines.Add('Schema Version: 1'); $lines.Add("Request ID: $($State.request_id)")
+    $lines.Add("Title: $Title"); $lines.Add("Created At: $([DateTimeOffset]::UtcNow.ToString('o'))"); $lines.Add("Updated At: $([DateTimeOffset]::UtcNow.ToString('o'))")
+    $lines.Add("Base Branch: $($State.base_branch)"); $lines.Add("Base SHA: $($State.base_sha)"); $lines.Add("Work Branch: $($State.branch)")
+    $lines.Add("Complexity: $($Payload.complexity)"); $lines.Add('Specification Version: 1'); $lines.Add("Lifecycle State: $($State.state)"); $lines.Add('Specification SHA256: pending'); $lines.Add('')
+    $sections = @(
+        @('1. Requirement', $Payload.requirement), @('2. Context', $Payload.context), @('3. Architecture', $Payload.architecture),
+        @('4. Dependencies', $Payload.dependencies), @('5. Scope', $Payload.scope), @('6. Out of Scope', $Payload.out_of_scope),
+        @('7. Acceptance Criteria', $Payload.acceptance_criteria), @('8. Definition of Ready', $Payload.dor),
+        @('9. Definition of Done', $Payload.dod), @('10. Complexity', $Payload.complexity), @('11. Implementation Plan', $Payload.implementation_plan),
+        @('12. Test Strategy', $Payload.test_strategy), @('13. Security Requirements', $Payload.security_requirements), @('14. Observability Requirements', $Payload.observability_requirements),
+        @('15. Implementation Result', 'PENDING'), @('16. Tester Result', 'PENDING'), @('17. Reviewer Result', 'PENDING'), @('18. Security Result', 'PENDING'),
+        @('19. Quality Gates', 'PENDING'), @('20. Observability Verification', 'PENDING'), @('21. Requirement Verification', 'PENDING'), @('22. Scope Verification', 'PENDING'),
+        @('23. Final Status', [string]$State.state), @('24. Residual Risks', @()), @('25. Evidence Index', @("Request Envelope: $($State.request_envelope_path)", "Preflight Result: $($State.preflight_result_path)"))
+    )
+    foreach ($section in $sections) {
+        $lines.Add("## $($section[0])"); $value = $section[1]
+        if ($value -is [string]) { $lines.Add($value) }
+        else { $lines.Add('```json'); $lines.Add(($value | ConvertTo-Json -Depth 20)); $lines.Add('```') }
+        $lines.Add('')
+    }
+    return ($lines -join [Environment]::NewLine) + [Environment]::NewLine
+}
+
+function ConvertTo-AgenticSanitizedArtifactValue {
+    param([AllowNull()]$Value)
+    if ($null -eq $Value -or $Value -is [bool] -or $Value -is [ValueType]) { return $Value }
+    if ($Value -is [string]) { return (ConvertTo-AgenticSanitizedText -Text $Value) }
+    if ($Value -is [System.Collections.IDictionary]) {
+        $map = [ordered]@{}
+        foreach ($key in $Value.Keys) { $map[[string]$key] = ConvertTo-AgenticSanitizedArtifactValue -Value $Value[$key] }
+        return $map
+    }
+    if ($Value -is [System.Collections.IEnumerable]) { return @($Value | ForEach-Object { ConvertTo-AgenticSanitizedArtifactValue -Value $_ }) }
+    $properties = @($Value.PSObject.Properties)
+    if ($null -ne $Value.PSObject -and $properties.Length -gt 0) {
+        $map = [ordered]@{}
+        foreach ($property in $properties) { $map[$property.Name] = ConvertTo-AgenticSanitizedArtifactValue -Value $property.Value }
+        return $map
+    }
+    return (ConvertTo-AgenticSanitizedText -Text ([string]$Value))
+}
+
+function Set-AgenticSpecificationProjection {
+    param([Parameter(Mandatory=$true)]$State,[Parameter(Mandatory=$true)][ValidateSet('Implementation Result','Tester Result','Reviewer Result','Security Result','Quality Gates','Observability Verification','Requirement Verification','Scope Verification','Final Status')][string]$Section,[Parameter(Mandatory=$true)]$Value)
+    if([string]::IsNullOrWhiteSpace([string]$State.specification_path)){throw 'Canonical Specification path is absent.'}
+    $path=Join-Path $script:AgenticRepoRoot ([string]$State.specification_path)
+    Assert-AgenticNoReparsePoints -Path $path -BasePath $script:AgenticRepoRoot -RequireLeaf|Out-Null
+    $text=Read-AgenticTextSafely -Path $path
+    $number=switch($Section){'Implementation Result'{15}'Tester Result'{16}'Reviewer Result'{17}'Security Result'{18}'Quality Gates'{19}'Observability Verification'{20}'Requirement Verification'{21}'Scope Verification'{22}'Final Status'{23}}
+    $heading="## $number. $Section"
+    $next=[regex]::Escape($heading)+'(?s).*?(?=\r?\n## |\z)'
+    if($text -notmatch $next){throw "Canonical Specification section missing: $Section."}
+    $json=ConvertTo-Json -InputObject (ConvertTo-AgenticSanitizedArtifactValue -Value $Value) -Depth 12
+    $replacement=$heading+"`n"+'```json'+"`n$json`n"+'```'
+    $updated=[regex]::Replace($text,$next,[System.Text.RegularExpressions.MatchEvaluator]{param($m)$replacement},1)
+    Write-AgenticBytesSafely -Path $path -Bytes ([Text.UTF8Encoding]::new($false).GetBytes($updated))
+    $State.specification_sha256=Get-AgenticFileSha256 -Path $path
+    return $State.specification_sha256
 }
 
 function Get-AgenticTextWhitespaceErrors {
@@ -937,8 +817,6 @@ function Invoke-AgenticQualityGates {
     if ($commitPaths.Count -eq 0) { throw 'Nenhum arquivo funcional commitável para executar gates.' }
     $allowed = @(Get-AgenticAllowedGoalFiles -Metadata $Metadata)
     foreach ($path in $commitPaths) {
-        $bootstrapPath = Get-AgenticAuthenticatedBootstrapPath -State $State
-        if ($null -ne $bootstrapPath -and $path -ceq $bootstrapPath) { continue }
         if ($allowed -cnotcontains $path) { throw "Arquivo fora da allowlist bloqueia quality gates: $path" }
     }
     Set-AgenticGateResult -State $State -Name 'allowlist' -Status 'PASS' -Command 'Validate goal Allowed files' -ExitCode 0 -Reason 'Todos os functional paths pertencem à allowlist explícita.' -EvidenceSummary ("{0} paths validados." -f $commitPaths.Count) | Out-Null
@@ -978,7 +856,14 @@ function Invoke-AgenticQualityGates {
                         if ($errors.Count -gt 0) { throw ("AST parse falhou em {0}: {1}" -f $file.Name, $errors[0].Message) }
                     }
                 }
-                'supervisor_fixtures' { $commandName = 'Invoke-AgenticSupervisorFixtures'; [void](Invoke-AgenticSupervisorFixtures) }
+                'supervisor_fixtures' {
+                    $commandName = 'Agentic vNext L1/L2 deterministic fixtures'
+                    $engine = Resolve-AgenticPowerShellEngine
+                    $fixtureScript = Join-Path $script:AgenticRepoRoot 'scripts/agentic-supervisor-tests.ps1'
+                    $native = Invoke-AgenticNativeProcess -FilePath $engine.Path -Arguments @('-NoProfile','-File',$fixtureScript) -CaptureStandardError
+                    $exitCode = [int]$native.ExitCode
+                    if ($exitCode -ne 0) { throw "Agentic vNext deterministic fixtures failed (exit code $exitCode)." }
+                }
                 default {
                     if (-not $commands.ContainsKey($gateName)) { throw "Gate requerido '$gateName' não possui executor do supervisor." }
                     $entry = $commands[$gateName]; $commandName = $entry.Command
@@ -1058,86 +943,74 @@ function Test-AgenticReadiness {
         [Parameter(Mandatory = $true)][hashtable]$Metadata,
         [Parameter(Mandatory = $true)][string]$CurrentBranch,
         [Parameter(Mandatory = $true)][string[]]$ChangedPaths,
-        [string]$JournalText,
-        [string]$BootstrapGoalSha256
+        [string]$JournalText
     )
 
-    if ([string]$State.state -ne "READY_TO_COMMIT") { throw "Somente o supervisor pode validar state READY_TO_COMMIT." }
-    $goalId = [string]$Metadata["ID"]
-    if ([string]::IsNullOrWhiteSpace($goalId)) { throw "Goal precisa declarar ID antes do commit." }
-    $stateGoalIdProperty = $State.PSObject.Properties["goal_id"]
-    if ($null -eq $stateGoalIdProperty) { throw "State precisa declarar goal_id antes do commit." }
-    $stateGoalId = [string]$stateGoalIdProperty.Value
-    if ([string]::IsNullOrWhiteSpace($stateGoalId)) { throw "State.goal_id nao pode estar vazio antes do commit." }
-    if ($stateGoalId -cne $goalId) { throw "ID do goal no state nao corresponde exatamente ao goal ativo." }
-    $stateBootstrapHashProperty = $State.PSObject.Properties["bootstrap_goal_sha256"]
-    $stateBootstrapHash = if ($null -eq $stateBootstrapHashProperty) { "" } else { [string]$stateBootstrapHashProperty.Value }
-    $bootstrapGoalPath = $null
-    if (-not [string]::IsNullOrWhiteSpace($BootstrapGoalSha256)) {
-        $bootstrapGoalPath = Assert-AgenticBootstrapGoalIntegrity -State $State -Metadata $Metadata -ExpectedSha256 $BootstrapGoalSha256
-        if ([string]::IsNullOrWhiteSpace($JournalText)) { $JournalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath }
-        Test-AgenticBootstrapGoalProvenance -GoalId $goalId -CanonicalPath $bootstrapGoalPath -Sha256 $BootstrapGoalSha256 -JournalText $JournalText | Out-Null
-    }
-    elseif (-not [string]::IsNullOrWhiteSpace($stateBootstrapHash)) {
-        throw "Bootstrap goal rejeitado: contexto autenticado do supervisor ausente."
-    }
-    if ([string]$State.branch -cne $CurrentBranch) { throw "Branch atual nao corresponde ao checkpoint." }
-    if ([string]$State.base_branch -cne [string]$Metadata["Base branch"]) { throw "Base do state nao corresponde ao goal." }
-    $prefix = [string]$Metadata["Branch prefix"]
-    $slug = ([string]$Metadata["ID"]).ToLowerInvariant() -replace "[^a-z0-9-]+", "-"
-    $slug = $slug.Trim("-")
-    $expectedBranch = "$prefix/$slug"
-    if ($CurrentBranch -cne $expectedBranch -or $CurrentBranch -cin @("develop", "main")) { throw "Branch nao corresponde ao prefixo e ID declarados no goal." }
-    if ($State.base_branch -cnotin @("develop", "main") -or (($prefix -ceq "hotfix") -ne ($State.base_branch -ceq "main"))) { throw "Combinacao de branch/base nao permitida." }
+    if ([string]$State.state -ne 'READY_TO_COMMIT') { throw 'Readiness só pode ser validada em READY_TO_COMMIT.' }
+    $requestId = [string]$Metadata['ID']
+    if ($requestId -cne [string]$State.request_id -or $requestId -cne [string]$State.goal_id) { throw 'Request identity não corresponde ao checkpoint.' }
+    if ([string]$State.branch -cne $CurrentBranch -or [string]$State.base_branch -cne [string]$Metadata['Base branch']) { throw 'Branch/base diverge do checkpoint.' }
+    $expectedBranch = '{0}/{1}' -f [string]$Metadata['Branch prefix'], $requestId
+    if ($CurrentBranch -cne $expectedBranch -or $CurrentBranch -in @('develop','main')) { throw 'Branch de trabalho não é fresh/canônica.' }
+    if ([string]$State.base_sha -cnotmatch '^[0-9a-f]{40,64}$') { throw 'Trusted base SHA ausente ou inválido.' }
+    $baseAncestor = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $script:AgenticRepoRoot, 'merge-base', '--is-ancestor', [string]$State.base_sha, 'HEAD')
+    Assert-AgenticNativeProcessSucceeded -Result $baseAncestor -CommandName 'git merge-base captured base'
+
+    $requestPath = Join-Path $script:AgenticRepoRoot ([string]$State.request_envelope_path)
+    $request = Read-AgenticTextSafely -Path $requestPath | ConvertFrom-Json
+    Assert-AgenticRequestEnvelope -Envelope $request | Out-Null
+    if ([string]$request.request_id -cne $requestId -or [string]$request.content_sha256 -cne [string]$State.request_envelope_sha256) { throw 'Request Envelope identity/hash diverge.' }
+    if ([string]::IsNullOrWhiteSpace([string]$State.preflight_result_path) -or [string]::IsNullOrWhiteSpace([string]$State.preflight_result_sha256)) { throw 'Preflight Result Artifact ausente.' }
+    $preflightPath = Join-Path $script:AgenticRepoRoot ([string]$State.preflight_result_path)
+    $preflight = Read-AgenticTextSafely -Path $preflightPath | ConvertFrom-Json
+    Assert-AgenticPreflightResultArtifact -Artifact $preflight -Envelope $request -BaseBranch ([string]$State.base_branch) -BaseSha ([string]$State.base_sha) | Out-Null
+    if ([string]$preflight.status -cne 'NOT_SATISFIED' -or (Get-AgenticFileSha256 -Path $preflightPath) -cne [string]$State.preflight_result_sha256) { throw 'Preflight artifact não aprova esta execução ou foi alterado.' }
+    if ([string]::IsNullOrWhiteSpace([string]$State.specification_path) -or [string]::IsNullOrWhiteSpace([string]$State.specification_sha256)) { throw 'Execution Specification ausente.' }
+    $specPath = Join-Path $script:AgenticRepoRoot ([string]$State.specification_path)
+    if ((Get-AgenticFileSha256 -Path $specPath) -cne [string]$State.specification_sha256) { throw 'Execution Specification mudou depois da validação.' }
 
     $allowed = @(Get-AgenticAllowedGoalFiles -Metadata $Metadata)
-    if ($allowed.Count -eq 0) { throw "Goal precisa declarar Allowed files antes do commit." }
-    if ($ChangedPaths.Count -eq 0) { throw "Nenhuma alteracao de goal para stage." }
+    if ($allowed.Count -eq 0 -or $ChangedPaths.Count -eq 0) { throw 'Scope aprovado ou change set vazio.' }
     foreach ($path in $ChangedPaths) {
-        $normalized = ([string]$path).Replace('\', '/')
+        $normalized = ([string]$path).Replace('\','/')
         if (Test-AgenticSupervisorPath -Path $normalized) { continue }
-        if ($null -ne $bootstrapGoalPath -and $normalized -ceq $bootstrapGoalPath) { continue }
-        if ($allowed -cnotcontains $normalized) { throw "Working tree contem arquivo fora do escopo permitido pelo goal." }
+        if ($allowed -cnotcontains $normalized) { throw "Arquivo fora do scope aprovado: $normalized" }
     }
     $functionalPaths = @(Get-AgenticCommitPaths -ChangedPaths $ChangedPaths)
     $classification = Get-AgenticChangeClassification -Paths $functionalPaths
-    if ([string]$State.change_classification -cne $classification) { throw 'Change classification mudou depois dos gates; readiness invalidada.' }
-    $typecheckResolver = Resolve-AgenticTypecheckCommand
-    $runtimeTestResolver = Resolve-AgenticRuntimeTestsCommand
-    $policy = Get-AgenticGatePolicy -Classification $classification -TypecheckStatus $typecheckResolver.Status -RuntimeTestsStatus $runtimeTestResolver.Status -Paths $functionalPaths
-    if (@($State.required_gates | Where-Object { $_ -notin $policy.Required }).Count -gt 0 -or @($policy.Required | Where-Object { $_ -notin $State.required_gates }).Count -gt 0) { throw 'required_gates divergentes da política calculada pelo supervisor.' }
-    foreach ($gate in $policy.Required | Where-Object { $_ -notin @('security_review', 'reviewer_review', 'staged_diff_check') }) {
-        $gateRecord = @($State.gate_results | Where-Object { [string]$_.name -ceq $gate } | Select-Object -Last 1)
-        if ($gateRecord.Count -eq 0 -or [string]$gateRecord[0].status -cne 'PASS') { throw "Gate obrigatório '$gate' não foi aprovado pelo supervisor." }
+    if ([string]$State.change_classification -cne $classification) { throw 'Change classification mudou; approvals stale.' }
+    $typecheck = Resolve-AgenticTypecheckCommand; $runtimeTests = Resolve-AgenticRuntimeTestsCommand
+    $policy = Get-AgenticGatePolicy -Classification $classification -TypecheckStatus $typecheck.Status -RuntimeTestsStatus $runtimeTests.Status -Paths $functionalPaths
+    if (@($policy.Required | Where-Object { $_ -notin $State.required_gates }).Count -gt 0 -or @($State.required_gates | Where-Object { $_ -notin $policy.Required }).Count -gt 0) { throw 'Required gate set diverge da policy calculada.' }
+    foreach ($gate in $policy.Required | Where-Object { $_ -notin @('security_review','reviewer_review','staged_diff_check') }) {
+        $record = @($State.gate_results | Where-Object { [string]$_.name -ceq $gate } | Select-Object -Last 1)
+        if ($record.Count -eq 0 -or [string]$record[0].status -cne 'PASS') { throw "Gate obrigatório '$gate' sem PASS." }
     }
     foreach ($skip in $policy.Skipped) {
-        $gateRecord = @($State.gate_results | Where-Object { [string]$_.name -ceq $skip.name } | Select-Object -Last 1)
-        if ($gateRecord.Count -eq 0 -or [string]$gateRecord[0].status -cne 'NOT_APPLICABLE' -or [string]::IsNullOrWhiteSpace([string]$gateRecord[0].reason)) { throw "Gate dispensado '$($skip.name)' precisa ser NOT_APPLICABLE com motivo." }
+        $record = @($State.gate_results | Where-Object { [string]$_.name -ceq $skip.name } | Select-Object -Last 1)
+        if ($record.Count -eq 0 -or [string]$record[0].status -cne 'NOT_APPLICABLE' -or [string]::IsNullOrWhiteSpace([string]$record[0].reason)) { throw "NOT_APPLICABLE sem motivo para '$($skip.name)'." }
     }
-    if ([string]$State.security_review_status -cne 'PASS') { throw 'Security review não foi aprovada pelo supervisor.' }
-    if ([string]$State.code_review_status -cne 'PASS') { throw 'Reviewer review não foi aprovada pelo supervisor.' }
+    if ([string]$State.tester_status -cne 'PASS' -or [string]$State.security_review_status -cne 'PASS' -or [string]$State.code_review_status -cne 'PASS') { throw 'Tester, Security e Reviewer precisam de PASS independente.' }
+    if ([string]$State.observability_status -cnotin @('PASS','NOT_APPLICABLE') -or [string]$State.requirement_status -cne 'PASS' -or [string]$State.scope_status -cne 'PASS') { throw 'Verificação final de observabilidade, requisito ou scope incompleta.' }
     $snapshot = @(Get-AgenticCommitSnapshot -Paths $functionalPaths)
     $snapshotHash = Get-AgenticStableSnapshotSha256 -Snapshot $snapshot
-    foreach ($role in @('security', 'reviewer')) {
-        $evidence = @($State.role_invocations | Where-Object { [string]$_.role -ceq $role -and [string]$_.goal_id -ceq $goalId } | Select-Object -Last 1)
-        if ($evidence.Count -ne 1 -or [string]$evidence[0].status -cne 'PASS' -or [int]$evidence[0].exit_code -ne 0 -or [string]$evidence[0].snapshot_sha256 -cne $snapshotHash) { throw "Invocation independente '$role' não corresponde ao goal/snapshot funcional validado." }
-        if ([string]$evidence[0].command_fingerprint -notmatch '^[a-f0-9]{64}$') { throw "Invocation '$role' não possui command fingerprint válido." }
-        $expectedArtifact = 'agentic/state/results/{0}/{1}.json' -f $goalId, [string]$evidence[0].invocation_id
-        if (-not (Test-AgenticLocalResultArtifactPath -Path $expectedArtifact) -or [string]$evidence[0].result_artifact_path -cne $expectedArtifact) { throw ("Artifact path da role '{0}' não é canônico (esperado '{1}', recebido '{2}')." -f $role, $expectedArtifact, [string]$evidence[0].result_artifact_path) }
-        $artifactPath = Join-Path $script:AgenticRepoRoot $expectedArtifact
-        if (-not (Test-Path -LiteralPath $artifactPath -PathType Leaf) -or (Get-AgenticFileSha256 -Path $artifactPath) -cne [string]$evidence[0].result_artifact_sha256) { throw "Artifact de resultado '$role' ausente ou modificado." }
+    if ([string]$State.approved_snapshot_sha256 -cne $snapshotHash) { throw 'Snapshot atual não é o snapshot aprovado.' }
+    foreach ($role in @('tester','reviewer','security')) {
+        $roleEvidence = @($State.role_invocations | Where-Object { [string]$_.role -ceq $role -and [string]$_.status -ceq 'PASS' } | Select-Object -Last 1)
+        if ($roleEvidence.Count -ne 1 -or [int]$roleEvidence[0].exit_code -ne 0 -or [string]$roleEvidence[0].snapshot_sha256 -cne $snapshotHash) { throw "Approval '$role' não está vinculada ao snapshot atual." }
+        $currentInvocationId = switch ($role) { 'tester' { [string]$State.tester_invocation_id } 'reviewer' { [string]$State.reviewer_invocation_id } 'security' { [string]$State.security_invocation_id } }
+        if ([string]$roleEvidence[0].invocation_id -cne $currentInvocationId) { throw "Approval '$role' não pertence à invocation aprovada corrente." }
+        if ([string]$roleEvidence[0].command_fingerprint -notmatch '^[a-f0-9]{64}$') { throw "Invocation '$role' sem command fingerprint." }
+        $artifactRel = [string]$roleEvidence[0].result_artifact_path
+        $artifactFull = Join-Path $script:AgenticRepoRoot $artifactRel
+        if (-not (Test-AgenticLocalResultArtifactPath -Path $artifactRel) -or -not (Test-Path -LiteralPath $artifactFull -PathType Leaf) -or (Get-AgenticFileSha256 -Path $artifactFull) -cne [string]$roleEvidence[0].result_artifact_sha256) { throw "Artifact '$role' ausente ou adulterado." }
     }
     $expectedSnapshot = @($State.quality_gate_snapshot | Sort-Object path)
-    if ($expectedSnapshot.Count -ne $snapshot.Count) { throw 'Paths commitáveis mudaram depois dos gates; readiness invalidada.' }
-    for ($index = 0; $index -lt $snapshot.Count; $index++) {
-        if ([string]$expectedSnapshot[$index].path -cne [string]$snapshot[$index].path -or [string]$expectedSnapshot[$index].sha256 -cne [string]$snapshot[$index].sha256) { throw 'Paths ou conteúdo mudaram depois dos gates; readiness invalidada.' }
-    }
+    if ($expectedSnapshot.Count -ne $snapshot.Count) { throw 'Paths mudaram depois da aprovação.' }
+    for ($index=0; $index -lt $snapshot.Count; $index++) { if ([string]$expectedSnapshot[$index].path -cne [string]$snapshot[$index].path -or [string]$expectedSnapshot[$index].sha256 -cne [string]$snapshot[$index].sha256) { throw 'Conteúdo mudou depois das aprovações downstream.' } }
     Assert-AgenticFunctionalDiffCheck -Paths $functionalPaths | Out-Null
-    $provenancePaths = @($functionalPaths | Where-Object { $null -eq $bootstrapGoalPath -or ([string]$_ -cne $bootstrapGoalPath) })
-    if ($provenancePaths.Count -gt 0) {
-        if ([string]::IsNullOrWhiteSpace($JournalText)) { $JournalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath }
-        Test-AgenticImplementerProvenance -GoalId $goalId -FunctionalPaths $provenancePaths -JournalText $JournalText | Out-Null
-    }
+    if ([string]::IsNullOrWhiteSpace($JournalText)) { $JournalText = Read-AgenticTextSafely -Path $script:AgenticJournalPath }
+    Test-AgenticImplementerProvenance -GoalId $requestId -FunctionalPaths $functionalPaths -JournalText $JournalText | Out-Null
     return $true
 }
 
@@ -1193,893 +1066,6 @@ function New-AgenticFailedCheckpoint {
     if ($null -ne $failed.PSObject.Properties["updated_at"]) { $failed.updated_at = [DateTime]::UtcNow.ToString("o") }
     else { $failed | Add-Member -NotePropertyName updated_at -NotePropertyValue ([DateTime]::UtcNow.ToString("o")) }
     return $failed
-}
-
-function Set-AgenticFixtureReadinessEvidence {
-    param([Parameter(Mandatory = $true)]$State, [Parameter(Mandatory = $true)][string[]]$Paths)
-    foreach ($propertyName in @('change_classification', 'required_gates', 'skipped_gates', 'quality_gate_snapshot', 'gate_results', 'role_invocations')) {
-        if ($null -eq $State.PSObject.Properties[$propertyName]) { $State | Add-Member -NotePropertyName $propertyName -NotePropertyValue $null }
-    }
-    $functional = @(Get-AgenticCommitPaths -ChangedPaths $Paths)
-    if ($functional.Count -eq 0) { throw 'Fixture readiness requires at least one functional path.' }
-    $classification = Get-AgenticChangeClassification -Paths $functional
-    $typecheck = Resolve-AgenticTypecheckCommand
-    $runtimeTests = Resolve-AgenticRuntimeTestsCommand
-    $policy = Get-AgenticGatePolicy -Classification $classification -TypecheckStatus $typecheck.Status -RuntimeTestsStatus $runtimeTests.Status -Paths $functional
-    $State.change_classification = $classification
-    $State.required_gates = @($policy.Required)
-    $State.skipped_gates = @($policy.Skipped)
-    $State.quality_gate_snapshot = @(Get-AgenticCommitSnapshot -Paths $functional)
-    $State.gate_results = @()
-    foreach ($name in $policy.Required | Where-Object { $_ -notin @('security_review', 'reviewer_review', 'staged_diff_check') }) {
-        Set-AgenticGateResult -State $State -Name $name -Status 'PASS' -Reason 'fixture evidence' | Out-Null
-    }
-    foreach ($skip in $policy.Skipped) { Set-AgenticGateResult -State $State -Name $skip.name -Status 'NOT_APPLICABLE' -Reason $skip.reason | Out-Null }
-    $snapshotHash = Get-AgenticStableSnapshotSha256 -Snapshot $State.quality_gate_snapshot
-    $State.role_invocations = @()
-    foreach ($role in @('security', 'reviewer')) {
-        $invocationId = [guid]::NewGuid().ToString('N')
-        $relativeArtifact = 'agentic/state/results/{0}/{1}.json' -f [string]$State.goal_id, $invocationId
-        $artifactPath = Join-Path $script:AgenticRepoRoot $relativeArtifact
-        [IO.Directory]::CreateDirectory((Split-Path -Parent $artifactPath)) | Out-Null
-        Write-AgenticBytesSafely -Path $artifactPath -Bytes ([Text.UTF8Encoding]::new($false).GetBytes(('{{"role":"{0}","fixture":true}}' -f $role)))
-        $script:AgenticFixtureArtifactPaths += $artifactPath
-        $State.role_invocations += [pscustomobject]@{
-            role = $role; goal_id = [string]$State.goal_id; invocation_id = $invocationId; phase = if ($role -eq 'security') { 'SECURITY_REVIEW' } else { 'CODE_REVIEW' }
-            snapshot_sha256 = $snapshotHash; command_fingerprint = ('a' * 64); result_artifact_path = $relativeArtifact
-            result_artifact_sha256 = Get-AgenticFileSha256 -Path $artifactPath; exit_code = 0; status = 'PASS'; timestamp = [DateTimeOffset]::UtcNow.ToString('o')
-        }
-    }
-    $State.security_review_status = 'PASS'
-    $State.code_review_status = 'PASS'
-}
-
-function Invoke-AgenticResumeLifecycleIntegrationFixture {
-    $root = Join-Path ([IO.Path]::GetTempPath()) ('agentic-resume-e2e-{0}' -f [guid]::NewGuid().ToString('N'))
-    $remoteRoot = $root + '-origin.git'
-    $savedPath = $env:PATH; $savedStop = $env:GERIT_AGENTIC_FIXTURE_STOP_AT_READY; $savedGateStop = $env:GERIT_AGENTIC_FIXTURE_STOP_ON_GATE_FAILURE; $savedInterrupt = $env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY
-    try {
-        foreach ($relative in @('scripts', 'agentic/prompts', 'agentic/goals', 'agentic/state', 'agentic/journal', '.codex/agents', 'docs', 'fake-bin')) { [IO.Directory]::CreateDirectory((Join-Path $root $relative)) | Out-Null }
-        foreach ($file in @('agentic-common.ps1', 'agentic-loop.ps1', 'agentic-resume.ps1', 'agentic-status.ps1')) { Copy-Item -LiteralPath (Join-Path $script:AgenticRepoRoot ('scripts/' + $file)) -Destination (Join-Path $root ('scripts/' + $file)) }
-        $loopCopy = Join-Path $root 'scripts/agentic-loop.ps1'
-        $loopText = [IO.File]::ReadAllText($loopCopy, [Text.UTF8Encoding]::new($false))
-        $loopText = [regex]::Replace($loopText, '(?m)^(\s*)if \(Invoke-AgenticFinalization -State \$state -Metadata \$metadata\) \{ exit 0 \}', '$1if ($$env:GERIT_AGENTIC_FIXTURE_STOP_AT_READY -eq ''1'' -and (Test-Path -LiteralPath (Join-Path $$script:AgenticRepoRoot ''.agentic-fixture'') -PathType Leaf)) { exit 0 }' + "`n" + '$1if (Invoke-AgenticFinalization -State $$state -Metadata $$metadata) { exit 0 }')
-        $loopText = [regex]::Replace($loopText, '(?m)^(\s*)\$diag = New-AgenticFailureDiagnostic -Category ''quality_gate''', '$1if ($$env:GERIT_AGENTIC_FIXTURE_STOP_ON_GATE_FAILURE -eq ''1'' -and (Test-Path -LiteralPath (Join-Path $$script:AgenticRepoRoot ''.agentic-fixture'') -PathType Leaf)) { throw $$_.Exception.Message }' + "`n" + '$1$$diag = New-AgenticFailureDiagnostic -Category ''quality_gate''', 1)
-        $interruptAnchor = @'
-        if ($nextPhase -eq 'READY_TO_COMMIT') {
-'@
-        $interruptReplacement = @'
-        if ($env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY -eq '1' -and (Test-Path -LiteralPath (Join-Path $script:AgenticRepoRoot '.agentic-fixture') -PathType Leaf) -and $nextPhase -eq 'PLANNING') { exit 0 }
-        if ($nextPhase -eq 'READY_TO_COMMIT') {
-'@
-        if (-not $loopText.Contains($interruptAnchor)) { throw 'Lifecycle X: ponto de interrupção determinístico não encontrado no loop copiado.' }
-        $loopText = $loopText.Replace($interruptAnchor, $interruptReplacement)
-        [IO.File]::WriteAllText($loopCopy, $loopText, [Text.UTF8Encoding]::new($false))
-        Copy-Item -LiteralPath (Join-Path $script:AgenticRepoRoot 'agentic/prompts/autonomous-loop.md') -Destination (Join-Path $root 'agentic/prompts/autonomous-loop.md')
-        foreach ($roleFile in @(Get-ChildItem -LiteralPath (Join-Path $script:AgenticRepoRoot '.codex/agents') -Filter '*.toml' -File)) { Copy-Item -LiteralPath $roleFile.FullName -Destination (Join-Path $root ('.codex/agents/' + $roleFile.Name)) }
-        [IO.File]::WriteAllText((Join-Path $root '.agentic-fixture'), 'fixture', [Text.UTF8Encoding]::new($false))
-        $goal = @'
-# Goal
-- ID: agentic-resume-e2e
-- Title: Deterministic supervisor resume lifecycle fixture
-- Base branch: develop
-- Branch prefix: feature
-- Allowed files: docs/result.md
-
-## Objective
-Exercise the supervisor lifecycle using deterministic role fixtures.
-## Acceptance criteria
-Reach READY_TO_COMMIT after resuming an interrupted checkpoint.
-'@
-        [IO.File]::WriteAllText((Join-Path $root 'agentic/goals/agentic-resume-e2e.md'), $goal + "`n", [Text.UTF8Encoding]::new($false))
-        $fakeCodex = @'
-$argv = @($args); $outIndex = [Array]::IndexOf($argv, '--output-last-message'); $cdIndex = [Array]::IndexOf($argv, '--cd')
-if ($outIndex -lt 0 -or $cdIndex -lt 0) { $global:LASTEXITCODE = 2; exit 2 }
-$repoRoot = [string]$argv[$cdIndex + 1]
-$responsePath = [string]$argv[$outIndex + 1]; $prompt = [string]$argv[$argv.Count - 1]
-function Read-ContractValue([string]$Name) { $m = [regex]::Match($prompt, '(?m)^' + [regex]::Escape($Name) + '=(.+)$'); if (-not $m.Success) { throw "missing $Name" }; return $m.Groups[1].Value.Trim() }
-$goalId = Read-ContractValue 'goal_id'; $phase = Read-ContractValue 'phase'; $invocation = Read-ContractValue 'invocation_id'; $snapshot = Read-ContractValue 'snapshot_sha256'; $role = switch ($phase) { 'DISCOVERY' { 'architect' } 'PLANNING' { 'architect' } 'IMPLEMENTING' { 'implementer' } 'CORRECTING' { 'implementer' } 'TESTING' { 'tester' } 'SECURITY_REVIEW' { 'security' } 'CODE_REVIEW' { 'reviewer' } default { throw 'missing role' } }; $changed = @()
-if ($role -eq 'implementer') { [IO.File]::WriteAllText((Join-Path $repoRoot 'docs/result.md'), "Supervisor resume integration fixture.`n", [Text.UTF8Encoding]::new($false)); $changed = @('docs/result.md') }
-$result = [ordered]@{ schema_version = 1; goal_id = $goalId; role = $role; invocation_id = $invocation; phase = $phase; snapshot_sha256 = $snapshot; status = 'PASS'; summary = 'deterministic integration role'; findings = @(); evidence = @('fake Codex process completed'); failure = $null; files_changed = $changed }
-[IO.File]::WriteAllText($responsePath, ($result | ConvertTo-Json -Depth 5 -Compress), [Text.UTF8Encoding]::new($false)); $global:LASTEXITCODE = 0
-'@
-        [IO.File]::WriteAllText((Join-Path $root 'fake-bin/codex.ps1'), $fakeCodex + "`n", [Text.UTF8Encoding]::new($false))
-        $commands = @(@('init', '-b', 'develop'), @('config', 'user.email', 'fixture@example.invalid'), @('config', 'user.name', 'Agentic Fixture'))
-        foreach ($commandArgs in $commands) { $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments (@('-C', $root) + $commandArgs); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture git init/config' }
-        $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('init', '--bare', $remoteRoot); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture origin init'
-        $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $root, 'add', '-A'); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture git add'
-        $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $root, 'commit', '-m', 'fixture base'); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture git commit'
-        $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $root, 'remote', 'add', 'origin', $remoteRoot); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture remote add'
-        $r = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $root, 'push', '-u', 'origin', 'develop'); Assert-AgenticNativeProcessSucceeded -Result $r -CommandName 'fixture base push'
-        $state = Get-AgenticStateTemplate
-        $statePath = Join-Path $root 'agentic/state/loop-state.json'; [IO.File]::WriteAllText($statePath, ($state | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
-        $env:PATH = (Join-Path $root 'fake-bin') + [IO.Path]::PathSeparator + $savedPath; $env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY = '1'
-        $engine = Resolve-AgenticPowerShellEngine
-        $run = Invoke-AgenticNativeProcess -FilePath $engine.Path -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'scripts/agentic-loop.ps1'), '-Goal', (Join-Path $root 'agentic/goals/agentic-resume-e2e.md')) -CaptureStandardError
-        if ($run.ExitCode -ne 0) { throw ("Lifecycle X: start do loop terminou com exit code {0}: {1}" -f $run.ExitCode, (ConvertTo-AgenticSanitizedText -Text (@($run.Output | ForEach-Object { [string]$_ }) -join ' '))) }
-        $interruptedState = [IO.File]::ReadAllText($statePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
-        if ([string]$interruptedState.state -cne 'PLANNING' -or [int]$interruptedState.agent_calls -ne 1 -or [int]$interruptedState.iteration -ne 1) { throw 'Lifecycle X: interrupção não preservou o checkpoint após discovery.' }
-        if ($null -eq $savedInterrupt) { Remove-Item Env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY = $savedInterrupt }
-        $env:GERIT_AGENTIC_FIXTURE_STOP_AT_READY = '1'; $env:GERIT_AGENTIC_FIXTURE_STOP_ON_GATE_FAILURE = '1'
-        $run = Invoke-AgenticNativeProcess -FilePath $engine.Path -Arguments @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $root 'scripts/agentic-resume.ps1')) -CaptureStandardError
-        $finalState = [IO.File]::ReadAllText($statePath, [Text.UTF8Encoding]::new($false)) | ConvertFrom-Json
-        if ($run.ExitCode -ne 0) { $failureText = if ($null -ne $finalState.failure_diagnostic) { [string]$finalState.failure_diagnostic.message } else { '' }; $gateText = @($finalState.gate_results | ForEach-Object { '{0}={1}:{2}' -f $_.name, $_.status, $_.reason }) -join '; '; $roleText = @($finalState.role_invocations | ForEach-Object { $failureProperty = $_.PSObject.Properties['failure_reason']; $failureReason = if ($null -ne $failureProperty) { [string]$failureProperty.Value } else { '' }; '{0}/{1}={2}:{3}:{4}' -f $_.role, $_.phase, $_.status, $_.result_artifact_path, $failureReason }) -join '; '; $artifactFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'agentic/state/results') -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { Get-AgenticRelativePath -BasePath $root -TargetPath $_.FullName }) -join ','; throw ("Lifecycle X: resume terminou com exit code {0}; checkpoint={1}; roles={2}; artifacts={3}; gates={4}; saída={5}" -f $run.ExitCode, $failureText, $roleText, $artifactFiles, $gateText, (ConvertTo-AgenticSanitizedText -Text (@($run.Output | ForEach-Object { [string]$_ }) -join ' '))) }
-        if ([string]$finalState.state -cne 'READY_TO_COMMIT' -or [int]$finalState.agent_calls -le [int]$interruptedState.agent_calls -or [int]$finalState.iteration -le [int]$interruptedState.iteration) { throw 'Lifecycle X: counters não foram preservados ou READY_TO_COMMIT não foi alcançado.' }
-        if (@($finalState.role_invocations).Count -ne 6) { throw 'Lifecycle X: esperadas seis invocações isoladas.' }
-        foreach ($roleName in @('architect', 'implementer', 'tester', 'security', 'reviewer')) { if (@($finalState.role_invocations | Where-Object { [string]$_.role -ceq $roleName -and [string]$_.status -ceq 'PASS' }).Count -lt 1) { throw "Lifecycle X: provenance PASS ausente para $roleName." } }
-        if (-not (Test-Path -LiteralPath (Join-Path $root 'docs/result.md') -PathType Leaf)) { throw 'Lifecycle X: implementer fixture não criou docs/result.md.' }
-    }
-    finally {
-        $env:PATH = $savedPath
-        if ($null -eq $savedStop) { Remove-Item Env:GERIT_AGENTIC_FIXTURE_STOP_AT_READY -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_FIXTURE_STOP_AT_READY = $savedStop }
-        if ($null -eq $savedGateStop) { Remove-Item Env:GERIT_AGENTIC_FIXTURE_STOP_ON_GATE_FAILURE -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_FIXTURE_STOP_ON_GATE_FAILURE = $savedGateStop }
-        if ($null -eq $savedInterrupt) { Remove-Item Env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY -ErrorAction SilentlyContinue } else { $env:GERIT_AGENTIC_FIXTURE_INTERRUPT_AFTER_DISCOVERY = $savedInterrupt }
-        if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
-        if (Test-Path -LiteralPath $remoteRoot) { Remove-Item -LiteralPath $remoteRoot -Recurse -Force -ErrorAction SilentlyContinue }
-    }
-}
-
-function Invoke-AgenticSupervisorFixtures {
-    $script:AgenticFixtureArtifactPaths = @()
-    $promptPath = Join-Path $script:AgenticRepoRoot "agentic/prompts/autonomous-loop.md"
-    $prompt = [System.IO.File]::ReadAllText($promptPath, [System.Text.UTF8Encoding]::new($false))
-    $supervisorPath = Join-Path $script:AgenticRepoRoot "scripts/agentic-loop.ps1"
-    $supervisorSource = [System.IO.File]::ReadAllText($supervisorPath, [System.Text.UTF8Encoding]::new($false))
-    $commonSource = [System.IO.File]::ReadAllText((Join-Path $script:AgenticRepoRoot "scripts/agentic-common.ps1"), [System.Text.UTF8Encoding]::new($false))
-    $startPath = Join-Path $script:AgenticRepoRoot "scripts/agentic-start.ps1"
-    $startSource = [System.IO.File]::ReadAllText($startPath, [System.Text.UTF8Encoding]::new($false))
-    $frontDoorSource = [System.IO.File]::ReadAllText((Join-Path $script:AgenticRepoRoot 'agentic/prompts/front-door.md'), [Text.UTF8Encoding]::new($false))
-    $intakeFixturePath = Join-Path ([IO.Path]::GetTempPath()) ("agentic-intake-{0}.md" -f [guid]::NewGuid().ToString("N"))
-    $validIntake = @'
-- ID: clients-crud
-- Title: Implementar CRUD de Clients
-- Base branch: develop
-- Branch prefix: feature
-- Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts
-
-## Objective
-Implementar o CRUD usando a API existente.
-## Discovery requirements
-Architect confirma contratos da API.
-## Acceptance criteria
-CRUD funcional com allowlist validada.
-## Validation requirements
-Executar gates padrão.
-## Security/production restrictions
-Sem produção, deploy ou merge automático.
-'@
-    try {
-        [IO.File]::WriteAllText($intakeFixturePath, $validIntake, [Text.UTF8Encoding]::new($false))
-        $fixtureMetadata = Assert-AgenticIntake -Path $intakeFixturePath -BasePath ([IO.Path]::GetTempPath())
-        if ($fixtureMetadata["ID"] -ne "clients-crud") { throw "Fixture A: intake válido não foi normalizado." }
-        $invalidIntakes = @(
-            @{ Name = "B base"; Replace = "Base branch: develop"; With = "Base branch: production" },
-            @{ Name = "C prefixo"; Replace = "Branch prefix: feature"; With = "Branch prefix: release" },
-            @{ Name = "D ID traversal"; Replace = "ID: clients-crud"; With = "ID: ../clients-crud" },
-            @{ Name = "E allowlist vazia"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: " },
-            @{ Name = "F wildcard"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: **" },
-            @{ Name = "F repo inteiro"; Replace = "Allowed files: domains/operations/clients/page.tsx, domains/operations/clients/api.ts"; With = "Allowed files: ." },
-            @{ Name = "password"; Replace = "Sem produção, deploy ou merge automático."; With = "password: [REDACTED]" },
-            @{ Name = "authorization bearer"; Replace = "Sem produção, deploy ou merge automático."; With = "Authorization: Bearer [REDACTED]" },
-            @{ Name = "cookie"; Replace = "Sem produção, deploy ou merge automático."; With = "Cookie: session=[REDACTED]" },
-            @{ Name = "set-cookie"; Replace = "Sem produção, deploy ou merge automático."; With = "Set-Cookie: session=[REDACTED]; HttpOnly" },
-            @{ Name = "cookie frase"; Replace = "Sem produção, deploy ou merge automático."; With = "A resposta incluiu Cookie: session=[REDACTED]." },
-            @{ Name = "set-cookie markdown"; Replace = "Sem produção, deploy ou merge automático."; With = "- Set-Cookie: session=[REDACTED]; HttpOnly" },
-            @{ Name = "api key"; Replace = "Sem produção, deploy ou merge automático."; With = "api_key: [REDACTED]" },
-            @{ Name = "api key com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "API KEY: [REDACTED]" },
-            @{ Name = "access key com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "ACCESS KEY: [REDACTED]" },
-            @{ Name = "client secret com espaço"; Replace = "Sem produção, deploy ou merge automático."; With = "CLIENT SECRET: [REDACTED]" },
-            @{ Name = "jwt puro"; Replace = "Sem produção, deploy ou merge automático."; With = ("eyJ" + ("A" * 24) + "." + ("B" * 24) + "." + ("C" * 24)) },
-            @{ Name = "PEM"; Replace = "Sem produção, deploy ou merge automático."; With = "-----BEGIN PRIVATE KEY-----" },
-            @{ Name = "URL com credenciais"; Replace = "Sem produção, deploy ou merge automático."; With = ("https://user:[REDACTED]@example.invalid") }
-        )
-        foreach ($case in $invalidIntakes) {
-            $candidate = $validIntake.Replace([string]$case.Replace, [string]$case.With)
-            [IO.File]::WriteAllText($intakeFixturePath, $candidate, [Text.UTF8Encoding]::new($false))
-            $rejected = $false; $rejectionMessage = ""
-            try { Assert-AgenticIntake -Path $intakeFixturePath -BasePath ([IO.Path]::GetTempPath()) | Out-Null } catch { $rejected = $true; $rejectionMessage = $_.Exception.Message }
-            if (-not $rejected) { throw ("Fixture {0}: entrada insegura aceita." -f $case.Name) }
-            if ($case.Name -in @("password", "authorization bearer", "cookie", "set-cookie", "cookie frase", "set-cookie markdown", "api key", "api key com espaço", "access key com espaço", "client secret com espaço", "jwt puro", "PEM", "URL com credenciais") -and $rejectionMessage -ne "Intake rejeitado: conteúdo sensível detectado; valor omitido.") { throw ("Fixture {0}: alerta de dado sensível não foi sanitizado." -f $case.Name) }
-        }
-    }
-    finally { Remove-Item -LiteralPath $intakeFixturePath -Force -ErrorAction SilentlyContinue }
-    # Fixtures G-H: intake is the sole dirty path accepted by bootstrap.
-    if (-not (Assert-AgenticBootstrapStatus -StatusLines @("?? agentic/state/intake.md"))) { throw "Fixture H: intake novo controlado não foi aceito." }
-    if (-not (Assert-AgenticBootstrapStatus -StatusLines @('?? agentic/state/intake.md', '?? agentic/state/history/previous-goal-hash.json'))) { throw 'Lifecycle B: state history local bloqueou um novo bootstrap.' }
-    if (-not (Assert-AgenticBootstrapStatus -StatusLines @('?? agentic/state/intake.md', '?? agentic/state/results/agentic-fixture/0123456789abcdef0123456789abcdef.json'))) { throw 'Lifecycle B: resultado local validado bloqueou um novo bootstrap.' }
-    $unrelatedStatusCases = @(
-        [pscustomobject]@{ Lines = @(" M agentic/state/loop-state.json") },
-        [pscustomobject]@{ Lines = @("?? agentic/journal/current.md") },
-        [pscustomobject]@{ Lines = @("?? src/unrelated.ts") },
-        [pscustomobject]@{ Lines = [string[]]@() }
-    )
-    foreach ($statusCase in $unrelatedStatusCases) {
-        $rejected = $false
-        try { Assert-AgenticBootstrapStatus -StatusLines $statusCase.Lines | Out-Null } catch { $rejected = $true }
-        if (-not $rejected) { throw "Fixture G: alteração preexistente foi aceita junto ao intake." }
-    }
-    if ($startSource -notmatch 'agentic/state/intake\.md' -or $startSource -notmatch 'Assert-AgenticBootstrapStatus') { throw "Fixture G-H: bootstrap não restringe alterações locais ao intake controlado." }
-    $preflightIndex = $frontDoorSource.IndexOf('preflight architect estritamente read-only')
-    $intakeIndex = $frontDoorSource.IndexOf('intake completo')
-    if ($preflightIndex -lt 0 -or $intakeIndex -le $preflightIndex -or $frontDoorSource -notmatch 'allowlist curta e concreta') { throw 'Lifecycle G: preflight sem paths concretos não está documentado antes do intake.' }
-    $preparedCheckpointIndex = $startSource.IndexOf('Initialize-AgenticNewGoalCheckpoint -PreviousState $checkpoint')
-    $preparedJournalIndex = $startSource.IndexOf('Add-AgenticJournalEvent -Goal $preparedState.goal_id -State ''DISCOVERY''')
-    $preparedProcessIndex = $startSource.IndexOf('[Diagnostics.Process]::Start($startInfo)')
-    if ($preparedCheckpointIndex -lt 0 -or $preparedJournalIndex -le $preparedCheckpointIndex -or $preparedProcessIndex -le $preparedJournalIndex -or $startSource.IndexOf('Assert-AgenticPreparedCheckpoint -State $preparedState') -le $preparedJournalIndex) { throw 'Lifecycle U: start deve persistir e validar checkpoint/journal antes do subprocesso.' }
-    $branchCreationIndex = $startSource.IndexOf('Start-GoalBranch -Metadata $metadata')
-    $goalWriterIndex = $startSource.IndexOf('Write-AgenticPreparedGoal -Path $goalPath')
-    if ($branchCreationIndex -lt 0 -or $goalWriterIndex -le $branchCreationIndex) { throw "Fixture J: start não chama materialização depois de criar a branch." }
-    # Fixture J: materialization is behaviorally gated by the checked-out work branch.
-    $bootstrapFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-bootstrap-{0}" -f [guid]::NewGuid().ToString("N"))
-    $bootstrapFixtureGoal = Join-Path $bootstrapFixtureRoot "agentic/goals/fixture-goal.md"
-    $bootstrapFixtureMetadata = @{ ID = "fixture-goal"; "Branch prefix" = "feature" }
-    $outsideGoal = $null
-    [IO.Directory]::CreateDirectory($bootstrapFixtureRoot) | Out-Null
-    try {
-        $wrongBranchRejected = $false
-        try { Write-AgenticPreparedGoal -Path $bootstrapFixtureGoal -Text "fixture goal" -Metadata $bootstrapFixtureMetadata -CurrentBranch "develop" -BasePath $bootstrapFixtureRoot | Out-Null } catch { $wrongBranchRejected = $true }
-        if (-not $wrongBranchRejected -or (Test-Path -LiteralPath $bootstrapFixtureGoal)) { throw "Fixture J: goal foi materializado antes da branch de trabalho." }
-        Write-AgenticPreparedGoal -Path $bootstrapFixtureGoal -Text "fixture goal" -Metadata $bootstrapFixtureMetadata -CurrentBranch "feature/fixture-goal" -BasePath $bootstrapFixtureRoot | Out-Null
-        if (-not (Test-Path -LiteralPath $bootstrapFixtureGoal) -or [IO.File]::ReadAllText($bootstrapFixtureGoal) -cne "fixture goal") { throw "Fixture J: goal não foi materializado na branch validada." }
-        $insideHandle = [IO.File]::OpenRead($bootstrapFixtureGoal)
-        try { Assert-AgenticOpenedPathWithinRoot -Stream $insideHandle -Path $bootstrapFixtureGoal -BasePath $bootstrapFixtureRoot | Out-Null } finally { $insideHandle.Dispose() }
-        $outsideGoal = Join-Path ([IO.Path]::GetTempPath()) ("agentic-outside-{0}.md" -f [guid]::NewGuid().ToString("N"))
-        $outsideGoalRejected = $false
-        try { Write-AgenticPreparedGoal -Path $outsideGoal -Text "fixture goal" -Metadata @{ ID = "fixture-goal"; "Branch prefix" = "feature" } -CurrentBranch "feature/fixture-goal" -BasePath $bootstrapFixtureRoot | Out-Null } catch { $outsideGoalRejected = $true }
-        if (-not $outsideGoalRejected -or (Test-Path -LiteralPath $outsideGoal)) { throw "Fixture J: destino fora do repositório temporário foi aceito." }
-    }
-    finally {
-        Remove-Item -LiteralPath $bootstrapFixtureRoot -Recurse -Force -ErrorAction SilentlyContinue
-        if ($outsideGoal -and (Test-Path -LiteralPath $outsideGoal)) { Remove-Item -LiteralPath $outsideGoal -Force -ErrorAction SilentlyContinue }
-    }
-    # Reparse point fixture uses NTFS junctions in temporary directories and exercises existing intake and destination checks.
-    $reparseFixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-reparse-{0}" -f [guid]::NewGuid().ToString("N"))
-    $reparseOutside = Join-Path ([IO.Path]::GetTempPath()) ("agentic-reparse-target-{0}" -f [guid]::NewGuid().ToString("N"))
-    $stateJunction = Join-Path $reparseFixtureRoot "agentic/state"
-    $goalsJunction = Join-Path $reparseFixtureRoot "agentic/goals"
-    [IO.Directory]::CreateDirectory((Join-Path $reparseFixtureRoot "agentic")) | Out-Null
-    [IO.Directory]::CreateDirectory($reparseOutside) | Out-Null
-    try {
-        $null = New-Item -ItemType Junction -Path $stateJunction -Target $reparseOutside -ErrorAction Stop
-        [IO.File]::WriteAllText((Join-Path $reparseOutside "intake.md"), $validIntake, [Text.UTF8Encoding]::new($false))
-        $directReparseCheckRejected = $false
-        try { Assert-AgenticNoReparsePoints -Path (Join-Path $stateJunction "intake.md") -BasePath $reparseFixtureRoot -RequireLeaf | Out-Null } catch { $directReparseCheckRejected = $true }
-        $reparseIntakeRejected = $false
-        try { Assert-AgenticIntake -Path (Join-Path $stateJunction "intake.md") -BasePath $reparseFixtureRoot | Out-Null } catch { $reparseIntakeRejected = $true }
-        if (-not $reparseIntakeRejected) {
-            $junctionItem = Get-Item -LiteralPath $stateJunction -Force -ErrorAction SilentlyContinue
-            $junctionType = if ($null -eq $junctionItem) { "missing" } else { $junctionItem.GetType().Name }
-            $junctionAttributes = try { [IO.File]::GetAttributes($stateJunction).ToString() } catch { "unavailable" }
-            $relativePath = Get-AgenticRelativePath -BasePath $reparseFixtureRoot -TargetPath (Join-Path $stateJunction "intake.md")
-            $componentAttributes = @()
-            $componentPath = $reparseFixtureRoot
-            foreach ($component in ($relativePath -split '/')) { $componentPath = Join-Path $componentPath $component; $componentAttributes += try { [IO.File]::GetAttributes($componentPath).ToString() } catch { "missing" } }
-            throw "Fixture Reparse intake: DirectCheck=$directReparseCheckRejected; PathType=$junctionType; FileAttributes=$junctionAttributes; Components=$($componentAttributes -join ',')."
-        }
-
-        $savedRepoRoot = $script:AgenticRepoRoot
-        try {
-            [IO.Directory]::Delete($stateJunction, $false)
-            [IO.Directory]::CreateDirectory($stateJunction) | Out-Null
-            [IO.File]::WriteAllText((Join-Path $stateJunction 'checkpoint.json'), '{"state":"IDLE"}', [Text.UTF8Encoding]::new($false))
-            $script:AgenticRepoRoot = $reparseFixtureRoot
-            $safeSnapshot = Get-AgenticControlPlaneSnapshot
-            [IO.File]::WriteAllText((Join-Path $stateJunction 'checkpoint.json'), '{"state":"FAILED"}', [Text.UTF8Encoding]::new($false))
-            $ordinaryTamperRejected = $false
-            $ordinaryTamperFailure = ''
-            try { Assert-AgenticControlPlaneUnchanged -Snapshot $safeSnapshot | Out-Null } catch { $ordinaryTamperFailure = [string]$_.Exception.Message; $ordinaryTamperRejected = $ordinaryTamperFailure -match 'restaurou o checkpoint' }
-            $restoredCheckpoint = [IO.File]::ReadAllText((Join-Path $stateJunction 'checkpoint.json'), [Text.UTF8Encoding]::new($false))
-            if (-not $ordinaryTamperRejected -or $restoredCheckpoint -cne '{"state":"IDLE"}') { throw ("Fixture Control Restore: alteração comum não foi restaurada pelo supervisor. Rejected={0}; Checkpoint={1}; Cause={2}" -f $ordinaryTamperRejected, $restoredCheckpoint, $ordinaryTamperFailure) }
-            [IO.Directory]::Delete($stateJunction, $true)
-            $null = New-Item -ItemType Junction -Path $stateJunction -Target $reparseOutside -ErrorAction Stop
-            $outsideCheckpoint = Join-Path $reparseOutside 'intake.md'
-            $outsideBefore = Get-AgenticFileSha256 -Path $outsideCheckpoint -BasePath $reparseOutside
-            $unsafeControlRejected = $false
-            try { Assert-AgenticControlPlaneUnchanged -Snapshot $safeSnapshot | Out-Null } catch { $unsafeControlRejected = $_.Exception.Message -match 'reparse point' }
-            if (-not $unsafeControlRejected -or (Get-AgenticFileSha256 -Path $outsideCheckpoint -BasePath $reparseOutside) -cne $outsideBefore) { throw 'Fixture Control Reparse: snapshot/restauração seguiu reparse point ou tocou destino externo.' }
-        }
-        finally { $script:AgenticRepoRoot = $savedRepoRoot }
-
-        $null = New-Item -ItemType Junction -Path $goalsJunction -Target $reparseOutside -ErrorAction Stop
-        $outsideHandlePath = Join-Path $reparseOutside "outside-handle.txt"
-        [IO.File]::WriteAllText($outsideHandlePath, "fixture", [Text.UTF8Encoding]::new($false))
-        $outsideHandle = [IO.File]::OpenRead($outsideHandlePath)
-        $outsideFinalPathRejected = $false
-        try { Assert-AgenticOpenedPathWithinRoot -Stream $outsideHandle -Path (Join-Path $goalsJunction "outside-handle.txt") -BasePath $reparseFixtureRoot | Out-Null } catch { $outsideFinalPathRejected = $true } finally { $outsideHandle.Dispose() }
-        if (-not $outsideFinalPathRejected) { throw "Fixture Reparse final path: handle fora da raiz foi aceito." }
-        if (Test-Path -LiteralPath (Join-Path $reparseOutside "fixture-goal.md")) { throw "Fixture Reparse destino: arquivo-alvo preexistia antes do teste de escrita." }
-        $reparseDestinationRejected = $false
-        try { Write-AgenticPreparedGoal -Path (Join-Path $goalsJunction "fixture-goal.md") -Text "fixture" -Metadata $bootstrapFixtureMetadata -CurrentBranch "feature/fixture-goal" -BasePath $reparseFixtureRoot | Out-Null } catch { $reparseDestinationRejected = $true }
-        if (-not $reparseDestinationRejected -or (Test-Path -LiteralPath (Join-Path $reparseOutside "fixture-goal.md"))) { throw "Fixture Reparse destino: junction não foi rejeitado antes da escrita." }
-        $reparseArtifactRejected = $false
-        try { Write-AgenticBytesSafely -Path (Join-Path $goalsJunction 'fixture-result.json') -Bytes ([Text.UTF8Encoding]::new($false).GetBytes('fixture')) -BasePath $reparseFixtureRoot } catch { $reparseArtifactRejected = $true }
-        if (-not $reparseArtifactRejected -or (Test-Path -LiteralPath (Join-Path $reparseOutside 'fixture-result.json'))) { throw 'Fixture Reparse artifact: escrita de resultado não rejeitou junction antes de criar arquivo externo.' }
-    }
-    finally {
-        foreach ($junction in @($stateJunction, $goalsJunction)) {
-            if (Test-Path -LiteralPath $junction) { try { [IO.Directory]::Delete($junction, $false) } catch { } }
-        }
-        foreach ($directory in @((Join-Path $reparseFixtureRoot "agentic"), $reparseFixtureRoot)) {
-            if (Test-Path -LiteralPath $directory) { try { [IO.Directory]::Delete($directory, $false) } catch { } }
-        }
-        if (Test-Path -LiteralPath $reparseOutside) { try { [IO.Directory]::Delete($reparseOutside, $true) } catch { } }
-    }
-    # Fixtures I/K/L/M/N: supervisor owns Git mutations; manual/resume stays compatible; no automatic merge/deploy; valid handoff enters the prepared loop.
-    if ($startSource -notmatch 'Invoke-AgenticGit' -or $startSource -notmatch 'agentic-loop\.ps1') { throw "Fixture I/N: handoff válido não é executado pelo supervisor." }
-    if ($startSource -notmatch 'NamedPipeServerStreamAcl\]::Create' -or $startSource -notmatch 'NamedPipeServerStream\]::new' -or $startSource -match 'CurrentUserOnly') { throw "Fixture N: criação do pipe não mantém ACL compatível com PS 5.1 e PS 7." }
-    if ($supervisorSource -notmatch 'Start-(?:Agentic)?GoalBranch\s+-Metadata\s+\$metadata' -or $supervisorSource -notmatch '\$Resume' -or $supervisorSource -notmatch '\$PreparedBranch') { throw "Fixture K/L: loop manual ou retomada incompatível." }
-    if ($supervisorSource -notmatch 'Assert-AgenticPreparedHandoff' -or $commonSource -notmatch 'agentic/goals/\{0\}\.md') { throw "Fixture N: prepared branch sem handoff autenticado ou goal canônico." }
-    $wrongGoalRejected = $false
-    try { Assert-AgenticPreparedHandoff -GoalPath (Join-Path $script:AgenticRepoRoot "agentic/goals/other.md") -Metadata @{ ID = "clients-crud"; "Branch prefix" = "feature" } | Out-Null } catch { $wrongGoalRejected = $true }
-    if (-not $wrongGoalRejected) { throw "Fixture N: caminho não canônico aceito para branch preparada." }
-    $savedPipe = [string]$env:GERIT_AGENTIC_HANDOFF_PIPE
-    Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue
-    $handoffWithoutSupervisorRejected = $false
-    try { Assert-AgenticPreparedHandoff -GoalPath (Join-Path $script:AgenticRepoRoot "agentic/goals/clients-crud.md") -Metadata @{ ID = "clients-crud"; "Branch prefix" = "feature" } | Out-Null } catch { $handoffWithoutSupervisorRejected = $true }
-    finally { if ($savedPipe) { $env:GERIT_AGENTIC_HANDOFF_PIPE = $savedPipe } }
-    if (-not $handoffWithoutSupervisorRejected) { throw "Fixture N: PreparedBranch foi aceito sem o canal temporário do supervisor." }
-    $mergeCommandPattern = '(?i)\bgit(?:\.exe)?\s+merge(?:\s|$)|deploy\s+production'
-    if ("git merge-base develop main" -match $mergeCommandPattern -or "git merge --no-ff feature/topic" -notmatch $mergeCommandPattern) { throw "Fixture M: detector de merge automático tem falso positivo/negativo." }
-    if ($supervisorSource -match $mergeCommandPattern -or $startSource -match $mergeCommandPattern) { throw "Fixture M: merge/deploy automático detectado." }
-    foreach ($forbidden in @("git fetch", "git add", "git commit", "git push", "git checkout", "git switch", "gh pr create", "merge")) {
-        if ($prompt -notmatch [regex]::Escape($forbidden)) { throw "Prompt nao proibe '$forbidden' dentro do Codex." }
-    }
-    if ($prompt -match 'FINAL_STATE\s*:') { throw "Prompt ainda concede autoridade de state por texto livre." }
-    foreach ($requiredSchemaField in @('schema_version', 'goal_id', 'role', 'invocation_id', 'phase', 'snapshot_sha256', 'status', 'summary', 'findings', 'evidence', 'failure', 'files_changed')) {
-        if ($prompt -notmatch [regex]::Escape(('"{0}"' -f $requiredSchemaField))) { throw "Prompt sem campo estruturado obrigatório: $requiredSchemaField." }
-    }
-    if ($supervisorSource -notmatch 'Set-AgenticSupervisorTransition' -or $supervisorSource -notmatch 'ConvertFrom-AgenticRoleResult' -or $supervisorSource -notmatch 'Invoke-CodexAgentRole') { throw "Supervisor não invoca roles isoladas nem valida resultado estruturado." }
-    $readOnlyCommands = @("git status", "git diff", "git diff --check", "git branch --show-current", "git log")
-    if (@($readOnlyCommands | Where-Object { $_ -match 'git (fetch|add|commit|push|checkout|switch)|gh pr create' }).Count -gt 0) { throw "Fixture A: lista de comandos read-only contem Git mutavel." }
-
-    # Fixtures A-C: empty optional journal values are normalized without trailing whitespace.
-    $originalJournalPath = $script:AgenticJournalPath
-    $originalFixtureStatePath = $script:AgenticStatePath
-    $originalRepoRootForJournalFixture = $script:AgenticRepoRoot
-    $fixtureJournalPath = Join-Path ([IO.Path]::GetTempPath()) ("agentic-journal-whitespace-{0}.md" -f [guid]::NewGuid().ToString("N"))
-    $fixtureStatePath = Join-Path ([IO.Path]::GetTempPath()) ("agentic-journal-state-{0}.json" -f [guid]::NewGuid().ToString("N"))
-    try {
-        $script:AgenticRepoRoot = [IO.Path]::GetTempPath()
-        $script:AgenticJournalPath = $fixtureJournalPath
-        $fixtureState = Get-AgenticStateTemplate
-        $fixtureState.goal_id = 'journal-fixture'; $fixtureState.goal_file = 'agentic/goals/journal-fixture.md'; $fixtureState.branch = 'feature/journal-fixture'; $fixtureState.state = 'TESTING'; $fixtureState.pending_phase = 'TESTING'; $fixtureState.pending_action = 'fixture'
-        [IO.File]::WriteAllText($fixtureStatePath, ($fixtureState | ConvertTo-Json -Depth 20), [Text.UTF8Encoding]::new($false))
-        $script:AgenticStatePath = $fixtureStatePath
-        $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-        [System.IO.File]::WriteAllText($fixtureJournalPath, (New-AgenticJournalHeader -GoalId 'journal-fixture' -Branch 'feature/journal-fixture' -BaseBranch 'develop'), $utf8NoBom)
-        Add-AgenticJournalEvent -Goal "journal-fixture" -State "TESTING" -Agent "tester" -Action "empty quota fixture" -Result "PASS" -Quota ""
-        $journalFixture = [System.IO.File]::ReadAllText($fixtureJournalPath, $utf8NoBom)
-        if (@([regex]::Split($journalFixture, "\r\n|\n|\r")) -notcontains "- quota: n/a" -or @(Get-AgenticTextWhitespaceErrors -Text $journalFixture).Count -gt 0) { throw "Fixture A: quota vazia gerou whitespace inválido." }
-
-        [System.IO.File]::WriteAllText($fixtureJournalPath, (New-AgenticJournalHeader -GoalId 'journal-fixture' -Branch 'feature/journal-fixture' -BaseBranch 'develop'), $utf8NoBom)
-        Add-AgenticJournalEvent -Goal "journal-fixture" -State "TESTING" -Agent "tester" -Action "empty memory fixture" -Result "PASS" -Memory ""
-        $journalFixture = [System.IO.File]::ReadAllText($fixtureJournalPath, $utf8NoBom)
-        if (@([regex]::Split($journalFixture, "\r\n|\n|\r")) -notcontains "- memory: n/a" -or @(Get-AgenticTextWhitespaceErrors -Text $journalFixture).Count -gt 0) { throw "Fixture B: memory vazia gerou whitespace inválido." }
-
-        [System.IO.File]::WriteAllText($fixtureJournalPath, (New-AgenticJournalHeader -GoalId 'journal-fixture' -Branch 'feature/journal-fixture' -BaseBranch 'develop'), $utf8NoBom)
-        Add-AgenticJournalEvent -Goal "journal-fixture" -State "TESTING" -Agent "tester" -Action "empty failure/retry fixture" -Result "PASS" -Failure "" -Retry "" -Gate "" -Quota "" -Memory "" -DelegatedAgent ""
-        $journalFixture = [System.IO.File]::ReadAllText($fixtureJournalPath, $utf8NoBom)
-        foreach ($field in @("failure", "retry", "gate", "quota", "memory", "delegated_agent")) {
-            if (@([regex]::Split($journalFixture, "\r\n|\n|\r")) -notcontains ("- {0}: n/a" -f $field)) { throw "Fixture C: campo '$field' vazio não virou n/a." }
-        }
-        if (@(Get-AgenticTextWhitespaceErrors -Text $journalFixture).Count -gt 0) { throw "Fixture C: campos opcionais vazios geraram trailing whitespace." }
-    }
-    finally {
-        $script:AgenticJournalPath = $originalJournalPath
-        $script:AgenticStatePath = $originalFixtureStatePath
-        $script:AgenticRepoRoot = $originalRepoRootForJournalFixture
-        Remove-Item -LiteralPath $fixtureJournalPath -Force -ErrorAction SilentlyContinue
-        Remove-Item -LiteralPath $fixtureStatePath -Force -ErrorAction SilentlyContinue
-    }
-
-    # Fixture D: whitespace in newly added functional file content blocks the functional quality gate.
-    $functionalWhitespaceRejected = $false
-    try { Assert-AgenticFileWhitespaceClean -Path "functional-fixture.ts" -Text "new functional line `t`n" | Out-Null }
-    catch { $functionalWhitespaceRejected = $true }
-    if (-not $functionalWhitespaceRejected) { throw "Fixture D: trailing whitespace em conteúdo funcional não bloqueou o gate." }
-
-    # Fixture E: control paths are excluded from the functional whitespace gate.
-    if (-not (Assert-AgenticFunctionalDiffCheck -Paths @("agentic/state/loop-state.json", "agentic/journal/current.md", "agentic/journal/history/old.md"))) { throw "Fixture E: whitespace de state/journal bloqueou o diff funcional." }
-
-    # Fixture F: supervisor must run the cached diff check after staging and before commit.
-    $stageIndex = $supervisorSource.IndexOf('Invoke-Git -GitArguments (@("add"')
-    $stagedCheckIndex = $supervisorSource.IndexOf('$step = "git diff --cached --check"')
-    $commitIndex = $supervisorSource.IndexOf('$step = "git commit"')
-    if ($stageIndex -lt 0 -or $stagedCheckIndex -le $stageIndex -or $commitIndex -le $stagedCheckIndex) { throw "Fixture F: git diff --cached --check não está entre stage e commit." }
-
-    $metadata = @{
-        "ID" = "agentic-fixture"
-        "Title" = "Fixture do supervisor"
-        "Base branch" = "develop"
-        "Branch prefix" = "feature"
-        "Allowed files" = "scripts/agentic-common.ps1"
-    }
-    $provenanceJournal = @'
-## 2026-10-16T10:00:00Z - agentic-fixture - iteracao 1
-- state: PLANNING
-- controller: supervisor
-- actor: supervisor
-- delegated_agent: implementer
-- action: delegar implementacao do fixture
-- files_changed: nenhum
-- decision: checkpoint
-- gate: n/a
-- result: PASS
-- failure: n/a
-- retry: n/a
-- quota: n/a
-- memory: MEMORY_UNAVAILABLE
-
-## 2026-10-16T10:01:00Z - agentic-fixture - iteracao 1
-- state: IMPLEMENTING
-- controller: supervisor
-- actor: implementer
-- delegated_agent: n/a
-- action: atualizar fixture
-- files_changed: scripts/agentic-common.ps1
-- decision: checkpoint
-- gate: n/a
-- result: PASS
-- failure: n/a
-- retry: n/a
-- quota: n/a
-- memory: MEMORY_UNAVAILABLE
-'@
-    $state = [pscustomobject]@{
-        state = "READY_TO_COMMIT"
-        branch = "feature/agentic-fixture"
-        base_branch = "develop"
-        quality_gates = [pscustomobject]@{ diff_check = "PASS"; lint = "PASS"; build = "PASS"; typecheck = "PASS" }
-        security_review_status = "PASS"
-        code_review_status = "PASS"
-        goal_id = "agentic-fixture"
-        commit_sha = $null
-        pr_number = $null
-        pr_url = $null
-        last_gate = "CODE_REVIEW: PASS"
-        last_failure = $null
-        pending_action = "supervisor"
-        active_agent = "supervisor"
-        memory_status = "MEMORY_UNAVAILABLE"
-        quota_state = "AVAILABLE"
-        updated_at = $null
-    }
-    Set-AgenticFixtureReadinessEvidence -State $state -Paths @('scripts/agentic-common.ps1')
-
-    # goal_id must be explicitly present and match the active goal ID case-sensitively.
-    $goalIdReadinessCases = @(
-        [pscustomobject]@{ Name = "ausente"; IncludeProperty = $false; Value = $null; ExpectedPass = $false },
-        [pscustomobject]@{ Name = "vazio"; IncludeProperty = $true; Value = ""; ExpectedPass = $false },
-        [pscustomobject]@{ Name = "diferente"; IncludeProperty = $true; Value = "another-goal"; ExpectedPass = $false },
-        [pscustomobject]@{ Name = "casing diferente"; IncludeProperty = $true; Value = "Agentic-fixture"; ExpectedPass = $false },
-        [pscustomobject]@{ Name = "exatamente igual"; IncludeProperty = $true; Value = "agentic-fixture"; ExpectedPass = $true }
-    )
-    foreach ($goalIdCase in $goalIdReadinessCases) {
-        $goalIdState = $state | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-        if ($goalIdCase.IncludeProperty) { $goalIdState.goal_id = $goalIdCase.Value }
-        else { $null = $goalIdState.PSObject.Properties.Remove("goal_id") }
-        if ($goalIdCase.ExpectedPass) { Set-AgenticFixtureReadinessEvidence -State $goalIdState -Paths @('scripts/agentic-common.ps1') }
-        $accepted = $false
-        try {
-            Test-AgenticReadiness -State $goalIdState -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal | Out-Null
-            $accepted = $true
-        }
-        catch { $accepted = $false }
-        if ($accepted -ne $goalIdCase.ExpectedPass) { throw "Fixture goal_id '$($goalIdCase.Name)' retornou resultado incorreto." }
-    }
-
-    # Control paths never enter commit paths or functional classification.
-    $coordinationOnlyPaths = @(Get-AgenticCommitPaths -ChangedPaths @('agentic/state/loop-state.json', 'agentic/journal/current.md', 'agentic/plans/local.md'))
-    if ($coordinationOnlyPaths.Count -ne 0) { throw 'Control paths foram incluídos nos commit paths.' }
-
-    if (-not (Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1", "agentic/state/loop-state.json") -JournalText $provenanceJournal)) { throw "Fixture B: READY_TO_COMMIT nao foi reconhecido." }
-
-    $rejected = $false
-    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/wrong-branch" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal | Out-Null }
-    catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture C: branch incorreta foi aceita." }
-
-    $rejected = $false
-    $state.security_review_status = "PENDING"
-    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal | Out-Null }
-    catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture D: state sem reviews PASS foi aceito." }
-    $state.security_review_status = "PASS"
-    $state.code_review_status = "PENDING"
-    $rejected = $false
-    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal | Out-Null }
-    catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture D: state sem code review PASS foi aceito." }
-    $state.code_review_status = "PASS"
-    $state.quality_gates.lint = "FAIL"
-    Set-AgenticGateResult -State $state -Name 'lint' -Status 'FAIL' -Reason 'fixture failure' | Out-Null
-    $rejected = $false
-    try { Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal | Out-Null }
-    catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture D: state sem quality gates PASS foi aceito." }
-    $state.quality_gates.lint = "PASS"
-    Set-AgenticGateResult -State $state -Name 'lint' -Status 'PASS' -Reason 'fixture restored' | Out-Null
-
-    if (-not (Test-AgenticPushTarget -Branch "feature/agentic-fixture")) { throw "Fixture E: branch de trabalho valida foi rejeitada." }
-    foreach ($protectedBranch in @("develop", "main")) {
-        if (Test-AgenticPushTarget -Branch $protectedBranch) { throw "Fixture E: push para '$protectedBranch' foi permitido." }
-    }
-
-    foreach ($operation in @("git commit", "git push", "gh pr create")) {
-        $state.commit_sha = if ($operation -eq "git commit") { $null } else { "fixture-commit-sha" }
-        $failed = New-AgenticFailedCheckpoint -State $state -Reason "$operation falhou (exit code 9); saida omitida."
-        $expectedCommit = if ($operation -eq "git commit") { $null } else { "fixture-commit-sha" }
-        if ($failed.state -ne "FAILED" -or $failed.commit_sha -ne $expectedCommit -or $failed.branch -ne $state.branch -or $failed.goal_id -ne $state.goal_id) { throw "Fixture F: falha de $operation nao preservou o checkpoint." }
-    }
-
-    $pr = [pscustomobject]@{ number = 316; url = "https://github.com/vianahub-pt/VianaHub.Global.Gerit.Web/pull/316"; state = "OPEN"; headRefName = "feature/agentic-fixture"; baseRefName = "develop" }
-    if (-not (Test-AgenticPullRequest -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop")) { throw "Fixture G: PR verificavel foi rejeitado." }
-    $pr.state = "MERGED"
-    if (Test-AgenticPullRequest -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop") { throw "Fixture G: estado final aceitou PR que nao esta aberto." }
-    $state.state = "READY_TO_PR"
-    $rejected = $false
-    try { Set-AgenticVerifiedPullRequestState -State $state -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop" | Out-Null }
-    catch { $rejected = $true }
-    if (-not $rejected -or $state.state -ne "READY_TO_PR") { throw "Fixture G: WAITING_HUMAN_MERGE foi definido sem PR verificavel." }
-    $pr.state = "OPEN"
-    Set-AgenticVerifiedPullRequestState -State $state -PullRequest $pr -Branch "feature/agentic-fixture" -BaseBranch "develop" | Out-Null
-    if ($state.state -ne "WAITING_HUMAN_MERGE" -or $state.pr_number -ne "316" -or -not $state.pr_url) { throw "Fixture G: PR verificavel nao produziu checkpoint WAITING_HUMAN_MERGE." }
-
-    # Fixture A: orchestrator pode alterar somente state/journal de coordenacao.
-    $coordinationJournal = "## coordination`n- actor: supervisor`n- action: checkpoint`n- files_changed: agentic/state/loop-state.json`n- result: PASS"
-    if (-not (Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @() -JournalText $coordinationJournal)) { throw "Fixture A: state/journal coordination foi rejeitada." }
-
-    # Fixture B: orchestrator nao pode executar alteracao funcional.
-    $roleJournal = "## role`n- actor: orchestrator`n- action: alteracao`n- files_changed: scripts/agentic-common.ps1`n- result: PASS"
-    $rejected = $false
-    try { Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @("scripts/agentic-common.ps1") -JournalText $roleJournal | Out-Null } catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture B: orchestrator foi aceito como executor funcional." }
-
-    # Fixture C: implementer com arquivo permitido e evento verificavel e aceito.
-    if (-not (Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal)) { throw "Fixture C: implementer valido foi rejeitado." }
-
-    # Fixtures D-G: demais roles nao podem executar alteracoes funcionais.
-    foreach ($role in @("architect", "tester", "security", "reviewer")) {
-        $roleJournal = "## role`n- actor: $role`n- action: alteracao`n- files_changed: scripts/agentic-common.ps1`n- result: PASS"
-        $rejected = $false
-        try { Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @("scripts/agentic-common.ps1") -JournalText $roleJournal | Out-Null } catch { $rejected = $true }
-        if (-not $rejected) { throw "Fixture de role: '$role' foi aceito como executor funcional." }
-    }
-
-    # Fixture H: journal estruturado de outro goal e bloco sem schema nao comprovam provenance.
-    $otherGoalJournal = @'
-## 2026-10-16T10:00:00Z - another-goal - iteracao 1
-- state: PLANNING
-- controller: orchestrator
-- actor: orchestrator
-- delegated_agent: implementer
-- action: delegar implementacao
-- files_changed: nenhum
-- result: PASS
-
-## 2026-10-16T10:01:00Z - another-goal - iteracao 1
-- state: IMPLEMENTING
-- controller: orchestrator
-- actor: implementer
-- delegated_agent: n/a
-- action: atualizar mesmo arquivo
-- files_changed: scripts/agentic-common.ps1
-- result: PASS
-'@
-    $rejected = $false
-    try { Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @("scripts/agentic-common.ps1") -JournalText $otherGoalJournal | Out-Null } catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture H: provenance estruturada de outro goal foi aceita." }
-    $rejected = $false
-    try { Test-AgenticImplementerProvenance -GoalId "agentic-fixture" -FunctionalPaths @("scripts/agentic-common.ps1") -JournalText "- actor: implementer`n- action: alteracao`n- files_changed: scripts/agentic-common.ps1`n- result: PASS" | Out-Null } catch { $rejected = $true }
-    if (-not $rejected) { throw "Fixture H: bloco sem heading/schema foi aceito." }
-
-    # Fixture I: prompt proibe mutacoes Git em codex exec e reserva-as ao supervisor.
-    foreach ($operation in @("git fetch", "git add", "git commit", "git push", "git checkout", "git switch", "gh pr create", "merge")) {
-        if ($prompt -notmatch [regex]::Escape($operation)) { throw "Fixture Git supervisor: prompt nao documenta bloqueio de '$operation'." }
-    }
-    if ($prompt -notmatch 'exclusivos do supervisor') { throw "Fixture I: Git mutável não está reservado ao supervisor." }
-
-    # Fixture J: state valido continua elegivel a READY_TO_COMMIT.
-    $state.state = "READY_TO_COMMIT"
-    $state.pr_number = $null
-    $state.pr_url = $null
-    Set-AgenticFixtureReadinessEvidence -State $state -Paths @('scripts/agentic-common.ps1')
-    if (-not (Test-AgenticReadiness -State $state -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal)) { throw "Fixture fluxo valido: READY_TO_COMMIT foi bloqueado." }
-
-    # Bootstrap fixtures use the checked-in front-door goal as an immutable fixture input.
-    $bootstrapGoalFile = Join-Path $script:AgenticRepoRoot "agentic/goals/codex-desktop-front-door.md"
-    $bootstrapMetadata = Get-AgenticGoalMetadata -Path $bootstrapGoalFile
-    $bootstrapGoalId = [string]$bootstrapMetadata["ID"]
-    $bootstrapCanonicalPath = "agentic/goals/{0}.md" -f $bootstrapGoalId
-    $bootstrapHash = Get-AgenticFileSha256 -Path $bootstrapGoalFile
-    if ((Get-AgenticAllowedGoalFiles -Metadata $bootstrapMetadata) -contains $bootstrapCanonicalPath) { throw "Fixture 1: goal bootstrap foi listado como arquivo funcional permitido." }
-    $bootstrapJournal = @"
-## 2026-10-19T10:00:00Z - $bootstrapGoalId - iteracao 1
-- state: DISCOVERY
-- controller: supervisor
-- actor: supervisor
-- delegated_agent: n/a
-- action: Materializar goal bootstrap autenticado
-- files_changed: $bootstrapCanonicalPath
-- decision: materialização após validar branch de trabalho
-- gate: bootstrap_goal_sha256=$bootstrapHash
-- result: PASS
-- failure: n/a
-- retry: n/a
-- quota: n/a
-- memory: AVAILABLE
-"@
-    $bootstrapState = [pscustomobject]@{
-        state = "READY_TO_COMMIT"
-        goal_id = $bootstrapGoalId
-        goal_file = $bootstrapCanonicalPath
-        bootstrap_goal_sha256 = $bootstrapHash
-        branch = "feature/$bootstrapGoalId"
-        base_branch = "develop"
-        quality_gates = [pscustomobject]@{ diff_check = "PASS"; lint = "PASS"; build = "PASS"; typecheck = "PASS" }
-        security_review_status = "PASS"
-        code_review_status = "PASS"
-    }
-    Set-AgenticFixtureReadinessEvidence -State $bootstrapState -Paths @($bootstrapCanonicalPath)
-    $wrongCaseBootstrapState = $bootstrapState | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-    $wrongCaseBootstrapState.bootstrap_goal_sha256 = $bootstrapHash.ToUpperInvariant()
-    $wrongCaseHashRejected = $false
-    try { Assert-AgenticBootstrapGoalIntegrity -State $wrongCaseBootstrapState -Metadata $bootstrapMetadata -ExpectedSha256 $bootstrapHash | Out-Null } catch { $wrongCaseHashRejected = $true }
-    if (-not $wrongCaseHashRejected) { throw "Fixture 4: SHA-256 com casing diferente foi aceito." }
-    $bootstrapChangedPaths = @($bootstrapCanonicalPath, "scripts/agentic-common.ps1")
-    Set-AgenticFixtureReadinessEvidence -State $bootstrapState -Paths @($bootstrapCanonicalPath)
-    if (-not (Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath) -JournalText $bootstrapJournal -BootstrapGoalSha256 $bootstrapHash)) { throw "Fixture 2: goal bootstrap canônico exigiu provenance funcional." }
-    $bootstrapCommitPaths = @(Get-AgenticCommitPaths -ChangedPaths @($bootstrapCanonicalPath, "agentic/state/loop-state.json", "agentic/journal/current.md", "scripts/agentic-common.ps1"))
-    if ($bootstrapCommitPaths -notcontains $bootstrapCanonicalPath) { throw "Fixture 3: goal bootstrap canônico não entrou no conjunto a stagear." }
-    if ($bootstrapCommitPaths -contains "agentic/state/loop-state.json" -or $bootstrapCommitPaths -contains "agentic/journal/current.md") { throw "Fixture 9: state/journal entraram no conjunto a stagear." }
-
-    $tamperRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentic-bootstrap-integrity-{0}" -f [guid]::NewGuid().ToString("N"))
-    $tamperGoalPath = Join-Path $tamperRoot "agentic/goals/bootstrap-fixture.md"
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $tamperGoalPath)) | Out-Null
-    try {
-        $initResult = Invoke-AgenticNativeProcess -FilePath 'git' -Arguments @('-C', $tamperRoot, 'init', '--quiet')
-        Assert-AgenticNativeProcessSucceeded -Result $initResult -CommandName 'git init fixture'
-        [IO.File]::WriteAllText($tamperGoalPath, "original materialized bytes", [Text.UTF8Encoding]::new($false))
-        $originalHash = Get-AgenticFileSha256 -Path $tamperGoalPath -BasePath $tamperRoot
-        Write-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -Sha256 $originalHash -BasePath $tamperRoot | Out-Null
-        Assert-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -ExpectedSha256 $originalHash -BasePath $tamperRoot | Out-Null
-        $tamperState = [pscustomobject]@{ goal_id = "bootstrap-fixture"; goal_file = "agentic/goals/bootstrap-fixture.md"; bootstrap_goal_sha256 = $originalHash }
-        [IO.File]::WriteAllText($tamperGoalPath, "changed after materialization", [Text.UTF8Encoding]::new($false))
-        $tamperRejected = $false
-        try { Assert-AgenticBootstrapGoalIntegrity -State $tamperState -Metadata @{ ID = "bootstrap-fixture" } -ExpectedSha256 $originalHash -BasePath $tamperRoot | Out-Null } catch { $tamperRejected = $true }
-        if (-not $tamperRejected) { throw "Fixture 4: alteração do goal bootstrap após materialização foi aceita." }
-        $tamperState.bootstrap_goal_sha256 = Get-AgenticFileSha256 -Path $tamperGoalPath -BasePath $tamperRoot
-        $stateHashReplacementRejected = $false
-        try { Assert-AgenticBootstrapAnchor -GoalId 'bootstrap-fixture' -ExpectedSha256 $tamperState.bootstrap_goal_sha256 -BasePath $tamperRoot | Out-Null } catch { $stateHashReplacementRejected = $true }
-        if (-not $stateHashReplacementRejected) { throw "Fixture 4: hash do checkpoint foi silenciosamente substituído após alteração do goal." }
-    }
-    finally { Remove-Item -LiteralPath $tamperRoot -Recurse -Force -ErrorAction SilentlyContinue }
-
-    $bootstrapSupervisorOnlyJournal = $bootstrapJournal
-    $bootstrapWithImplementerJournal = @"
-$bootstrapJournal
-
-## 2026-10-19T10:01:00Z - $bootstrapGoalId - iteracao 1
-- state: PLANNING
-- controller: supervisor
-- actor: supervisor
-- delegated_agent: implementer
-- action: Delegar atualização do supervisor
-- files_changed: nenhum
-- decision: iniciar implementação permitida
-- gate: n/a
-- result: PASS
-- failure: n/a
-- retry: n/a
-- quota: AVAILABLE
-- memory: AVAILABLE
-
-## 2026-10-19T10:02:00Z - $bootstrapGoalId - iteracao 1
-- state: IMPLEMENTING
-- controller: supervisor
-- actor: implementer
-- delegated_agent: n/a
-- action: Atualizar validação de bootstrap
-- files_changed: scripts/agentic-common.ps1
-- decision: implementação no escopo
-- gate: n/a
-- result: PASS
-- failure: n/a
-- retry: n/a
-- quota: AVAILABLE
-- memory: AVAILABLE
-"@
-    foreach ($untrustedGoalPath in @("agentic/goals/another-id.md", "agentic/goals/arbitrary.md")) {
-        $rejectedGoalPath = $false
-        try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, $untrustedGoalPath) -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $rejectedGoalPath = $true }
-        if (-not $rejectedGoalPath) { throw "Fixture 5/6: arquivo goal não canônico '$untrustedGoalPath' foi aceito." }
-    }
-    $explicitArbitraryGoalMetadata = @{
-        "ID" = $bootstrapGoalId
-        "Title" = $bootstrapMetadata["Title"]
-        "Base branch" = $bootstrapMetadata["Base branch"]
-        "Branch prefix" = $bootstrapMetadata["Branch prefix"]
-        "Allowed files" = "agentic/goals/arbitrary.md"
-    }
-    $arbitraryGoalFile = Join-Path $script:AgenticRepoRoot "agentic/goals/arbitrary.md"
-    if (Test-Path -LiteralPath $arbitraryGoalFile) { throw "Fixture 6: arquivo temporário arbitrário já existe; teste não irá sobrescrevê-lo." }
-    try {
-        [IO.File]::WriteAllText($arbitraryGoalFile, "fixture goal file`n", [Text.UTF8Encoding]::new($false))
-        $arbitraryGoalWithoutImplementerRejected = $false
-        try { Test-AgenticReadiness -State $bootstrapState -Metadata $explicitArbitraryGoalMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @("agentic/goals/arbitrary.md") -JournalText $bootstrapSupervisorOnlyJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $arbitraryGoalWithoutImplementerRejected = $true }
-        if (-not $arbitraryGoalWithoutImplementerRejected) { throw "Fixture 6: arquivo agentic/goals arbitrário recebeu confiança bootstrap sem provenance funcional." }
-    }
-    finally { Remove-Item -LiteralPath $arbitraryGoalFile -Force -ErrorAction SilentlyContinue }
-    $outsideAllowedRejected = $false
-    try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, "functional/not-allowed.ts") -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $outsideAllowedRejected = $true }
-    if (-not $outsideAllowedRejected) { throw "Fixture 7: arquivo funcional fora de Allowed files foi aceito." }
-    $missingFunctionalProvenanceRejected = $false
-    try { Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths @($bootstrapCanonicalPath, "scripts/agentic-common.ps1") -JournalText $bootstrapSupervisorOnlyJournal -BootstrapGoalSha256 $bootstrapHash | Out-Null } catch { $missingFunctionalProvenanceRejected = $true }
-    if (-not $missingFunctionalProvenanceRejected) { throw "Fixture 8: arquivo funcional sem provenance do implementer foi aceito." }
-    if ($supervisorSource -notmatch 'Test-AgenticReadiness[^\r\n]+BootstrapGoalSha256' -or $supervisorSource -notmatch 'Get-AgenticCommitPaths') { throw "Fixture 3/12: finalização não integra autenticação bootstrap ao readiness/stage." }
-
-    # Fixture 10: manual loop remains functional and receives no bootstrap classification.
-    $manualState = $state | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-    $manualState.goal_id = "agentic-fixture"
-    if ($null -eq $manualState.PSObject.Properties["goal_file"]) { $manualState | Add-Member -NotePropertyName goal_file -NotePropertyValue "agentic/goals/agentic-fixture.md" }
-    else { $manualState.goal_file = "agentic/goals/agentic-fixture.md" }
-    if ($null -eq $manualState.PSObject.Properties["bootstrap_goal_sha256"]) { $manualState | Add-Member -NotePropertyName bootstrap_goal_sha256 -NotePropertyValue $null }
-    else { $manualState.bootstrap_goal_sha256 = $null }
-    Set-AgenticFixtureReadinessEvidence -State $manualState -Paths @('scripts/agentic-common.ps1')
-    if (-not (Test-AgenticReadiness -State $manualState -Metadata $metadata -CurrentBranch "feature/agentic-fixture" -ChangedPaths @("scripts/agentic-common.ps1") -JournalText $provenanceJournal)) { throw "Fixture 10: fluxo manual sem bootstrap autenticado deixou de ser compatível." }
-
-    # Fixture 12: front-door handoff can reach READY_TO_COMMIT with bootstrap + functional provenance.
-    Set-AgenticFixtureReadinessEvidence -State $bootstrapState -Paths $bootstrapChangedPaths
-    if (-not (Test-AgenticReadiness -State $bootstrapState -Metadata $bootstrapMetadata -CurrentBranch "feature/$bootstrapGoalId" -ChangedPaths $bootstrapChangedPaths -JournalText $bootstrapWithImplementerJournal -BootstrapGoalSha256 $bootstrapHash)) { throw "Fixture 12: bootstrap válido bloqueou READY_TO_COMMIT." }
-
-    # Lifecycle fixtures A-X exercise isolated journals, resume, policies and the supervisor handoff.
-    $lifecycleRoot = Join-Path ([IO.Path]::GetTempPath()) ('agentic-lifecycle-{0}' -f [guid]::NewGuid().ToString('N'))
-    $lifecycleJournal = Join-Path $lifecycleRoot 'journal/current.md'
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $lifecycleJournal)) | Out-Null
-    try {
-        $goalAHeader = New-AgenticJournalHeader -GoalId 'goal-a' -Branch 'feature/goal-a' -BaseBranch 'develop'
-        [IO.File]::WriteAllText($lifecycleJournal, ($goalAHeader + "`n## historical event for goal-a`n"), [Text.UTF8Encoding]::new($false))
-        Initialize-AgenticJournalForGoal -GoalId 'goal-b' -Branch 'feature/goal-b' -BaseBranch 'develop' -JournalPath $lifecycleJournal -BasePath $lifecycleRoot
-        $goalBText = [IO.File]::ReadAllText($lifecycleJournal, [Text.UTF8Encoding]::new($false))
-        if ($goalBText -match 'historical event for goal-a' -or (Get-AgenticJournalHeader -JournalText $goalBText).goal_id -cne 'goal-b') { throw 'Lifecycle A/B: novo goal herdou journal anterior.' }
-        $archives = @(Get-ChildItem -LiteralPath (Join-Path (Split-Path -Parent $lifecycleJournal) 'history') -File)
-        if ($archives.Count -ne 1 -or [IO.File]::ReadAllText($archives[0].FullName) -notmatch 'goal-a') { throw 'Lifecycle B: journal anterior não foi arquivado.' }
-        $goalBState = [pscustomobject]@{ goal_id = 'goal-b'; branch = 'feature/goal-b'; base_branch = 'develop' }
-        if (-not (Assert-AgenticJournalMatchesState -State $goalBState -JournalPath $lifecycleJournal -BasePath $lifecycleRoot)) { throw 'Lifecycle C: journal ativo não corresponde ao state.' }
-        $goalAState = [pscustomobject]@{ goal_id = 'goal-a'; branch = 'feature/goal-a'; base_branch = 'develop' }
-        $mismatchRejected = $false
-        try { Assert-AgenticJournalMatchesState -State $goalAState -JournalPath $lifecycleJournal -BasePath $lifecycleRoot | Out-Null } catch { $mismatchRejected = $true }
-        if (-not $mismatchRejected) { throw 'Lifecycle C: resume aceitou journal de outro goal.' }
-    }
-    finally { Remove-Item -LiteralPath $lifecycleRoot -Recurse -Force -ErrorAction SilentlyContinue }
-
-    $stateArchiveRoot = Join-Path ([IO.Path]::GetTempPath()) ('agentic-state-archive-{0}' -f [guid]::NewGuid().ToString('N'))
-    $stateArchivePath = Join-Path $stateArchiveRoot 'state/loop-state.json'
-    $originalStatePath = $script:AgenticStatePath
-    $originalRepoRootForStateFixture = $script:AgenticRepoRoot
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $stateArchivePath)) | Out-Null
-    try {
-        $previousState = [pscustomobject]@{ state = 'FAILED'; goal_id = 'previous-goal'; branch = 'fix/previous-goal'; base_branch = 'develop' }
-        [IO.File]::WriteAllText($stateArchivePath, ($previousState | ConvertTo-Json -Depth 5), [Text.UTF8Encoding]::new($false))
-        $script:AgenticStatePath = $stateArchivePath
-        $script:AgenticRepoRoot = $stateArchiveRoot
-        $freshState = Reset-AgenticStateForNewGoal -PreviousState $previousState -StatePath $stateArchivePath
-        $stateArchives = @(Get-ChildItem -LiteralPath (Join-Path (Split-Path -Parent $stateArchivePath) 'history') -File)
-        if ($freshState.state -ne 'IDLE' -or $null -ne $freshState.goal_id -or $stateArchives.Count -ne 1) { throw 'Lifecycle B: state anterior não foi arquivado nem isolado do novo goal.' }
-        if (@(Get-AgenticCommitPaths -ChangedPaths @('agentic/state/history/previous.json')).Count -ne 0) { throw 'Lifecycle K: histórico de state entrou nos commit paths.' }
-    }
-    finally { $script:AgenticStatePath = $originalStatePath; $script:AgenticRepoRoot = $originalRepoRootForStateFixture; Remove-Item -LiteralPath $stateArchiveRoot -Recurse -Force -ErrorAction SilentlyContinue }
-
-    # Bootstrap A-L: replace stale terminal state atomically, preserve resume identity, and validate the authenticated child handoff.
-    Invoke-AgenticBootstrapStateIsolationFixture | Out-Null
-    $startSourceForIsolation = [IO.File]::ReadAllText((Join-Path $script:AgenticRepoRoot 'scripts/agentic-start.ps1'), [Text.UTF8Encoding]::new($false))
-    $preparedStateIndex = $startSourceForIsolation.IndexOf('Initialize-AgenticNewGoalCheckpoint -PreviousState $checkpoint')
-    $handoffLaunchIndex = $startSourceForIsolation.IndexOf('$process = [Diagnostics.Process]::Start($startInfo)')
-    if ($preparedStateIndex -lt 0 -or $handoffLaunchIndex -le $preparedStateIndex -or $startSourceForIsolation.IndexOf('Assert-AgenticPreparedCheckpoint -State $preparedState') -lt $preparedStateIndex) { throw 'Bootstrap fixture L: start does not persist and revalidate the new checkpoint before launching the child.' }
-    if ($supervisorSource -notmatch 'Assert-AgenticPreparedCheckpoint -State \$state' -or $supervisorSource -notmatch 'Assert-AgenticJournalMatchesState -State \$state') { throw 'Bootstrap fixture F/K: child does not validate checkpoint identity and journal after authenticated handoff.' }
-
-    $availablePwsh = Get-Command 'pwsh.exe' -CommandType Application -ErrorAction SilentlyContinue
-    if ($null -eq $availablePwsh) { $availablePwsh = Get-Command 'pwsh' -CommandType Application -ErrorAction SilentlyContinue }
-    if ($null -ne $availablePwsh) {
-        $selectedEngine = Resolve-AgenticPowerShellEngine
-        if ($selectedEngine.Edition -ne 'Core') { throw 'Lifecycle D: PowerShell 7 está disponível, mas não foi preferido.' }
-    }
-    $commonSourceForEngine = [IO.File]::ReadAllText((Join-Path $script:AgenticRepoRoot 'scripts/agentic-common.ps1'), [Text.UTF8Encoding]::new($false))
-    if ($commonSourceForEngine.IndexOf("Get-Command -Name 'pwsh.exe'") -gt $commonSourceForEngine.IndexOf("Get-Command -Name 'powershell.exe'")) { throw 'Lifecycle E: fallback PowerShell 5.1 é avaliado antes de pwsh.' }
-    $hadFixturePlanRoot = $null -ne (Get-Variable -Name AgenticFixturePlanRoot -Scope Script -ErrorAction SilentlyContinue)
-    $savedFixturePlanRoot = Get-AgenticOptionalScriptValue -Name 'AgenticFixturePlanRoot'
-    Remove-Variable -Name AgenticFixturePlanRoot -Scope Script -ErrorAction SilentlyContinue
-    try { if ([string]::IsNullOrWhiteSpace((Get-AgenticPlanPath -GoalId 'strictmode-fixture'))) { throw 'Lifecycle F: optional plan root falhou sob StrictMode.' } }
-    finally { if ($hadFixturePlanRoot) { $script:AgenticFixturePlanRoot = $savedFixturePlanRoot } }
-
-    if ((Get-AgenticChangeClassification -Paths @('docs/foo.md')) -ne 'documentation-only') { throw 'Lifecycle G: docs isolado não classificou documentation-only.' }
-    $docsPolicy = Get-AgenticGatePolicy -Classification 'documentation-only'
-    foreach ($skippedName in @('npm_ci', 'lint', 'typecheck', 'build', 'runtime_tests')) {
-        $skipRecord = @($docsPolicy.Skipped | Where-Object { $_.name -ceq $skippedName })
-        if ($skipRecord.Count -ne 1 -or $skipRecord[0].status -cne 'NOT_APPLICABLE' -or [string]::IsNullOrWhiteSpace([string]$skipRecord[0].reason)) { throw "Lifecycle G: gate '$skippedName' não tem NOT_APPLICABLE com motivo." }
-    }
-    if ((Get-AgenticChangeClassification -Paths @('docs/foo.md', 'src/foo.ts')) -ne 'runtime-code') { throw 'Lifecycle H: docs + runtime não reclassificou para runtime-code.' }
-    if ((Get-AgenticChangeClassification -Paths @('docs/foo.md', 'package.json')) -ne 'runtime-infra') { throw 'Lifecycle I: package.json não foi classificado como runtime-infra.' }
-    if ((Get-AgenticChangeClassification -Paths @('docs/foo.md', '.github/workflows/ci.yml')) -ne 'runtime-infra') { throw 'Lifecycle J: workflow não foi classificado como runtime-infra.' }
-    foreach ($configurationPath in @('.codex/agents/security.toml', 'agentic/prompts/front-door.md', 'next.config.mjs', 'tsconfig.typecheck.json', '.env.production')) {
-        if ((Get-AgenticChangeClassification -Paths @($configurationPath)) -ne 'runtime-infra') { throw "Lifecycle J: configuração '$configurationPath' não foi classificada como infraestrutura." }
-    }
-    if (@(Get-AgenticCommitPaths -ChangedPaths @('agentic/plans/local.md', 'agentic/state/loop-state.json')).Count -ne 0) { throw 'Lifecycle K: plano/control artifact entrou nos commit paths.' }
-    $runtimePolicy = Get-AgenticGatePolicy -Classification 'runtime-code' -Paths @('src/foo.ts')
-    if ($runtimePolicy.Required -notcontains 'lint' -or $runtimePolicy.Required -notcontains 'build' -or $runtimePolicy.Skipped.Count -ne 0) { throw 'Lifecycle L: NOT_APPLICABLE dispensaria gate obrigatório de runtime.' }
-    if ((Resolve-AgenticTypecheckCommand).Command -cne 'npx tsc --project tsconfig.typecheck.json --noEmit') { throw 'Lifecycle M: typecheck não usa o comando canônico.' }
-    $unstagedSnapshotHash = Get-AgenticStableSnapshotSha256 -Snapshot @([pscustomobject]@{ path = 'docs/a.md'; sha256 = 'same-content'; status = ' M' })
-    $stagedSnapshotHash = Get-AgenticStableSnapshotSha256 -Snapshot @([pscustomobject]@{ path = 'docs/a.md'; sha256 = 'same-content'; status = 'M ' })
-    if ($unstagedSnapshotHash -cne $stagedSnapshotHash) { throw 'Lifecycle S: snapshot de conteúdo mudou somente por stage.' }
-
-    $structuredState = [pscustomobject]@{ state = 'IMPLEMENTING'; goal_id = 'agentic-fixture'; pending_phase = 'IMPLEMENTING' }
-    $executionId = 'execution-fixture'
-    $snapshotFixture = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    $validRoleJson = [pscustomobject]@{ schema_version = 1; goal_id = 'agentic-fixture'; role = 'implementer'; invocation_id = $executionId; phase = 'IMPLEMENTING'; snapshot_sha256 = $snapshotFixture; status = 'PASS'; summary = 'fixture'; findings = @(); evidence = @('fixture execution'); failure = $null; files_changed = @('scripts/agentic-common.ps1') } | ConvertTo-Json -Depth 5 -Compress
-    if ((ConvertFrom-AgenticRoleResult -Json $validRoleJson -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture).role -cne 'implementer') { throw 'Lifecycle N: resultado estruturado de role válido foi rejeitado.' }
-    $wrongRoleRejected = $false
-    try { ConvertFrom-AgenticRoleResult -Json $validRoleJson.Replace('implementer','security') -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture | Out-Null } catch { $wrongRoleRejected = $true }
-    if (-not $wrongRoleRejected) { throw 'Lifecycle J: resultado de role errada foi aceito.' }
-    $staleInvocationRejected = $false
-    try { ConvertFrom-AgenticRoleResult -Json $validRoleJson -State $structuredState -ExpectedRole 'implementer' -InvocationId 'stale-invocation' -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture | Out-Null } catch { $staleInvocationRejected = $true }
-    if (-not $staleInvocationRejected) { throw 'Lifecycle I: resultado de invocation anterior foi aceito.' }
-    $staleSnapshotRejected = $false
-    try { ConvertFrom-AgenticRoleResult -Json $validRoleJson.Replace($snapshotFixture, ('b' * 64)) -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture | Out-Null } catch { $staleSnapshotRejected = $true }
-    if (-not $staleSnapshotRejected) { throw 'Lifecycle I: resultado de snapshot anterior foi aceito.' }
-    $fabricatedRoleRejected = $false
-    try { ConvertFrom-AgenticRoleResult -Json ($validRoleJson.TrimEnd('}') + ',"role_results":[{"role":"security","result":"PASS"}]}') -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture | Out-Null } catch { $fabricatedRoleRejected = $true }
-    if (-not $fabricatedRoleRejected) { throw 'Lifecycle T: role result aceitou agregação fabricada de outras roles.' }
-    $stateBeforeFreeText = [string]$structuredState.state
-    $freeTextRejected = $false
-    try { ConvertFrom-AgenticRoleResult -Json 'The word FAILED is just prose.' -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture | Out-Null } catch { $freeTextRejected = $true }
-    if (-not $freeTextRejected -or [string]$structuredState.state -cne $stateBeforeFreeText) { throw 'Lifecycle O: prosa livre influenciou o state.' }
-    $blockedRoleJson = [pscustomobject]@{ schema_version = 1; goal_id = 'agentic-fixture'; role = 'implementer'; invocation_id = $executionId; phase = 'IMPLEMENTING'; snapshot_sha256 = $snapshotFixture; status = 'BLOCKED'; summary = 'blocked'; findings = @(); evidence = @(); failure = [pscustomobject]@{ category = 'input'; message = 'needs human choice'; operation = 'resolve scope'; retryable = $false }; files_changed = @() } | ConvertTo-Json -Depth 5 -Compress
-    $blocked = ConvertFrom-AgenticRoleResult -Json $blockedRoleJson -State $structuredState -ExpectedRole 'implementer' -InvocationId $executionId -ExpectedPhase 'IMPLEMENTING' -SnapshotSha256 $snapshotFixture
-    if ($blocked.status -cne 'BLOCKED' -or [string]$structuredState.state -cne $stateBeforeFreeText) { throw 'Lifecycle P: blocked não alterou state sem decisão do supervisor.' }
-
-    $diagnostic = New-AgenticFailureDiagnostic -Category 'fixture' -Message 'token=fixture-sensitive-value' -Operation 'fixture operation; password=operation-sensitive-value' -ScriptPath 'scripts/agentic-loop.ps1' -FunctionName 'Invoke fixture' -Line 42 -StateBefore 'TESTING' -Phase 'TESTING'
-    if ($diagnostic.message -match 'fixture-sensitive-value' -or $diagnostic.operation -match 'operation-sensitive-value' -or $diagnostic.line -ne 42 -or $diagnostic.state_before -ne 'TESTING') { throw 'Lifecycle Q: diagnóstico não foi sanitizado ou perdeu contexto.' }
-    $secretSamples = @(
-        @{ name = 'authorization'; text = ('Bearer ' + ('A' * 40)) },
-        @{ name = 'cookie header'; text = ('Set-Cookie: session=' + ('A' * 40) + '; HttpOnly') },
-        @{ name = 'json access token'; text = ('{"access_token":"' + ('A' * 40) + '"}') },
-        @{ name = 'github token'; text = ('ghp_' + ('A' * 32)) },
-        @{ name = 'github fine-grained token'; text = ('github_pat_' + ('A' * 32)) },
-        @{ name = 'openai project key'; text = ('sk-proj-' + ('A' * 32)) }
-    )
-    foreach ($sample in $secretSamples) {
-        $sanitized = ConvertTo-AgenticSanitizedText -Text ([string]$sample.text)
-        if ($sanitized.Contains([string]$sample.text)) { throw ("Lifecycle Q: valor sensível não foi removido pelo sanitizador ({0})." -f $sample.name) }
-    }
-    if ((Get-AgenticChangeClassification -Paths @('docs/foo.md', 'src/unexpected.ts')) -ne 'runtime-code') { throw 'Lifecycle R: arquivo inesperado não elevou classification.' }
-    if ($stagedCheckIndex -le $stageIndex -or $commitIndex -le $stagedCheckIndex) { throw 'Lifecycle S: diff staged não é obrigatório antes do commit.' }
-    $withoutReviews = $state | ConvertTo-Json -Depth 20 | ConvertFrom-Json
-    $withoutReviews.role_invocations = @()
-    $reviewEvidenceRejected = $false
-    try { Test-AgenticReadiness -State $withoutReviews -Metadata $metadata -CurrentBranch 'feature/agentic-fixture' -ChangedPaths @('scripts/agentic-common.ps1') -JournalText $provenanceJournal | Out-Null } catch { $reviewEvidenceRejected = $true }
-    if (-not $reviewEvidenceRejected) { throw 'Lifecycle T: READY_TO_COMMIT aceitou security/reviewer sem evidência.' }
-    $terminalResumeMessage = ''
-    try { Assert-AgenticResumeCheckpoint -State ([pscustomobject]@{ state = 'FAILED' }) | Out-Null } catch { $terminalResumeMessage = $_.Exception.Message }
-    if ($terminalResumeMessage -notmatch "Estado 'FAILED'.*retomada") { throw 'Lifecycle U: resume não identifica estado terminal antes de validar campos do checkpoint.' }
-    $incompleteResumeMessage = ''
-    try { Assert-AgenticResumeCheckpoint -State ([pscustomobject]@{ state = 'TESTING' }) | Out-Null } catch { $incompleteResumeMessage = $_.Exception.Message }
-    if ($incompleteResumeMessage -notmatch "campo obrigatório 'goal_id'") { throw 'Lifecycle U: resume não rejeita checkpoint ativo incompleto.' }
-    if ($supervisorSource -notmatch 'Assert-AgenticJournalMatchesState' -or $supervisorSource -notmatch 'pending_phase') { throw 'Lifecycle U: resume não valida identidade nem fase pendente.' }
-    if ($supervisorSource -notmatch 'Assert-AgenticPreparedCheckpoint -State \$state' -or $supervisorSource -notmatch 'Assert-AgenticJournalMatchesState -State \$state') { throw 'Lifecycle U: loop não retoma checkpoint autenticado preparado.' }
-    if ($supervisorSource -notmatch 'if \(\$state\.state -eq ''READY_TO_COMMIT''\)[\s\S]*?Invoke-AgenticFinalization') { throw 'Lifecycle U: resume de READY_TO_COMMIT não retoma finalização pelo supervisor.' }
-    if ($supervisorSource -notmatch 'Working tree diverge do .*staged') { throw 'Lifecycle S: finalização não rejeita divergência entre working tree e stage.' }
-    $phasePath = @(@('DISCOVERY', 'PLANNING'), @('PLANNING', 'IMPLEMENTING'), @('IMPLEMENTING', 'TESTING'), @('TESTING', 'SECURITY_REVIEW'), @('SECURITY_REVIEW', 'CODE_REVIEW'), @('CODE_REVIEW', 'READY_TO_COMMIT'))
-    foreach ($edge in $phasePath) { if (-not (Test-AgenticTransition -From $edge[0] -To $edge[1])) { throw ("Lifecycle V: transição {0}->{1} ausente." -f $edge[0], $edge[1]) } }
-    $revalidationIndex = $supervisorSource.IndexOf('$currentClassification = Get-AgenticChangeClassification')
-    $readyCheckIndex = $supervisorSource.IndexOf('Test-AgenticReadiness -State $State')
-    if ($revalidationIndex -lt 0 -or $readyCheckIndex -lt $revalidationIndex) { throw 'Lifecycle R: paths/classification não são revalidados antes de readiness.' }
-    if ($prompt -match '(?i)git\s+(fetch|add|commit|push|checkout|switch)' -and $supervisorSource -notmatch 'Invoke-AgenticFinalization') { throw 'Lifecycle W: responsabilidade Git do supervisor não foi encontrada.' }
-    $invalidPrState = [pscustomobject]@{ number = 1; url = 'https://github.com/example/repo/pull/1'; state = 'CLOSED'; headRefName = 'feature/agentic-fixture'; baseRefName = 'develop' }
-    if (Test-AgenticPullRequest -PullRequest $invalidPrState -Branch 'feature/agentic-fixture' -BaseBranch 'develop') { throw 'Lifecycle X: PR fechado permitiu handoff humano.' }
-
-    Invoke-AgenticResumeLifecycleIntegrationFixture
-    foreach ($fixtureArtifact in @($script:AgenticFixtureArtifactPaths)) { if (Test-Path -LiteralPath $fixtureArtifact -PathType Leaf) { Remove-Item -LiteralPath $fixtureArtifact -Force } }
-    return "PASS: policy, isolated role-result, readiness, bootstrap, classification, resume integration and lifecycle fixtures"
 }
 
 function Write-AgenticState {
@@ -2220,7 +1206,7 @@ function Set-AgenticSupervisorTransition {
     $from = [string]$State.state
     if (-not (Test-AgenticTransition -From $from -To $To)) { throw "Transição de supervisor não permitida: $from -> $To." }
     $State.state = $To
-    $State.pending_phase = if ($To -in @('RESUMING', 'WAITING_FOR_QUOTA', 'FAILED', 'WAITING_HUMAN_MERGE')) { [string]$State.pending_phase } else { $To }
+    $State.pending_phase = if ($To -in @('RESUMING', 'WAITING_FOR_QUOTA', 'BLOCKED', 'FAILED', 'WAITING_HUMAN_MERGE', 'ALREADY_SATISFIED')) { [string]$State.pending_phase } else { $To }
     $State.pending_action = $PendingAction
     $State.updated_at = [DateTime]::UtcNow.ToString('o')
     return $State
@@ -2234,7 +1220,8 @@ function ConvertFrom-AgenticRoleResult {
     foreach ($name in $required) {
         if ($null -eq $result.PSObject.Properties[$name]) { throw "Resultado estruturado da role ausente: $name." }
     }
-    $unknownProperties = @($result.PSObject.Properties.Name | Where-Object { $_ -cnotin $required })
+    $optional = @('decision', 'semantic_status', 'payload', 'test_actions', 'mode', 'request_id')
+    $unknownProperties = @($result.PSObject.Properties.Name | Where-Object { $_ -cnotin $required -and $_ -cnotin $optional })
     if ($unknownProperties.Count -gt 0) { throw 'Resultado da role contém campos não permitidos; agregação de outras roles é rejeitada.' }
     if ([int]$result.schema_version -ne 1) { throw 'Versão do schema de resultado da role não suportada.' }
     if ([string]$result.goal_id -cne [string]$State.goal_id) { throw 'Resultado da role pertence a outro goal.' }
@@ -2257,6 +1244,21 @@ function ConvertFrom-AgenticRoleResult {
     }
     if ($result.status -ne 'PASS' -and $null -eq $result.failure) { throw 'Resultado FAIL/BLOCKED exige diagnóstico estruturado.' }
     if ($result.status -eq 'PASS' -and $null -ne $result.failure) { throw 'Resultado PASS não pode conter failure.' }
+    if ($ExpectedRole -eq 'orchestrator') {
+        $decision = $result.PSObject.Properties['decision']
+        if ($result.status -cne 'PASS' -or $null -eq $decision -or $null -eq $decision.Value) { throw 'Orchestrator precisa retornar somente sua decisão estruturada.' }
+        foreach ($name in @('next_state', 'next_roles', 'correction_routing', 'terminal_outcome', 'rationale', 'evidence')) { if ($null -eq $decision.Value.PSObject.Properties[$name]) { throw "Decision do Orchestrator ausente: $name." } }
+        if ([string]::IsNullOrWhiteSpace([string]$decision.Value.rationale) -or @($decision.Value.evidence).Count -eq 0) { throw 'Decision do Orchestrator requer rationale e evidence.' }
+    }
+    if ($ExpectedRole -eq 'architect' -and $ExpectedPhase -eq 'PREFLIGHT_ANALYZING') {
+        if ($null -eq $result.PSObject.Properties['semantic_status'] -or [string]$result.semantic_status -cnotin @('SATISFIED','NOT_SATISFIED','BLOCKED')) { throw 'Architect preflight precisa de semantic_status válido.' }
+    }
+    if ($ExpectedRole -eq 'architect' -and $ExpectedPhase -eq 'ARCHITECTURE') {
+        if ($null -eq $result.PSObject.Properties['payload'] -or $null -eq $result.payload) { throw 'Architect precisa retornar o payload completo da Specification.' }
+    }
+    if ($ExpectedRole -eq 'tester' -and $ExpectedPhase -in @('TESTING','TESTING_EVALUATE')) {
+        if ($null -eq $result.PSObject.Properties['test_actions'] -or $result.test_actions -is [string] -or $result.test_actions -isnot [System.Collections.IEnumerable]) { throw 'Tester precisa solicitar ações de teste limitadas.' }
+    }
     return $result
 }
 
@@ -2267,7 +1269,7 @@ function Get-AgenticControlPlaneSnapshot {
 }
 
 function Get-AgenticControlPlaneFiles {
-    $roots = @('agentic/state', 'agentic/journal', 'agentic/plans')
+    $roots = @('agentic/state', 'agentic/journal', 'agentic/specifications')
     $entries = @()
     $totalBytes = [long]0
     foreach ($relativeRoot in $roots) {
@@ -2353,7 +1355,18 @@ function Write-AgenticBytesSafely {
             $targetCheck = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
             try { Assert-AgenticOpenedPathWithinRoot -Stream $targetCheck -Path $Path -BasePath $BasePath | Out-Null }
             finally { $targetCheck.Dispose() }
-            [IO.File]::Replace($temporaryPath, $Path, $backupPath)
+            try { [IO.File]::Replace($temporaryPath, $Path, $backupPath) }
+            catch {
+                [IO.File]::Copy($Path, $backupPath, $false)
+                try {
+                    [IO.File]::Delete($Path)
+                    [IO.File]::Move($temporaryPath, $Path)
+                }
+                catch {
+                    if (-not (Test-Path -LiteralPath $Path -PathType Leaf) -and (Test-Path -LiteralPath $backupPath -PathType Leaf)) { [IO.File]::Copy($backupPath, $Path, $false) }
+                    throw
+                }
+            }
             Remove-AgenticFileSafely -Path $backupPath -BasePath $BasePath
         }
         else { [IO.File]::Move($temporaryPath, $Path) }
@@ -2447,147 +1460,36 @@ function Get-AgenticQuotaClassification {
     return [pscustomobject]@{ Kind = "FAIL"; Type = $null; WaitMinutes = 0; RetryAt = $null }
 }
 
-function Get-AgenticGoalMetadata {
-    param([string]$Path, [string]$BasePath = $script:AgenticRepoRoot, [AllowEmptyString()][string]$Content)
-
-    if ($PSBoundParameters.ContainsKey('Content')) { $content = $Content }
-    else {
-        if ([string]::IsNullOrWhiteSpace($Path)) { throw 'Goal path or content is required.' }
-        $content = Read-AgenticTextSafely -Path $Path -BasePath $BasePath
-    }
-    $metadata = @{}
-    foreach ($key in @("ID", "Title", "Base branch", "Branch prefix", "Allowed files")) {
-        $pattern = "(?im)^\s*(?:-\s*)?(?:\*\*)?" + [regex]::Escape($key) + "(?:\*\*)?\s*:\s*(.+?)\s*$"
-        $match = [regex]::Match($content, $pattern)
-        if ($match.Success) {
-            $metadata[$key] = $match.Groups[1].Value.Trim()
-        }
-    }
-    foreach ($key in @("ID", "Title", "Base branch", "Branch prefix")) {
-        if (-not $metadata.ContainsKey($key)) {
-            throw "O goal nao declara o campo obrigatorio '$key'."
-        }
-    }
-    return $metadata
-}
-
-function Assert-AgenticIntake {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [string]$BasePath = $script:AgenticRepoRoot,
-        [AllowEmptyString()][string]$Content
-    )
-    Assert-AgenticNoReparsePoints -Path $Path -BasePath $BasePath -RequireLeaf | Out-Null
-    if (-not $PSBoundParameters.ContainsKey('Content')) { $Content = Read-AgenticTextSafely -Path $Path -BasePath $BasePath }
-    $metadata = Get-AgenticGoalMetadata -Content $Content
-    $content = $Content
-    if ($metadata["Base branch"] -cnotin @("develop", "main")) { throw "Intake rejeitado: base inválida." }
-    if ($metadata["Branch prefix"] -cnotin @("feature", "fix", "hotfix")) { throw "Intake rejeitado: prefixo inválido." }
-    if (($metadata["Branch prefix"] -ceq "hotfix") -ne ($metadata["Base branch"] -ceq "main")) { throw "Intake rejeitado: combinação base/prefixo inválida." }
-    if ($metadata["ID"] -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $metadata["ID"] -match '--|-$') { throw "Intake rejeitado: ID inválido." }
-    if ($metadata["Title"].Length -gt 120 -or [string]::IsNullOrWhiteSpace($metadata["Title"])) { throw "Intake rejeitado: título inválido." }
-    if (-not $metadata.ContainsKey("Allowed files") -or [string]::IsNullOrWhiteSpace($metadata["Allowed files"])) { throw "Intake rejeitado: Allowed files obrigatório." }
-    $sensitivePatterns = @(
-        '(?i)(password|passwd|secret|token|jwt|private[_ -]?key|connection[_ -]?string|api[_ -]?key|access[_ -]?key|client[_ -]?secret)\s*[:=]',
-        '(?i)\bauthorization\s*:\s*(?:bearer|basic)\s+\S+',
-        '(?i)\b(?:set-cookie|cookie)\s*:\s*[^\r\n]+',
-        '(?i)\bbearer\s+[A-Za-z0-9._~+/-]{8,}={0,2}',
-        '(?i)\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}',
-        '(?i)-----BEGIN\s+(?:[A-Z0-9 ]+\s+)?(?:PRIVATE KEY|CERTIFICATE)-----',
-        '(?i)\b[a-z][a-z0-9+.-]*://[^/\s:@]+:[^@\s/]+@'
-    )
-    foreach ($pattern in $sensitivePatterns) {
-        if ($content -match $pattern) { throw "Intake rejeitado: conteúdo sensível detectado; valor omitido." }
-    }
-    $allowed = @(Get-AgenticAllowedGoalFiles -Metadata $metadata)
-    if ($allowed.Count -eq 0) { throw "Intake rejeitado: allowlist concreta obrigatória." }
-    foreach ($entry in $allowed) {
-        if ($entry -match '[*?\[\]]|(^|/)\.\.?(/|$)|^/|^[a-zA-Z]:|\\\\|(^|/)\.git(/|$)' -or $entry -in @(".", "**")) { throw "Intake rejeitado: caminho permitido inválido." }
-        if ($entry -notmatch '^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)*$') { throw "Intake rejeitado: caminho permitido inválido." }
-    }
-    foreach ($required in @("Objective", "Discovery requirements", "Acceptance criteria", "Validation requirements", "Security/production restrictions")) {
-        if ($content -notmatch ("(?im)^##?\s*" + [regex]::Escape($required) + "\s*$")) { throw "Intake rejeitado: seção obrigatória ausente." }
-    }
-    return $metadata
-}
-
 function Start-GoalBranch {
-    param([Parameter(Mandatory = $true)][hashtable]$Metadata)
+    param([Parameter(Mandatory = $true)][hashtable]$Metadata, [Parameter(Mandatory = $true)][string]$BaseSha)
     $base = $Metadata["Base branch"]; $prefix = $Metadata["Branch prefix"]
     if ($base -cnotin @("develop", "main") -or $prefix -cnotin @("feature", "fix", "hotfix") -or (($prefix -ceq "hotfix") -ne ($base -ceq "main"))) { throw "Base/prefix de branch não permitidos." }
-    $current = [string](@(Invoke-AgenticGit -GitArguments @("branch", "--show-current"))[0]).Trim()
-    if ($current -cne $base) { throw "Goal novo requer checkout limpo da base '$base'." }
+    if ($BaseSha -cnotmatch '^[0-9a-f]{40,64}$') { throw 'Base SHA não é um commit id válido.' }
     $checkpoint = Get-AgenticState
-    if ($checkpoint.state -notin @('IDLE', 'FAILED', 'WAITING_HUMAN_MERGE')) { throw 'Um goal ainda está ativo; não será criada outra branch.' }
+    if ($checkpoint.state -notin @('IDLE', 'ALREADY_SATISFIED', 'FAILED', 'WAITING_HUMAN_MERGE', 'PREFLIGHT_ANALYZING')) { throw 'Um goal ainda está ativo; não será criada outra branch.' }
     $status = @(Invoke-AgenticGit -GitArguments @('status', '--porcelain=v1', '--untracked-files=all'))
     $unexpected = @($status | Where-Object {
         $line = [string]$_
         if ($line.Length -lt 4) { return $true }
         $path = $line.Substring(3).Replace('\', '/')
-        if ($path -eq 'agentic/state/loop-state.json' -or $path -eq 'agentic/journal/current.md' -or $path -match '^agentic/(state/history|journal/history|plans)/') {
+        if ($path -match '^agentic/(state|journal|specifications)(/|$)') {
             return ($line.Substring(0, 2) -notin @(' M', ' A', ' D', '??'))
         }
         if (Test-AgenticLocalResultArtifactPath -Path $path) { return ($line.Substring(0, 2) -ne '??') }
         return $true
     })
     if ($unexpected.Count -gt 0) { throw "Working tree contém alterações fora dos control artifacts permitidos; nada será descartado." }
-    Invoke-AgenticGit -GitArguments @("fetch", "origin") | Out-Null
+    $remoteBaseLines=@(Invoke-AgenticGit -GitArguments @('rev-parse', "refs/remotes/origin/$base"));$remoteBase=([string]$remoteBaseLines[0]).Trim()
+    if ($remoteBase -cne $BaseSha) { throw 'Trusted remote base SHA mudou depois do preflight; branch não será criada.' }
     $slug = ([string]$Metadata["ID"]).ToLowerInvariant() -replace "[^a-z0-9-]+", "-"
     $slug = $slug.Trim("-")
     if ([string]::IsNullOrWhiteSpace($slug)) { throw "ID do goal não pode gerar slug de branch." }
     $branch = "$prefix/$slug"
     if (@(Invoke-AgenticGit -GitArguments @("branch", "--list", $branch)).Count -gt 0 -or @(Invoke-AgenticGit -GitArguments @("branch", "--remotes", "--list", "origin/$branch")).Count -gt 0) { throw "Branch já existe; não será sobrescrita." }
-    Invoke-AgenticGit -GitArguments @("switch", "--create", $branch, "origin/$base") | Out-Null
+    Invoke-AgenticGit -GitArguments @("switch", "--create", $branch, $BaseSha) | Out-Null
+    $headLines=@(Invoke-AgenticGit -GitArguments @('rev-parse', 'HEAD'));$head=([string]$headLines[0]).Trim()
+    if ($head -cne $BaseSha) { throw 'Branch nova não aponta para o SHA capturado pelo preflight.' }
     return $branch
-}
-
-function Assert-AgenticPreparedHandoff {
-    param(
-        [Parameter(Mandatory = $true)][string]$GoalPath,
-        [Parameter(Mandatory = $true)][hashtable]$Metadata
-    )
-    $expectedGoal = [IO.Path]::GetFullPath((Join-Path $script:AgenticRepoRoot ("agentic/goals/{0}.md" -f $Metadata["ID"])))
-    $actualGoal = [IO.Path]::GetFullPath($GoalPath)
-    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-    if (-not [string]::Equals($actualGoal, $expectedGoal, $comparison)) { throw "Handoff preparado bloqueado: caminho canônico do goal inválido." }
-    $pipeName = [string]$env:GERIT_AGENTIC_HANDOFF_PIPE
-    if ($pipeName -notmatch '^gerit-agentic-[0-9a-fA-F]{32}$') { throw "Handoff preparado bloqueado: origem do supervisor não comprovada." }
-    $client = $null
-    try {
-        $client = [IO.Pipes.NamedPipeClientStream]::new('.', $pipeName, [IO.Pipes.PipeDirection]::In, [IO.Pipes.PipeOptions]::None)
-        $client.Connect(5000)
-        $reader = [IO.StreamReader]::new($client, [Text.Encoding]::UTF8, $false, 1024, $true)
-        $token = [string]$env:GERIT_AGENTIC_HANDOFF_TOKEN
-        if ($token -notmatch '^[0-9a-f]{64}$') { throw "Handoff preparado bloqueado: token temporário inválido." }
-        $received = $reader.ReadLine()
-        $reader.Dispose()
-        $parts = @(([string]$received) -split '\|', 6)
-        if ($parts.Count -ne 6 -or $parts[0] -cne 'prepared' -or $parts[1] -cne [string]$Metadata['ID'] -or $parts[2] -cne ("{0}/{1}" -f $Metadata['Branch prefix'], $Metadata['ID']) -or $parts[3] -cne ("agentic/goals/{0}.md" -f $Metadata['ID']) -or $parts[4] -notmatch '^[0-9a-f]{64}$' -or $parts[5] -cne $token) { throw "Handoff preparado bloqueado: autorização do supervisor inválida." }
-        Assert-AgenticNoReparsePoints -Path $expectedGoal -BasePath $script:AgenticRepoRoot -RequireLeaf | Out-Null
-        if ((Get-AgenticFileSha256 -Path $expectedGoal) -cne $parts[4]) { throw "Handoff preparado bloqueado: SHA-256 do goal difere do conteúdo materializado." }
-        Remove-Item Env:GERIT_AGENTIC_HANDOFF_PIPE -ErrorAction SilentlyContinue
-        Remove-Item Env:GERIT_AGENTIC_HANDOFF_TOKEN -ErrorAction SilentlyContinue
-        return [pscustomobject]@{ GoalPath = "agentic/goals/{0}.md" -f $Metadata['ID']; Sha256 = $parts[4] }
-    }
-    catch { throw "Handoff preparado bloqueado: conexão temporária do supervisor indisponível." }
-    finally { if ($null -ne $client) { $client.Dispose() } }
-}
-
-function Assert-AgenticBootstrapStatus {
-    param([Parameter(Mandatory = $true)][AllowEmptyCollection()][string[]]$StatusLines, [switch]$AllowMissingIntake)
-    $foundIntake = $false
-    foreach ($line in $StatusLines) {
-        if ([string]$line -notmatch '^..\s+(.+)$') { throw "Bootstrap bloqueado: formato de status não reconhecido." }
-        $path = $Matches[1].Replace('\', '/')
-        $status = ([string]$line).Substring(0, 2)
-        if ($path -eq 'agentic/state/intake.md' -and $status -eq '??') { $foundIntake = $true; continue }
-        $isLocalControl = ($path -eq 'agentic/state/loop-state.json' -or $path -eq 'agentic/journal/current.md' -or $path -match '^agentic/(state/history|journal/history|plans)/')
-        if ($isLocalControl -and $status -in @(' M', ' A', ' D', '??')) { continue }
-        if ((Test-AgenticLocalResultArtifactPath -Path $path) -and $status -eq '??') { continue }
-        throw "Bootstrap bloqueado: a árvore contém path funcional ou control path staged inesperado."
-    }
-    if (-not $foundIntake -and -not $AllowMissingIntake) { throw "Bootstrap bloqueado: intake novo não aparece como arquivo não rastreado." }
-    return $true
 }
 
 function Assert-AgenticNoReparsePoints {
@@ -2681,38 +1583,4 @@ public static class GeritAgenticFinalPathNative {
     }
     catch { throw "Goal bloqueado: caminho final do handle não pôde ser validado." }
     finally { if ($null -ne $rootHandle) { $rootHandle.Dispose() } }
-}
-
-function Write-AgenticPreparedGoal {
-    param(
-        [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Text,
-        [Parameter(Mandatory = $true)][hashtable]$Metadata,
-        [Parameter(Mandatory = $true)][string]$CurrentBranch,
-        [string]$BasePath = $script:AgenticRepoRoot
-    )
-    $goalId = [string]$Metadata['ID']
-    if ($goalId -notmatch '^[a-z][a-z0-9-]{2,63}$' -or $goalId -match '--|-$') { throw "Goal não pode ser materializado: ID não é canônico." }
-    $expectedBranch = "$($Metadata['Branch prefix'])/$goalId"
-    if ($CurrentBranch -cne $expectedBranch -or $CurrentBranch -in @("develop", "main")) { throw "Goal não pode ser materializado fora da branch de trabalho validada." }
-    $expectedPath = [IO.Path]::GetFullPath((Join-Path $BasePath ("agentic/goals/{0}.md" -f $goalId)))
-    $actualPath = Assert-AgenticNoReparsePoints -Path $Path -BasePath $BasePath
-    $comparison = if ([IO.Path]::DirectorySeparatorChar -eq '\') { [StringComparison]::OrdinalIgnoreCase } else { [StringComparison]::Ordinal }
-    if (-not [string]::Equals($actualPath, $expectedPath, $comparison)) { throw "Goal não pode ser materializado fora do caminho canônico." }
-    if (Test-Path -LiteralPath $actualPath) { throw "Goal de destino já existe; não será sobrescrito." }
-    [IO.Directory]::CreateDirectory((Split-Path -Parent $actualPath)) | Out-Null
-    Assert-AgenticNoReparsePoints -Path $actualPath -BasePath $BasePath | Out-Null
-    $stream = [IO.File]::Open($actualPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
-    try {
-        $revalidatedPath = Assert-AgenticNoReparsePoints -Path $actualPath -BasePath $BasePath
-        if (-not [string]::Equals($revalidatedPath, $expectedPath, $comparison)) { throw "Goal não pode ser materializado fora do caminho canônico." }
-        Assert-AgenticOpenedPathWithinRoot -Stream $stream -Path $actualPath -BasePath $BasePath | Out-Null
-        $bytes = [Text.UTF8Encoding]::new($false).GetBytes($Text)
-        $stream.Write($bytes, 0, $bytes.Length)
-    }
-    finally { $stream.Dispose() }
-    $sha256 = [Security.Cryptography.SHA256]::Create()
-    try { $digest = ([BitConverter]::ToString($sha256.ComputeHash($bytes))).Replace('-', '').ToLowerInvariant() }
-    finally { $sha256.Dispose() }
-    return [pscustomobject]@{ Path = $actualPath; Sha256 = $digest }
 }

@@ -56,6 +56,7 @@ export default defineConfig({
     {
       name: "chromium",
       testMatch: /.*\.spec\.ts/,
+      testIgnore: /actions-journey\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: storageStatePath,

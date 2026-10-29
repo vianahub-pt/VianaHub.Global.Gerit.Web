@@ -44,6 +44,42 @@ import {
 } from "@/shared/ui/select";
 import { useTheme } from "next-themes";
 
+type LoginE2EDiagnostic = {
+  componentHydrated: boolean;
+  loginSubmitHandlerEntered: boolean;
+  prepareSubmitOk: boolean | null;
+  loginSignInCalled: boolean;
+};
+
+declare global {
+  interface Window {
+    __GERIT_E2E_DIAGNOSTICS__?: boolean;
+    __GERIT_E2E_LOGIN_DIAGNOSTIC__?: LoginE2EDiagnostic;
+  }
+}
+
+function recordLoginE2EDiagnostic(
+  key: Exclude<keyof LoginE2EDiagnostic, "componentHydrated">,
+  value: boolean | null,
+) {
+  if (typeof window === "undefined" || window.__GERIT_E2E_DIAGNOSTICS__ !== true) {
+    return;
+  }
+
+  const current = window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ ?? {
+    componentHydrated: false,
+    loginSubmitHandlerEntered: false,
+    prepareSubmitOk: null,
+    loginSignInCalled: false,
+  };
+  if (key === "prepareSubmitOk") {
+    current.prepareSubmitOk = value;
+  } else if (value !== null) {
+    current[key] = value;
+  }
+  window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = current;
+}
+
 function resolveEmailErrorMessage(
   error: EmailValidationError,
   t: (key: string) => string,
@@ -92,6 +128,7 @@ function LoginVisualFallback({ title, body }: { title: string; body: string }) {
 export function LoginScreen() {
   const router = useRouter();
   const emailInputRef = useRef<HTMLInputElement>(null);
+  const signInInProgressRef = useRef(false);
   const emailInputId = useId();
   const emailErrorId = `${emailInputId}-error`;
   const passwordInputId = useId();
@@ -99,9 +136,19 @@ export function LoginScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  const [e2eDiagnosticsHydrated, setE2EDiagnosticsHydrated] = useState(false);
 
   useEffect(() => {
     setMounted(true);
+    if (window.__GERIT_E2E_DIAGNOSTICS__ === true) {
+      window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = {
+        componentHydrated: true,
+        loginSubmitHandlerEntered: false,
+        prepareSubmitOk: null,
+        loginSignInCalled: false,
+      };
+      setE2EDiagnosticsHydrated(true);
+    }
   }, []);
   const {
     state: authState,
@@ -139,22 +186,30 @@ export function LoginScreen() {
   }, []);
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !signInInProgressRef.current) {
       router.replace("/");
     }
   }, [isAuthenticated, router]);
 
   const handleEmailSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
+      recordLoginE2EDiagnostic("loginSubmitHandlerEntered", true);
       event.preventDefault();
 
       const result = prepareSubmit();
+      recordLoginE2EDiagnostic("prepareSubmitOk", result.ok);
 
       if (!result.ok) {
         return;
       }
 
+      if (signInInProgressRef.current) {
+        return;
+      }
+
+      signInInProgressRef.current = true;
       try {
+        recordLoginE2EDiagnostic("loginSignInCalled", true);
         const session = await signIn({
           email: result.email,
           password: result.password,
@@ -169,6 +224,7 @@ export function LoginScreen() {
 
         router.replace("/");
       } catch (error) {
+        signInInProgressRef.current = false;
         toast({
           title: t("auth.login.title"),
           description:
@@ -183,7 +239,11 @@ export function LoginScreen() {
   );
 
   return (
-    <div data-testid="login-screen-root" className="relative h-[100dvh] overflow-hidden bg-background text-white">
+    <div
+      data-testid="login-screen-root"
+      data-hydrated={e2eDiagnosticsHydrated ? "true" : undefined}
+      className="relative h-[100dvh] overflow-hidden bg-background text-white"
+    >
       <div className="relative grid h-[100dvh] lg:grid-cols-2">
         <LoginVisualPanel />
 
@@ -279,6 +339,7 @@ export function LoginScreen() {
                   onChange={(event) => setEmail(event.target.value)}
                   disabled={isAuthenticating}
                   placeholder={t("auth.login.emailPlaceholder")}
+                  aria-label={t("auth.login.emailLabel")}
                   aria-invalid={emailError !== ""}
                   aria-describedby={
                     emailError !== "" ? emailErrorId : undefined

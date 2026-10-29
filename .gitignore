@@ -23,6 +23,7 @@ mono_crash.*
 [Rr]elease/
 [Rr]eleases/
 .next/
+.next-e2e/
 x64/
 x86/
 [Ww][Ii][Nn]32/
@@ -302,6 +303,13 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+.env.e2e.local
+.e2e-debug/
+playwright-report/
+test-results/
+playwright/.auth/
+storageState.json
+**/storageState*.json
 
 # Visual Studio 6 build log
 *.plg

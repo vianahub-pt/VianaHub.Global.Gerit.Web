@@ -11,7 +11,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "node --test tests/actions/*.test.mjs",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "e2e:prepare": "node scripts/e2e/prepare-build.mjs"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.1.16",
@@ -43,6 +49,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@playwright/test": "^1.56.1",
     "autoprefixer": "^10.0.1",
     "eslint": "^9.39.1",
     "eslint-config-next": "15.5.14",

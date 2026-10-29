@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslation } from "@/platform/i18n";
@@ -53,6 +53,7 @@ export type HubMenuProps = {
 };
 
 export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection, onSectionHover, floating, onSectionClick }: HubMenuProps) {
+  const contentIdPrefix = useId();
   const pathname = usePathname();
   const { t } = useTranslation();
   const { state } = useSidebar();
@@ -157,45 +158,46 @@ export function HubMenu({ sections, collapsed, onToggleCollapse, hoveredSection,
         {sections.map((section) => {
           const expanded = floating ? true : isSectionExpanded(section.key);
           const isCollapsible = section.collapsible === true;
+          const contentId = `${contentIdPrefix}-${section.key}`;
 
           return (
             <SidebarGroup key={section.key} className={cn("mb-2", !expanded && isCollapsible && "mb-1")}>
-              {!floating && (
-                <SidebarGroupLabel
-                  className={cn(
-                    "px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground",
-                    "mb-2",
-                    isCollapsible && "flex items-center justify-between cursor-pointer",
-                    isCollapsible && "hover:text-foreground"
-                  )}
-                  onClick={isCollapsible ? () => toggleSection(section.key) : undefined}
-                >
-                  <span className="flex items-center gap-2 min-w-0">
-                    {section.icon && (
-                      <section.icon
-                        className={cn("h-4 w-4 shrink-0 text-muted-foreground")}
-                        aria-hidden="true"
-                      />
-                    )}
+              {!floating && (isCollapsible ? (
+                <SidebarGroupLabel asChild className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground">
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between text-left"
+                    aria-expanded={expanded}
+                    aria-controls={contentId}
+                    onClick={() => toggleSection(section.key)}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {section.icon && <section.icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
+                      <span className="truncate">{section.title}</span>
+                    </span>
+                    <ChevronDown
+                      className={cn(
+                        "h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-200",
+                        expanded && "rotate-180"
+                      )}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </SidebarGroupLabel>
+              ) : (
+                <SidebarGroupLabel className="mb-2 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span className="flex min-w-0 items-center gap-2">
+                    {section.icon && <section.icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
                     <span className="truncate">{section.title}</span>
-                    {isCollapsible && (
-                      <ChevronDown
-                        className={cn(
-                          "h-4 w-4 shrink-0 transition-transform duration-200 text-muted-foreground",
-                          expanded && "rotate-180"
-                        )}
-                        aria-hidden="true"
-                      />
-                    )}
                   </span>
                 </SidebarGroupLabel>
-              )}
+              ))}
               <SidebarGroupContent className={cn(
                 "transition-all duration-200 ease-in-out",
                 !expanded && "h-0 overflow-hidden opacity-0 pb-0",
                 expanded && !floating && "bg-accent/30 rounded-md px-2 py-1 -mx-2",
                 expanded && floating && "px-2 py-1"
-              )}>
+              )} id={contentId}>
                 <SidebarMenu>
                   {section.items.map((item) => {
                     const Icon = item.icon;

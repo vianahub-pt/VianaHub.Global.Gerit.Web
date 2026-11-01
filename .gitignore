@@ -23,6 +23,7 @@ mono_crash.*
 [Rr]elease/
 [Rr]eleases/
 .next/
+.next-e2e/
 x64/
 x86/
 [Ww][Ii][Nn]32/
@@ -302,6 +303,13 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+.env.e2e.local
+.e2e-debug/
+playwright-report/
+test-results/
+playwright/.auth/
+storageState.json
+**/storageState*.json
 
 # Visual Studio 6 build log
 *.plg
@@ -345,6 +353,10 @@ paket-files/
 **/__pycache__/
 *.pyc
 *.tsbuildinfo
+
+# Temporary Codex response/checkpoint files are never part of a commit.
+/agentic/state/*.tmp
+/agentic/state/.codex-last-message.md
 
 # Cake - Uncomment if you are using it
 #tools/**

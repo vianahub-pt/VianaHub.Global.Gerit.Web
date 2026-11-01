@@ -1,4 +1,5 @@
 export * from "@/domains/operations/attachments";
+export * from "@/domains/operations/actions";
 export * from "@/domains/operations/clients";
 export * from "@/domains/operations/equipments";
 export * from "@/domains/operations/interventions";

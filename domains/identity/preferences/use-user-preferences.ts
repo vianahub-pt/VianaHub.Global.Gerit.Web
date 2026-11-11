@@ -9,19 +9,25 @@ import {
   useRef,
   useState,
 } from "react";
-import { STORAGE_KEYS } from "@/core/constants/storage-keys";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import {
+  getUserPreferencesStorageKey,
+  getUserPreferencesSessionKey,
+  LEGACY_USER_PREFERENCES_CURRENT_KEY,
   getStorageItem,
   removeStorageItem,
   setStorageItem,
 } from "@/platform/storage";
 import { type Language } from "@/platform/i18n";
-
-const USER_PREFERENCES_STORAGE_KEY_PREFIX = STORAGE_KEYS.userPreferencesPrefix;
-const USER_PREFERENCES_CURRENT_STORAGE_KEY =
-  STORAGE_KEYS.userPreferencesCurrent;
+import {
+  buildUserPreferencesApiPayload,
+  canPersistPreferencesAfterLoad,
+  classifyPreferencesLoadStatus,
+  isUserPreferencesApiResponse,
+  preferencesSaveErrorKey,
+  type UserPreferencesApiResponse,
+} from "@/domains/identity/preferences/user-preferences-contract";
 
 export type PreferencesTab = "general" | "email";
 export type AppearancePreference = "light" | "dark";
@@ -56,46 +62,6 @@ interface UserPreferencesState {
   hydrated: boolean;
 }
 
-interface UserPreferencesApiResponse {
-  id: number;
-  tenantId: number;
-  tenant?: string;
-  userId: number;
-  user?: string;
-  appearance: string | null;
-  locale: string | null;
-  currencyCode: string | null;
-  timezone: string | null;
-  dateFormat: string | null;
-  timeFormat: string | null;
-  dayStart: string | null;
-  dayEnd: string | null;
-  emailNewsletter: boolean;
-  emailWeeklyReport: boolean;
-  emailApproval: boolean;
-  emailAlerts: boolean;
-  emailReminders: boolean;
-  emailPlanner: boolean;
-  isActive?: boolean;
-}
-
-interface UserPreferencesApiPayload {
-  appearance: AppearancePreference;
-  locale: PreferenceLocale;
-  currencyCode: CurrencyCodePreference;
-  timezone: string;
-  dateFormat: DateFormatPreference;
-  timeFormat: TimeFormatPreference;
-  dayStart: string;
-  dayEnd: string;
-  emailNewsletter: boolean;
-  emailWeeklyReport: boolean;
-  emailApproval: boolean;
-  emailAlerts: boolean;
-  emailReminders: boolean;
-  emailPlanner: boolean;
-}
-
 interface StoredUserPreferencesSnapshot {
   recordId: number | null;
   appearance: AppearancePreference;
@@ -110,6 +76,8 @@ interface StoredUserPreferencesSnapshot {
 }
 
 type PreferencesSaveStatus = "idle" | "saving" | "saved" | "error";
+type PreferencesLoadStatus = "loading" | "loaded" | "missing" | "error";
+const MINIMUM_SAVE_FEEDBACK_MS = 500;
 
 type UserPreferencesAction =
   | { type: "HYDRATE"; payload: UserPreferencesState }
@@ -154,10 +122,6 @@ const INITIAL_STATE: UserPreferencesState = {
   emailNotifications: DEFAULT_NOTIFICATION_PREFERENCES,
   hydrated: false,
 };
-
-function getPreferencesStorageKey(sessionKey: string) {
-  return `${USER_PREFERENCES_STORAGE_KEY_PREFIX}.${sessionKey}`;
-}
 
 function normalizeLocaleValue(
   value: unknown,
@@ -259,10 +223,6 @@ function normalizeNotificationPreferences(
   return notifications;
 }
 
-function toApiDayStart(value: string) {
-  return /^\d{2}:\d{2}$/.test(value) ? `${value}:00` : value;
-}
-
 function createDefaultState(input: {
   appearance: AppearancePreference;
   locale: PreferenceLocale;
@@ -276,28 +236,6 @@ function createDefaultState(input: {
     emailNotifications: { ...DEFAULT_NOTIFICATION_PREFERENCES },
     hydrated: true,
   };
-}
-
-function isUserPreferencesApiResponse(
-  payload: unknown,
-): payload is UserPreferencesApiResponse {
-  if (typeof payload !== "object" || payload === null) {
-    return false;
-  }
-
-  const candidate = payload as Partial<UserPreferencesApiResponse>;
-
-  return (
-    typeof candidate.id === "number" &&
-    typeof candidate.tenantId === "number" &&
-    typeof candidate.userId === "number" &&
-    typeof candidate.emailNewsletter === "boolean" &&
-    typeof candidate.emailWeeklyReport === "boolean" &&
-    typeof candidate.emailApproval === "boolean" &&
-    typeof candidate.emailAlerts === "boolean" &&
-    typeof candidate.emailReminders === "boolean" &&
-    typeof candidate.emailPlanner === "boolean"
-  );
 }
 
 function mapApiResponseToState(
@@ -342,27 +280,6 @@ function mapApiResponseToState(
   };
 }
 
-function buildApiPayload(
-  state: UserPreferencesState,
-): UserPreferencesApiPayload {
-  return {
-    appearance: state.appearance,
-    locale: state.locale,
-    currencyCode: state.currencyCode,
-    timezone: state.timezone,
-    dateFormat: state.dateFormat,
-    timeFormat: state.timeFormat,
-    dayStart: toApiDayStart(state.dayStart),
-    dayEnd: toApiDayStart(state.dayEnd),
-    emailNewsletter: state.emailNotifications.newsletter,
-    emailWeeklyReport: state.emailNotifications.weeklyReport,
-    emailApproval: state.emailNotifications.approval,
-    emailAlerts: state.emailNotifications.alerts,
-    emailReminders: state.emailNotifications.reminders,
-    emailPlanner: state.emailNotifications.planner,
-  };
-}
-
 function buildStoredPreferencesSnapshot(
   state: UserPreferencesState,
   recordId: number | null,
@@ -389,14 +306,14 @@ function persistStoredPreferences(
   const snapshot = buildStoredPreferencesSnapshot(state, recordId);
   const serializedSnapshot = JSON.stringify(snapshot);
 
-  setStorageItem(getPreferencesStorageKey(sessionKey), serializedSnapshot);
-  setStorageItem(USER_PREFERENCES_CURRENT_STORAGE_KEY, serializedSnapshot);
+  setStorageItem(getUserPreferencesStorageKey(sessionKey), serializedSnapshot);
 }
 
 function restoreStoredPreferences(
   sessionKey: string,
 ): { state: UserPreferencesState; recordId: number | null } | null {
-  const rawSnapshot = getStorageItem(getPreferencesStorageKey(sessionKey));
+  const storageKey = getUserPreferencesStorageKey(sessionKey);
+  const rawSnapshot = getStorageItem(storageKey);
 
   if (!rawSnapshot) {
     return null;
@@ -406,7 +323,7 @@ function restoreStoredPreferences(
     const parsedSnapshot = JSON.parse(rawSnapshot) as unknown;
 
     if (typeof parsedSnapshot !== "object" || parsedSnapshot === null) {
-      removeStorageItem(getPreferencesStorageKey(sessionKey));
+      removeStorageItem(storageKey);
       return null;
     }
 
@@ -452,7 +369,7 @@ function restoreStoredPreferences(
       },
     };
   } catch {
-    removeStorageItem(getPreferencesStorageKey(sessionKey));
+    removeStorageItem(storageKey);
     return null;
   }
 }
@@ -465,56 +382,6 @@ function extractRecordId(payload: unknown) {
   const candidate = payload as { id?: unknown };
 
   return typeof candidate.id === "number" ? candidate.id : null;
-}
-
-function normalizeApiErrorMessage(payload: unknown) {
-  if (typeof payload !== "object" || payload === null) {
-    return "Nao foi possivel guardar as preferencias.";
-  }
-
-  const candidate = payload as {
-    message?: unknown;
-    title?: unknown;
-    error?: unknown;
-    errors?: unknown;
-  };
-
-  if (
-    typeof candidate.message === "string" &&
-    candidate.message.trim().length > 0
-  ) {
-    return candidate.message;
-  }
-
-  if (
-    typeof candidate.error === "string" &&
-    candidate.error.trim().length > 0
-  ) {
-    return candidate.error;
-  }
-
-  if (typeof candidate.errors === "object" && candidate.errors !== null) {
-    const firstErrorGroup = Object.values(
-      candidate.errors as Record<string, unknown>,
-    ).find((value) => Array.isArray(value) && value.length > 0);
-
-    if (
-      Array.isArray(firstErrorGroup) &&
-      typeof firstErrorGroup[0] === "string" &&
-      firstErrorGroup[0].trim().length > 0
-    ) {
-      return firstErrorGroup[0];
-    }
-  }
-
-  if (
-    typeof candidate.title === "string" &&
-    candidate.title.trim().length > 0
-  ) {
-    return candidate.title;
-  }
-
-  return "Nao foi possivel guardar as preferencias.";
 }
 
 function userPreferencesReducer(
@@ -561,13 +428,15 @@ function userPreferencesReducer(
 export function useUserPreferences() {
   const { session, fetchWithAuth } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
-  const { state: translationState, setLocale } = useTranslation();
+  const { state: translationState, setLocale, t } = useTranslation();
   const [state, dispatch] = useReducer(userPreferencesReducer, INITIAL_STATE);
   const hydratedUserKeyRef = useRef<string | null>(null);
   const recordIdRef = useRef<number | null>(null);
   const lastSyncedPayloadRef = useRef<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<PreferencesSaveStatus>("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [loadStatus, setLoadStatus] = useState<PreferencesLoadStatus>("loading");
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const themeAppearance = useMemo(
     () => normalizeAppearanceValue(resolvedTheme, INITIAL_STATE.appearance),
@@ -578,11 +447,13 @@ export function useUserPreferences() {
     [translationState.locale],
   );
   const sessionKey = useMemo(
-    () => (session === null ? null : `${session.tenantId}:${session.userId}`),
+    () => getUserPreferencesSessionKey(session),
     [session],
   );
 
   useEffect(() => {
+    removeStorageItem(LEGACY_USER_PREFERENCES_CURRENT_KEY);
+
     if (sessionKey !== null) {
       return;
     }
@@ -592,6 +463,8 @@ export function useUserPreferences() {
     lastSyncedPayloadRef.current = null;
     setSaveStatus("idle");
     setSaveError(null);
+    setLoadStatus("loading");
+    setLoadError(null);
 
     dispatch({
       type: "HYDRATE",
@@ -608,6 +481,9 @@ export function useUserPreferences() {
       return;
     }
 
+    setLoadStatus("loading");
+    setLoadError(null);
+
     const restoredSnapshot = restoreStoredPreferences(sessionKey);
     const fallbackState =
       restoredSnapshot?.state ??
@@ -622,7 +498,9 @@ export function useUserPreferences() {
       recordId: number | null,
     ) => {
       recordIdRef.current = recordId;
-      lastSyncedPayloadRef.current = JSON.stringify(buildApiPayload(nextState));
+      lastSyncedPayloadRef.current = JSON.stringify(
+        buildUserPreferencesApiPayload(nextState),
+      );
       persistStoredPreferences(sessionKey, nextState, recordId);
       setSaveStatus("saved");
       setSaveError(null);
@@ -656,17 +534,26 @@ export function useUserPreferences() {
           },
         );
 
-        if (!response || ignore) {
+        if (ignore) {
+          return;
+        }
+        if (!response) {
+          setLoadStatus("error");
+          setLoadError(t("preferences.errors.loadFailed"));
           return;
         }
 
-        if (response.status === 404) {
+        const outcome = classifyPreferencesLoadStatus(response.status);
+        if (outcome.kind === "missing") {
+          setLoadStatus("missing");
           applyState(fallbackState, null);
           return;
         }
 
-        if (!response.ok) {
-          throw new Error("Nao foi possivel carregar as preferencias.");
+        if (outcome.kind === "error") {
+          setLoadStatus("error");
+          setLoadError(t(`preferences.errors.${outcome.messageKey}`));
+          return;
         }
 
         const responsePayload = (await response
@@ -682,13 +569,15 @@ export function useUserPreferences() {
           fallbackState,
         );
 
+        setLoadStatus("loaded");
         applyState(hydratedState, responsePayload.id);
       } catch {
         if (ignore) {
           return;
         }
 
-        applyState(fallbackState, restoredSnapshot?.recordId ?? null);
+        setLoadStatus("error");
+        setLoadError(t("preferences.errors.loadFailed"));
       } finally {
         hydratedUserKeyRef.current = sessionKey;
       }
@@ -706,6 +595,7 @@ export function useUserPreferences() {
     sessionKey,
     setLocale,
     setTheme,
+    t,
     themeAppearance,
   ]);
 
@@ -738,12 +628,16 @@ export function useUserPreferences() {
   }, [fetchWithAuth, normalizedLocale, session]);
 
   const persistPreferences = useCallback(
-    async (nextState: UserPreferencesState, payloadString: string) => {
+    async (
+      nextState: UserPreferencesState,
+      payloadString: string,
+      saveStartedAt: number,
+    ) => {
       if (!session) {
         return;
       }
 
-      const payload = buildApiPayload(nextState);
+      const payload = buildUserPreferencesApiPayload(nextState);
       const hasRecord = recordIdRef.current !== null;
       const endpoint = hasRecord
         ? `/api/gerit/v1/user-preferences/${recordIdRef.current}`
@@ -757,12 +651,13 @@ export function useUserPreferences() {
         body: JSON.stringify(payload),
       });
 
-      if (!response) return;
+      if (!response) {
+        throw new Error(t("preferences.errors.saveFailed"));
+      }
       if (!response.ok) {
-        const responsePayload = (await response
-          .json()
-          .catch(() => null)) as unknown;
-        throw new Error(normalizeApiErrorMessage(responsePayload));
+        throw new Error(
+          t(`preferences.errors.${preferencesSaveErrorKey(response.status)}`),
+        );
       }
 
       let persistedRecordId = recordIdRef.current;
@@ -777,6 +672,15 @@ export function useUserPreferences() {
 
       recordIdRef.current = persistedRecordId;
       lastSyncedPayloadRef.current = payloadString;
+      const remainingFeedbackMs = Math.max(
+        0,
+        MINIMUM_SAVE_FEEDBACK_MS - (Date.now() - saveStartedAt),
+      );
+      if (remainingFeedbackMs > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, remainingFeedbackMs);
+        });
+      }
       setSaveStatus("saved");
       setSaveError(null);
 
@@ -784,26 +688,32 @@ export function useUserPreferences() {
         persistStoredPreferences(sessionKey, nextState, persistedRecordId);
       }
     },
-    [fetchWithAuth, resolveRecordIdByUser, session, sessionKey],
+    [fetchWithAuth, resolveRecordIdByUser, session, sessionKey, t],
   );
 
   useEffect(() => {
-    if (!session || !sessionKey || !state.hydrated) {
+    if (
+      !session ||
+      !sessionKey ||
+      !state.hydrated ||
+      !canPersistPreferencesAfterLoad(loadStatus)
+    ) {
       return;
     }
 
     persistStoredPreferences(sessionKey, state, recordIdRef.current);
 
-    const payloadString = JSON.stringify(buildApiPayload(state));
+    const payloadString = JSON.stringify(buildUserPreferencesApiPayload(state));
 
     if (payloadString === lastSyncedPayloadRef.current) {
       return;
     }
 
+    const saveStartedAt = Date.now();
     setSaveStatus("saving");
     setSaveError(null);
 
-    void persistPreferences(state, payloadString).catch((error) => {
+    void persistPreferences(state, payloadString, saveStartedAt).catch((error) => {
       const message =
         error instanceof Error && error.message.trim().length > 0
           ? error.message
@@ -813,7 +723,7 @@ export function useUserPreferences() {
       setSaveError(message);
       console.error("Falha ao guardar preferencias do utilizador.", error);
     });
-  }, [persistPreferences, session, sessionKey, state]);
+  }, [loadStatus, persistPreferences, session, sessionKey, state]);
 
   useEffect(() => {
     if (!state.hydrated) {
@@ -867,8 +777,10 @@ export function useUserPreferences() {
       isHydrated: state.hydrated,
       saveStatus,
       saveError,
+      loadStatus,
+      loadError,
       ...actions,
     }),
-    [actions, saveError, saveStatus, state],
+    [actions, loadError, loadStatus, saveError, saveStatus, state],
   );
 }

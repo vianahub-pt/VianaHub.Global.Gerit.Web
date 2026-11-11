@@ -22,10 +22,55 @@ type Preferences = {
   emailReminders: boolean;
   emailPlanner: boolean;
 };
+type MutablePreferenceSnapshot = Pick<
+  Preferences,
+  | "appearance"
+  | "currencyCode"
+  | "locale"
+  | "timezone"
+  | "dateFormat"
+  | "timeFormat"
+  | "dayStart"
+  | "dayEnd"
+  | "emailNewsletter"
+  | "emailWeeklyReport"
+  | "emailApproval"
+  | "emailAlerts"
+  | "emailReminders"
+  | "emailPlanner"
+>;
+type SelectOptionResult = {
+  changed: boolean;
+  response?: import("@playwright/test").Response;
+  requestBody?: Record<string, unknown>;
+  finalUrl?: string;
+};
+type SafetyNetCleanup = {
+  attempted: boolean;
+  apiRestored: boolean;
+  storageRestored: boolean;
+  error: string | null;
+};
 
 const reportDirectory = resolve(".e2e-debug/user-preferences");
 const outputPath = resolve(reportDirectory, "report.json");
 const preferencePath = /\/api\/gerit\/v1\/user-preferences(?:\/|$)/;
+const mutablePreferenceFields = [
+  "appearance",
+  "currencyCode",
+  "locale",
+  "timezone",
+  "dateFormat",
+  "timeFormat",
+  "dayStart",
+  "dayEnd",
+  "emailNewsletter",
+  "emailWeeklyReport",
+  "emailApproval",
+  "emailAlerts",
+  "emailReminders",
+  "emailPlanner",
+] as const;
 const parametrizationAccessibleName = /^(parametrização|parametrización|configuration)$/i;
 const sidebarPreferencesAccessibleName = /^(preferências|preferencias|preferences)$/i;
 const dashboardSidebarAccessibleName = /^(dashboard|panel)$/i;
@@ -225,33 +270,55 @@ async function selectOption(
   page: Page,
   accessibleName: RegExp,
   option: RegExp,
-  keyboardEdge?: "first" | "last",
-  currentValue?: RegExp,
   observeSavingFeedback = false,
-) {
+): Promise<SelectOptionResult> {
   const field = page.getByRole("combobox", { name: accessibleName });
   await expect(field).toBeVisible();
-  if (currentValue) await expect(field).toContainText(currentValue);
+  await visualClick(page, field);
+  const listbox = page.getByRole("listbox");
+  await expect(listbox).toBeVisible();
+  const targetOption = listbox.getByRole("option", { name: option });
+  await expect(targetOption).toBeVisible();
+
+  if ((await targetOption.getAttribute("data-state")) === "checked") {
+    await page.keyboard.press("Escape");
+    await expect(listbox).not.toBeVisible();
+    return { changed: false };
+  }
+
   const responsePromise = page.waitForResponse((response) =>
     isFinalHttpResponse(response, "PUT", preferencePath),
   );
-  await visualClick(page, field);
-  await expect(page.getByRole("listbox")).toBeVisible();
-  if (keyboardEdge) {
-    await page.keyboard.press(keyboardEdge === "first" ? "Home" : "End");
-    await expect(page.getByRole("option", { name: option })).toBeVisible();
-    await page.keyboard.press("Enter");
-    await expect(field).toHaveText(option);
-  } else {
-    await visualClick(page, page.getByRole("option", { name: option }));
-  }
+  await visualClick(page, targetOption);
+  await expect(field).toHaveText(option);
   if (observeSavingFeedback) {
     await expect(page.getByText(savingFeedback)).toBeVisible();
   }
   const response = await responsePromise;
+  if (response.status() !== 200) {
+    throw new Error(`Updating preference returned HTTP ${response.status()}.`);
+  }
   const requestBody = response.request().postDataJSON() as Record<string, unknown>;
   if (observeSavingFeedback) await expect(page.getByText(savedFeedback)).toBeVisible();
-  return { response, requestBody, finalUrl: response.url() };
+  return {
+    changed: true,
+    response,
+    requestBody,
+    finalUrl: response.url(),
+  };
+}
+
+function requirePreferenceChange(
+  result: SelectOptionResult,
+): asserts result is SelectOptionResult & {
+  changed: true;
+  response: import("@playwright/test").Response;
+  requestBody: Record<string, unknown>;
+  finalUrl: string;
+} {
+  if (!result.changed || !result.response || !result.requestBody || !result.finalUrl) {
+    throw new Error("Expected preference change was not performed.");
+  }
 }
 
 async function readPreference(page: Page, userId: number) {
@@ -275,6 +342,12 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
   let scopedCacheOriginal: string | null = null;
   let legacyCacheOriginal: string | null = null;
   let cleanup = "NOT_STARTED";
+  const safetyNetCleanup: SafetyNetCleanup = {
+    attempted: false,
+    apiRestored: false,
+    storageRestored: false,
+    error: null,
+  };
   const evidence = { screenshots: [] as string[], trace: "Playwright trace attached to test result", video: "Playwright video attached to test result" };
   const preferenceReads: import("@playwright/test").Response[] = [];
 
@@ -356,7 +429,6 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
         const responseBody = await getResponse.json() as Preferences;
         preferenceSnapshot = responseBody;
         if (!scopedCacheKey) throw new Error("Authenticated scoped cache key is unavailable.");
-        scopedCacheOriginal = await page.evaluate((key) => localStorage.getItem(key), scopedCacheKey);
         return { status: getResponse.status(), url: finalUrl, detail: "Final non-redirect API response; sensitive identity identifiers remain local to the test." };
       });
 
@@ -404,14 +476,14 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
             [timezoneAccessibleName, targetGeneral.timezone, originalGeneral.timezone],
             [dateFormatAccessibleName, targetGeneral.dateFormat, originalGeneral.dateFormat],
           ] as const;
-          for (const [accessibleName, target, original] of updates) {
-            const { response, requestBody } = await selectOption(
+          for (const [accessibleName, target] of updates) {
+            const result = await selectOption(
               page,
               accessibleName,
               new RegExp(target.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-              undefined,
-              new RegExp(original.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
             );
+            requirePreferenceChange(result);
+            const { response, requestBody } = result;
             if (response.status() !== 200) throw new Error(`General preference update returned HTTP ${response.status()}.`);
             if (requestBody[accessibleName === currencyAccessibleName ? "currencyCode" : accessibleName === timezoneAccessibleName ? "timezone" : "dateFormat"] !== target) {
               throw new Error("General preference PUT did not contain its selected value.");
@@ -422,9 +494,8 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
             page,
             languageAccessibleName,
             languageOption(targetGeneral.locale),
-            undefined,
-            languageOption(originalGeneral.locale),
           );
+          requirePreferenceChange(localeUpdate);
           if (localeUpdate.response.status() !== 200 || localeUpdate.requestBody.locale !== targetGeneral.locale) {
             throw new Error(`Language update returned HTTP ${localeUpdate.response.status()} or an unexpected locale payload.`);
           }
@@ -447,9 +518,8 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
             page,
             languageAccessibleName,
             languageOption(originalGeneral.locale),
-            undefined,
-            languageOption(targetGeneral.locale),
           );
+          requirePreferenceChange(restoreLocale);
           if (restoreLocale.response.status() !== 200 || restoreLocale.requestBody.locale !== originalGeneral.locale) {
             throw new Error(`Restoring language returned HTTP ${restoreLocale.response.status()} or an unexpected locale payload.`);
           }
@@ -462,13 +532,13 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
         await recordStep(steps, "Update timeFormat and confirm API response", async () => {
           const original = preferenceSnapshot!.timeFormat ?? "24h";
           const target = original === "12h" ? "24h" : "12h";
-          const { response, requestBody, finalUrl } = await selectOption(
+          const result = await selectOption(
             page,
             timeFormatAccessibleName,
             timeFormatOption(target),
-            target === "12h" ? "last" : "first",
-            timeFormatOption(original),
           );
+          requirePreferenceChange(result);
+          const { response, requestBody, finalUrl } = result;
           if (response.status() !== 200) {
             return { outcome: "FAIL", status: response.status(), url: finalUrl, detail: "Final update response was not HTTP 200." };
           }
@@ -492,7 +562,9 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
           const original = timeHHmm(preferenceSnapshot!.dayStart);
           if (!original) throw new Error("Original dayStart is not a readable HH:mm value.");
           const target = original === "08:30" ? "09:00" : "08:30";
-          const { response, requestBody, finalUrl } = await selectOption(page, dayStartAccessibleName, new RegExp(`^${target}$`));
+          const result = await selectOption(page, dayStartAccessibleName, new RegExp(`^${target}$`));
+          requirePreferenceChange(result);
+          const { response, requestBody, finalUrl } = result;
           if (response.status() !== 200) {
             return { outcome: "FAIL", status: response.status(), url: finalUrl, detail: "Final dayStart update response was not HTTP 200." };
           }
@@ -510,7 +582,9 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
           const originalEnd = timeHHmm(preferenceSnapshot!.dayEnd);
           if (!originalEnd) throw new Error("Original dayEnd is not a readable HH:mm value.");
           const targetEnd = originalEnd === "17:00" ? "17:30" : "17:00";
-          const { response, requestBody, finalUrl } = await selectOption(page, dayEndAccessibleName, new RegExp(`^${targetEnd}$`));
+          const result = await selectOption(page, dayEndAccessibleName, new RegExp(`^${targetEnd}$`));
+          requirePreferenceChange(result);
+          const { response, requestBody, finalUrl } = result;
           if (response.status() !== 200) throw new Error(`dayEnd update returned HTTP ${response.status()}.`);
           if (requestBody.dayEnd !== targetEnd || typeof requestBody.dayEnd !== "string" || !/^\d{2}:\d{2}$/.test(requestBody.dayEnd)) {
             throw new Error("dayEnd request was not serialized as HH:mm.");
@@ -815,12 +889,14 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
           await visualClick(page, initialTab);
           const current = await readPreference(page, userId!);
           if (current.locale !== preferenceSnapshot!.locale) {
-            const { response } = await selectOption(
+            const result = await selectOption(
               page,
               languageAccessibleName,
               languageOption(originalGeneral.locale),
             );
-            if (response.status() !== 200) throw new Error(`Restoring locale returned HTTP ${response.status()}.`);
+            if (result.changed && result.response?.status() !== 200) {
+              throw new Error(`Restoring locale returned HTTP ${result.response?.status()}.`);
+            }
           }
           const themeGroup = page.getByRole("radiogroup", { name: /theme|tema/i });
           if (current.appearance !== preferenceSnapshot!.appearance) {
@@ -838,30 +914,38 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
           ] as const) {
             const latest = await readPreference(page, userId!);
             if (latest[field] !== preferenceSnapshot![field]) {
-              const { response } = await selectOption(
+              const result = await selectOption(
                 page,
                 accessibleName,
                 new RegExp(originalValue.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
               );
-              if (response.status() !== 200) throw new Error(`Restoring ${field} returned HTTP ${response.status()}.`);
+              if (result.changed && result.response?.status() !== 200) {
+                throw new Error(`Restoring ${field} returned HTTP ${result.response?.status()}.`);
+              }
             }
           }
           const originalTime = preferenceSnapshot!.timeFormat ?? "24h";
           if (current.timeFormat !== originalTime) {
-            const { response } = await selectOption(page, timeFormatAccessibleName, timeFormatOption(originalTime), originalTime === "12h" ? "last" : "first");
-            if (response.status() !== 200) throw new Error(`Restoring timeFormat returned HTTP ${response.status()}.`);
+            const result = await selectOption(page, timeFormatAccessibleName, timeFormatOption(originalTime));
+            if (result.changed && result.response?.status() !== 200) {
+              throw new Error(`Restoring timeFormat returned HTTP ${result.response?.status()}.`);
+            }
           }
           const originalStart = timeHHmm(preferenceSnapshot!.dayStart);
           const originalEnd = timeHHmm(preferenceSnapshot!.dayEnd);
           if (!originalStart || !originalEnd) throw new Error("Original day time values cannot be restored.");
           const currentAfterTime = await readPreference(page, userId!);
           if (timeHHmm(currentAfterTime.dayStart) !== originalStart) {
-            const { response } = await selectOption(page, dayStartAccessibleName, new RegExp(`^${originalStart}$`));
-            if (response.status() !== 200) throw new Error(`Restoring dayStart returned HTTP ${response.status()}.`);
+            const result = await selectOption(page, dayStartAccessibleName, new RegExp(`^${originalStart}$`));
+            if (result.changed && result.response?.status() !== 200) {
+              throw new Error(`Restoring dayStart returned HTTP ${result.response?.status()}.`);
+            }
           }
           if (timeHHmm(currentAfterTime.dayEnd) !== originalEnd) {
-            const { response } = await selectOption(page, dayEndAccessibleName, new RegExp(`^${originalEnd}$`));
-            if (response.status() !== 200) throw new Error(`Restoring dayEnd returned HTTP ${response.status()}.`);
+            const result = await selectOption(page, dayEndAccessibleName, new RegExp(`^${originalEnd}$`));
+            if (result.changed && result.response?.status() !== 200) {
+              throw new Error(`Restoring dayEnd returned HTTP ${result.response?.status()}.`);
+            }
           }
           await visualClick(page, emailTab);
           for (const item of emailCheckboxes) {
@@ -941,6 +1025,90 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
       steps.push({ name: "410 absence scenario", outcome: "NOT_EXECUTED", durationMs: 0, detail: "Unsafe to mutate shared E2E identity; absence behavior is covered by focused tests." });
     }
   } finally {
+    const cleanupSnapshot = preferenceSnapshot as Preferences | null;
+    const cleanupErrors: string[] = [];
+    if (cleanupSnapshot && userId !== null) {
+      safetyNetCleanup.attempted = true;
+      try {
+        if (page.isClosed()) {
+          throw new Error("Page closed before authenticated API cleanup.");
+        }
+
+        const readCurrentPreference = async () => {
+          const result = await apiCall(
+            page,
+            "GET",
+            `/api/gerit/v1/user-preferences/user/${userId}`,
+          );
+          if (result.status !== 200 || !result.body || typeof result.body !== "object") {
+            throw new Error(`Cleanup GET returned HTTP ${result.status}.`);
+          }
+          return result.body as Preferences;
+        };
+
+        const current = await readCurrentPreference();
+        const hasDifferences = mutablePreferenceFields.some(
+          (field) => current[field] !== cleanupSnapshot[field],
+        );
+
+        if (hasDifferences) {
+          const payload = Object.fromEntries(
+            mutablePreferenceFields.map((field) => [field, cleanupSnapshot[field]]),
+          ) as MutablePreferenceSnapshot;
+          const restore = await apiCall(
+            page,
+            "PUT",
+            `/api/gerit/v1/user-preferences/${cleanupSnapshot.id}`,
+            payload,
+          );
+          if (restore.status !== 200) {
+            throw new Error(`Cleanup PUT returned HTTP ${restore.status}.`);
+          }
+        }
+
+        const verified = await readCurrentPreference();
+        const stillDifferent = mutablePreferenceFields.some(
+          (field) => verified[field] !== cleanupSnapshot[field],
+        );
+        if (verified.id !== cleanupSnapshot.id || stillDifferent) {
+          throw new Error("API cleanup did not restore the original preference snapshot.");
+        }
+        safetyNetCleanup.apiRestored = true;
+      } catch (error) {
+        cleanupErrors.push(`API cleanup: ${safeDetail(error)}`);
+      }
+    }
+
+    if (scopedCacheKey !== null) {
+      try {
+        if (page.isClosed()) {
+          throw new Error("Page closed before storage cleanup.");
+        }
+        await page.evaluate(
+          ({ scopedKey, scopedValue, legacyValue }) => {
+            if (scopedValue === null) localStorage.removeItem(scopedKey);
+            else localStorage.setItem(scopedKey, scopedValue);
+            if (legacyValue === null) {
+              localStorage.removeItem("gerit.user-preferences.current");
+            } else {
+              localStorage.setItem("gerit.user-preferences.current", legacyValue);
+            }
+          },
+          {
+            scopedKey: scopedCacheKey,
+            scopedValue: scopedCacheOriginal,
+            legacyValue: legacyCacheOriginal,
+          },
+        );
+        safetyNetCleanup.storageRestored = true;
+      } catch (error) {
+        cleanupErrors.push(`Storage cleanup: ${safeDetail(error)}`);
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      safetyNetCleanup.error = cleanupErrors.join("; ");
+    }
+
     const report = {
       capability: "UserPreferences",
       startedAt: new Date(startedAt).toISOString(),
@@ -955,6 +1123,7 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
       loginAttempts: 1,
       identity: "tenant/user identifiers masked",
       cleanup,
+      safetyNetCleanup,
       evidence,
       steps,
     };

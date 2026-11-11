@@ -61,7 +61,7 @@ export default defineConfig({
     {
       name: "chromium",
       testMatch: /.*\.spec\.ts/,
-      testIgnore: /(?:actions|user-preferences)-journey\.spec\.ts/,
+      testIgnore: /[^/\\]+-journey\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: storageStatePath,
@@ -70,8 +70,9 @@ export default defineConfig({
     },
     {
       name: "journey",
-      testMatch: /(?:actions|user-preferences)-journey\.spec\.ts/,
+      testMatch: /[^/\\]+-journey\.spec\.ts/,
       timeout: 900_000,
+      retries: 0,
       use: {
         ...(visualE2E ? visualJourneyDevice : devices["Desktop Chrome"]),
         storageState: undefined,

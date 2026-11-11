@@ -611,6 +611,12 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
         const originalEmailValues = Object.fromEntries(
           emailCheckboxes.map(({ field }) => [field, preferenceSnapshot![field]]),
         ) as Record<(typeof emailCheckboxes)[number]["field"], boolean>;
+        let emailSavingFeedbackEvidence: {
+          savingVisibleAt: number;
+          putFinalResponseAt: number;
+          savedVisibleAt: number;
+          savingVisibleMs: number;
+        } | null = null;
 
         await recordStep(steps, "Update all six email preferences through UI", async () => {
           for (const item of emailCheckboxes) {
@@ -620,21 +626,111 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
             const control = page.getByRole("checkbox", { name: item.name });
             const original = originalEmailValues[item.field];
             const target = !original;
+            const isFirstEmailPreference = item.field === emailCheckboxes[0].field;
+            const savingStatus = page
+              .getByTestId("user-preferences-page-root")
+              .getByRole("status");
+
+            if (isFirstEmailPreference) {
+              await page.evaluate(({ savingPattern, savedPattern }) => {
+                const root = document.querySelector(
+                  '[data-testid="user-preferences-page-root"]',
+                );
+                const status = root?.querySelector('[role="status"]');
+                if (!status) throw new Error("Preferences saving status is missing.");
+
+                const saving = new RegExp(savingPattern, "i");
+                const saved = new RegExp(savedPattern, "i");
+                const timeline: {
+                  savingVisibleAt?: number;
+                  savedVisibleAt?: number;
+                } = {};
+                const recordVisibleState = () => {
+                  const text = status.textContent?.trim() ?? "";
+                  const timestamp = performance.timeOrigin + performance.now();
+                  if (saving.test(text) && timeline.savingVisibleAt === undefined) {
+                    timeline.savingVisibleAt = timestamp;
+                  } else if (
+                    saved.test(text) &&
+                    timeline.savingVisibleAt !== undefined &&
+                    timeline.savedVisibleAt === undefined
+                  ) {
+                    timeline.savedVisibleAt = timestamp;
+                  }
+                };
+                const observer = new MutationObserver(recordVisibleState);
+                observer.observe(status, {
+                  childList: true,
+                  subtree: true,
+                  characterData: true,
+                });
+                const browserWindow = window as Window & {
+                  __userPreferencesSavingTimeline?: typeof timeline;
+                  __userPreferencesSavingObserver?: MutationObserver;
+                };
+                browserWindow.__userPreferencesSavingTimeline = timeline;
+                browserWindow.__userPreferencesSavingObserver = observer;
+              }, {
+                savingPattern: savingFeedback.source,
+                savedPattern: savedFeedback.source,
+              });
+              await expect(savingStatus).toHaveAttribute("role", "status");
+              await expect(savingStatus).toHaveAttribute("aria-live", "polite");
+            }
+
             const responsePromise = page.waitForResponse((response) =>
               isFinalHttpResponse(response, "PUT", preferencePath),
             );
             await control.focus();
             await page.keyboard.press("Space");
             await expect(control).toHaveJSProperty("checked", target);
-            if (item.field === emailCheckboxes[0].field) {
-              await expect(page.getByText(savingFeedback)).toBeVisible();
+            if (isFirstEmailPreference) {
+              await expect(savingStatus).toContainText(savingFeedback);
             }
             const response = await responsePromise;
             if (response.status() !== 200) throw new Error(`${item.field} update returned HTTP ${response.status()}.`);
             const payload = response.request().postDataJSON() as Record<string, unknown>;
             if (payload[item.field] !== target) throw new Error(`${item.field} was absent or incorrect in its PUT payload.`);
-            if (item.field === emailCheckboxes[0].field) {
-              await expect(page.getByText(savedFeedback)).toBeVisible();
+            if (isFirstEmailPreference) {
+              const putFinalResponseAt = await page.evaluate(
+                () => performance.timeOrigin + performance.now(),
+              );
+              await expect(savingStatus).toContainText(savedFeedback);
+              await page.waitForFunction(() => {
+                const timeline = (window as Window & {
+                  __userPreferencesSavingTimeline?: {
+                    savingVisibleAt?: number;
+                    savedVisibleAt?: number;
+                  };
+                }).__userPreferencesSavingTimeline;
+                return timeline?.savedVisibleAt !== undefined;
+              });
+              const timing = await page.evaluate(() => {
+                const browserWindow = window as Window & {
+                  __userPreferencesSavingTimeline?: {
+                    savingVisibleAt?: number;
+                    savedVisibleAt?: number;
+                  };
+                  __userPreferencesSavingObserver?: MutationObserver;
+                };
+                browserWindow.__userPreferencesSavingObserver?.disconnect();
+                return browserWindow.__userPreferencesSavingTimeline ?? {};
+              });
+              if (
+                timing.savingVisibleAt === undefined ||
+                timing.savedVisibleAt === undefined
+              ) {
+                throw new Error("Saving feedback timestamps were not recorded.");
+              }
+              const savingVisibleMs = timing.savedVisibleAt - timing.savingVisibleAt;
+              expect(timing.savedVisibleAt).toBeGreaterThan(putFinalResponseAt);
+              expect(savingVisibleMs).toBeGreaterThanOrEqual(400);
+              emailSavingFeedbackEvidence = {
+                savingVisibleAt: timing.savingVisibleAt,
+                putFinalResponseAt,
+                savedVisibleAt: timing.savedVisibleAt,
+                savingVisibleMs,
+              };
             }
           }
           await page.reload({ waitUntil: "domcontentloaded" });
@@ -650,7 +746,13 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
           for (const item of emailCheckboxes) {
             await expect(page.getByRole("checkbox", { name: item.name })).toBeChecked({ checked: !originalEmailValues[item.field] });
           }
-          return { status: 200, detail: "Six UI PUTs returned HTTP 200 and the changed values persisted after reload." };
+          if (!emailSavingFeedbackEvidence) {
+            throw new Error("First email preference saving feedback was not measured.");
+          }
+          return {
+            status: 200,
+            detail: `Six UI PUTs returned HTTP 200 and persisted after reload; EMAIL_SAVING_FEEDBACK=PASS; role=status; aria-live=polite; savingVisibleMs=${emailSavingFeedbackEvidence.savingVisibleMs.toFixed(1)}; savingVisibleAt=${emailSavingFeedbackEvidence.savingVisibleAt.toFixed(1)}; putFinalResponseAt=${emailSavingFeedbackEvidence.putFinalResponseAt.toFixed(1)}; savedVisibleAt=${emailSavingFeedbackEvidence.savedVisibleAt.toFixed(1)}.`,
+          };
         });
 
         await recordStep(steps, "Scoped cache and legacy cache poisoning", async () => {

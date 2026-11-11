@@ -10,8 +10,11 @@ import {
   Plus,
 } from "lucide-react";
 import { type Language, useTranslation } from "@/platform/i18n";
-import { STORAGE_KEYS } from "@/core/constants/storage-keys";
-import { getStorageItem } from "@/platform/storage";
+import { useAuth } from "@/platform/auth";
+import {
+  getUserPreferencesSessionKey,
+  readUserPreferencesStorageSnapshot,
+} from "@/platform/storage";
 import { useDashboardShell } from "@/shared/layout";
 
 const viewTabs = ["month", "week", "day"] as const;
@@ -221,6 +224,7 @@ function getBodyTone({
 
 function GeritDashboardHomeContent() {
   const { state, setCalendarView } = useDashboardShell();
+  const { session } = useAuth();
   const { language, t } = useTranslation();
   const [rangePickerOpen, setRangePickerOpen] = useState(false);
   const [currentDateTime, setCurrentDateTime] = useState<Date | null>(null);
@@ -240,35 +244,36 @@ function GeritDashboardHomeContent() {
   const calendarScrollRef = useRef<HTMLDivElement>(null);
 
   const locale = language;
+  const preferencesSessionKey = getUserPreferencesSessionKey(session);
   useEffect(() => {
     const syncCalendarPreferences = () => {
-      const rawSnapshot = getStorageItem(STORAGE_KEYS.userPreferencesCurrent);
+      setDateFormatPreference("DD-MM-YYYY");
+      setTimeFormatPreference("24h");
 
-      if (!rawSnapshot) {
+      if (!preferencesSessionKey) {
         return;
       }
 
-      try {
-        const parsedSnapshot = JSON.parse(
-          rawSnapshot,
-        ) as StoredPreferencesSnapshot;
+      const parsedSnapshot = readUserPreferencesStorageSnapshot<StoredPreferencesSnapshot>(
+        window.localStorage,
+        preferencesSessionKey,
+      );
 
-        if (
-          parsedSnapshot.dateFormat === "MM/DD/YYYY" ||
-          parsedSnapshot.dateFormat === "DD-MM-YYYY" ||
-          parsedSnapshot.dateFormat === "DD/MM/YYYY"
-        ) {
-          setDateFormatPreference(parsedSnapshot.dateFormat);
-        }
+      if (!parsedSnapshot) return;
 
-        if (
-          parsedSnapshot.timeFormat === "12h" ||
-          parsedSnapshot.timeFormat === "24h"
-        ) {
-          setTimeFormatPreference(parsedSnapshot.timeFormat);
-        }
-      } catch {
-        // Ignora dados mal formados no storage local.
+      if (
+        parsedSnapshot.dateFormat === "MM/DD/YYYY" ||
+        parsedSnapshot.dateFormat === "DD-MM-YYYY" ||
+        parsedSnapshot.dateFormat === "DD/MM/YYYY"
+      ) {
+        setDateFormatPreference(parsedSnapshot.dateFormat);
+      }
+
+      if (
+        parsedSnapshot.timeFormat === "12h" ||
+        parsedSnapshot.timeFormat === "24h"
+      ) {
+        setTimeFormatPreference(parsedSnapshot.timeFormat);
       }
     };
 
@@ -278,7 +283,7 @@ function GeritDashboardHomeContent() {
     return () => {
       window.removeEventListener("storage", syncCalendarPreferences);
     };
-  }, []);
+  }, [preferencesSessionKey]);
 
   const copy = useMemo(
     () => ({

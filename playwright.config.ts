@@ -12,7 +12,12 @@ if (existsSync(localE2eEnvironment)) {
 const defaultLocalBaseURL = "http://127.0.0.1:3100";
 const baseURL = process.env.E2E_BASE_URL || defaultLocalBaseURL;
 const storageStatePath = "playwright/.auth/user.json";
-const visualE2E = process.env.E2E_VISUAL === "true";
+const visualE2E = process.env.E2E_VISUAL === "true" && process.env.CI !== "true";
+const visualJourneyDevice = Object.fromEntries(
+  Object.entries(devices["Desktop Chrome"]).filter(
+    ([property]) => !["viewport", "screen", "deviceScaleFactor"].includes(property),
+  ),
+);
 
 if (baseURL !== defaultLocalBaseURL) {
   throw new Error(`E2E must use the exclusive local URL ${defaultLocalBaseURL}; update E2E_BASE_URL.`);
@@ -34,13 +39,13 @@ export default defineConfig({
   reporter: [["list"], ["html", { outputFolder: "playwright-report", open: "never" }]],
   outputDir: "test-results",
   use: {
+    ...(visualE2E ? visualJourneyDevice : devices["Desktop Chrome"]),
     baseURL,
     actionTimeout: 5_000,
     navigationTimeout: 10_000,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "on",
-    ...devices["Desktop Chrome"],
   },
   projects: [
     {
@@ -56,7 +61,7 @@ export default defineConfig({
     {
       name: "chromium",
       testMatch: /.*\.spec\.ts/,
-      testIgnore: /actions-journey\.spec\.ts/,
+      testIgnore: /[^/\\]+-journey\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: storageStatePath,
@@ -65,13 +70,17 @@ export default defineConfig({
     },
     {
       name: "journey",
-      testMatch: /actions-journey\.spec\.ts/,
+      testMatch: /[^/\\]+-journey\.spec\.ts/,
       timeout: 900_000,
+      retries: 0,
       use: {
-        ...devices["Desktop Chrome"],
+        ...(visualE2E ? visualJourneyDevice : devices["Desktop Chrome"]),
         storageState: undefined,
         headless: visualE2E ? false : undefined,
-        launchOptions: visualE2E ? { slowMo: 350 } : undefined,
+        viewport: visualE2E ? null : undefined,
+        launchOptions: visualE2E
+          ? { args: ["--start-maximized"], slowMo: 300 }
+          : undefined,
         trace: "on",
         screenshot: "only-on-failure",
         video: "on",

@@ -31,6 +31,7 @@ import {
   type TimeFormatPreference,
   useIdentityPreferences,
 } from "@/domains/identity/preferences";
+import { USER_PREFERENCES_SWITCH_FOCUS_CLASSES } from "@/domains/identity/preferences/user-preferences-ui";
 
 export const TIMEZONE_OPTIONS = [
   { value: "America/New_York", label: "(UTC -05:00) America/Washington" },
@@ -206,7 +207,11 @@ export function UserPreferencesPage() {
               </p>
             </div>
 
-            <div className="inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-2 text-xs font-medium text-primary dark:bg-primary/10 dark:text-primary">
+            <div
+              role="status"
+              aria-live="polite"
+              className="inline-flex items-center gap-2 self-start rounded-full bg-primary/10 px-3 py-2 text-xs font-medium text-primary dark:bg-primary/10 dark:text-primary"
+            >
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               {preferences.saveStatus === "saving"
                 ? t("preferences.autosave.saving")
@@ -219,7 +224,16 @@ export function UserPreferencesPage() {
           </div>
         </div>
 
-        {isHydrating || !preferences.isHydrated || !session ? (
+        {!isHydrating && session && preferences.loadStatus === "error" ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <div
+              role="alert"
+              className="rounded-[1.75rem] border border-destructive/30 bg-background px-6 py-5 text-sm text-destructive shadow-[0_24px_60px_rgba(15,23,42,0.1)]"
+            >
+              {preferences.loadError}
+            </div>
+          </div>
+        ) : isHydrating || !preferences.isHydrated || !session ? (
           <div className="flex min-h-0 flex-1 items-center justify-center p-6">
             <div className="rounded-[1.75rem] border border-input bg-background px-6 py-5 text-sm text-muted-foreground shadow-[0_24px_60px_rgba(15,23,42,0.1)] dark:border-border dark:bg-background dark:text-foreground">
               {t("preferences.loading")}
@@ -523,7 +537,12 @@ export function UserPreferencesPage() {
                               aria-label={`${t("preferences.notifications.toggleLabel")}: ${item.title}`}
                               className="peer sr-only"
                             />
-                            <span className="flex h-7 w-12 items-center rounded-full bg-muted px-1 transition-colors peer-checked:bg-primary dark:bg-muted dark:peer-checked:bg-primary">
+                            <span
+                              className={clsx(
+                                "flex h-7 w-12 items-center rounded-full bg-muted px-1 transition-colors peer-checked:bg-primary dark:bg-muted dark:peer-checked:bg-primary",
+                                USER_PREFERENCES_SWITCH_FOCUS_CLASSES,
+                              )}
+                            >
                               <span className="h-5 w-5 rounded-full bg-white transition-transform peer-checked:translate-x-5" />
                             </span>
                           </span>

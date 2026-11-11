@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/actions/*.test.mjs",
+    "test": "node --test tests/actions/*.test.mjs tests/preferences/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:actions-ci": "playwright test --project=journey",
     "test:e2e:headed": "playwright test --headed",

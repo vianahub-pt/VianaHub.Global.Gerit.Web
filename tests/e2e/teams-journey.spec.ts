@@ -130,7 +130,7 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
 
     const csvInput = page.locator('input[type="file"][accept=".csv"]');
     await csvInput.setInputFiles({ name: "teams.txt", mimeType: "text/plain", buffer: Buffer.from("not csv", "utf8") });
-    await expect(page.getByText(/select a csv file|selecione um ficheiro csv|seleccione un archivo csv/i)).toBeVisible();
+    await expect(page.getByText(/select a csv file|selecione um ficheiro csv|seleccione un archivo csv/i).last()).toBeVisible();
     await waitForToastToClear(page);
 
     const emptyUploadPromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/teams/bulk-upload/"));

@@ -74,7 +74,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        capability: [actions, user-preferences, teams]
+        capability: [actions, user-preferences, teams, roles]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

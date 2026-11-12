@@ -4,3 +4,4 @@ export const operationsRolesModule = {
 } as const;
 
 export * from "@/domains/operations/roles/roles-page";
+export * from "@/domains/operations/roles/role-form-page";

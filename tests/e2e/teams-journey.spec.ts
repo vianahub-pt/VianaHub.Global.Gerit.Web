@@ -50,10 +50,19 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.goto("/teams/", { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("teams-page-root")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
+    await expect.poll(() => queries.at(-1)?.searchParams.get("PageNumber")).toBe("1");
+    const pageSize = page.getByRole("combobox", { name: /per page|por página|por pagina/i });
+    await pageSize.click();
+    await page.getByRole("option", { name: "20", exact: true }).click();
+    await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("20");
+    await pageSize.click();
+    await page.getByRole("option", { name: "10", exact: true }).click();
+    await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("10");
 
     await page.getByRole("button", { name: /add|adicionar|agregar/i }).click();
     await page.getByLabel(nameLabel).fill(teamName);
     await page.getByLabel(descriptionLabel).fill(description);
+    await waitForToastToClear(page);
     const createResponsePromise = page.waitForResponse((response) => response.status() === 201 && response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/teams/"));
     await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
     const createResponse = await createResponsePromise;
@@ -73,7 +82,8 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await expect(page.getByLabel(descriptionLabel)).toHaveValue(description);
     await page.getByLabel(nameLabel).fill(`${teamName} edited`);
     await page.getByLabel(descriptionLabel).fill(updatedDescription);
-    const updateResponsePromise = page.waitForResponse((response) => response.status() === 204 && response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/`));
+    await waitForToastToClear(page);
+    const updateResponsePromise = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/`));
     await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
     expect((await updateResponsePromise).status()).toBe(204);
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body)
@@ -97,11 +107,15 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await expect(row).toBeVisible();
     await expect.poll(() => queries.at(-1)?.searchParams.get("Search")).toBe(teamName);
 
-    await page.getByRole("button", { name: /deactivate|desativar|desactivar/i }).last().click();
+    const deactivateResponsePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/deactivate/`));
+    await row.getByRole("button", { name: /deactivate|desativar|desactivar/i }).click();
+    expect((await deactivateResponsePromise).ok()).toBe(true);
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body)
       .toMatchObject({ isActive: false });
     await waitForToastToClear(page);
-    await page.getByRole("button", { name: /activate|ativar|activar/i }).last().click();
+    const activateResponsePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/activate/`));
+    await row.getByRole("button", { name: /activate|ativar|activar/i }).click();
+    expect((await activateResponsePromise).ok()).toBe(true);
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body)
       .toMatchObject({ isActive: true });
     await waitForToastToClear(page);

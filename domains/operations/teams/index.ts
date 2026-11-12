@@ -4,3 +4,4 @@ export const operationsTeamsModule = {
 } as const;
 
 export * from "@/domains/operations/teams/teams-page";
+export * from "@/domains/operations/teams/team-form-page";

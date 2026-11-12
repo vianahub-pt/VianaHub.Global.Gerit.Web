@@ -93,3 +93,15 @@ Para a branch `feature/teams-crud`, com base em `develop`, o mantenedor autoriza
 - A exceção termina após a conclusão da entrega Teams.
 
 Esta autorização não dispensa testes, segurança, revisão de código ou rastreabilidade.
+
+## Exceção operacional — Roles CRUD
+
+Para a entrega Roles CRUD, exclusivamente na branch `feature/roles-crud` criada a partir de `origin/develop` atualizado, o mantenedor autoriza o Codex Desktop a executar diretamente o desenvolvimento e a entrega sem utilizar o supervisor Agentic. Esta exceção prevalece sobre as regras gerais do supervisor somente para este objetivo e termina em `WAITING_HUMAN_MERGE`.
+
+- O Codex pode consultar o remoto, criar somente `feature/roles-crud` a partir de `origin/develop` e executar operações Git nessa branch. Antes disso, deve verificar a working tree e as referências remotas, preservando todos os arquivos locais. Se uma colisão impedir a troca segura de branch, deve parar sem mover ou apagar arquivos.
+- Alterações funcionais ficam limitadas aos caminhos concretos autorizados no intake Roles. `AGENTS.md` pode ser incluído no commit somente para documentar esta exceção.
+- O intake `agentic/state/intake.md` e `.playwright-browsers/` devem ser preservados, não alterados e excluídos do commit.
+- O Codex pode executar os gates, E2E e revisões de segurança e código exigidos pelo goal, registrando comandos, códigos de saída, resultados e falhas. Nenhum gate ou revisão pode ser declarado PASS sem execução.
+- Git mutável limita-se a `feature/roles-crud`: stage explícito dos arquivos autorizados, commit, push sem force e PR para `develop`. É proibido fazer push em `develop` ou `main`, usar reset destrutivo ou limpeza indiscriminada, fazer merge ou executar deploy.
+- Revisões, critérios de qualidade, validação de isolamento por tenant e cleanup dos testes continuam obrigatórios. O tenant deve permanecer derivado da autenticação; não se deve enviar `TenantId` explícito para a API de Roles.
+- O merge para `develop` ou `main` permanece exclusivamente humano.

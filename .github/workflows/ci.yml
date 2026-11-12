@@ -5,6 +5,10 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   lint:
@@ -63,21 +67,69 @@ jobs:
 
       - name: Run build
         run: npm run build
+        env:
+          NEXT_DIST_DIR: .next-e2e
 
-  e2e:
-    name: ${{ matrix.capability }} E2E
+      - name: Upload build for E2E reuse
+        uses: actions/upload-artifact@v4
+        with:
+          name: next-build-${{ github.sha }}
+          path: .next-e2e/**
+          include-hidden-files: true
+          if-no-files-found: error
+
+  select-e2e:
+    name: E2E Selection Plan
     runs-on: ubuntu-24.04
-    if: ${{ vars.GERIT_API_BASE_URL != '' && vars.E2E_USER_EMAIL != '' }}
-    concurrency:
-      group: gerit-shared-e2e
-      cancel-in-progress: false
-    strategy:
-      max-parallel: 1
-      matrix:
-        capability: [actions, user-preferences, teams, roles]
+    outputs:
+      capabilities: ${{ steps.plan.outputs.capabilities }}
+      e2e_required: ${{ steps.plan.outputs.e2e_required }}
+      plan_digest: ${{ steps.plan.outputs.plan_digest }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test capability selection and outcome validation
+        run: node --test tests/e2e-selection/selection.test.mjs
+
+      - name: Select E2E capabilities
+        id: plan
+        run: node scripts/e2e/select-capabilities.mjs
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          FULL_REGRESSION: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+
+      - name: Upload E2E selection plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-selection-${{ github.run_id }}
+          path: .e2e-plan/selection.json
+          include-hidden-files: true
+          if-no-files-found: error
+
+  e2e:
+    name: Selected E2E
+    runs-on: ubuntu-24.04
+    needs: [select-e2e, build]
+    if: ${{ needs.select-e2e.outputs.e2e_required == 'true' }}
+    outputs:
+      evidence_digest: ${{ steps.journeys.outputs.evidence_digest }}
+    concurrency:
+      group: gerit-shared-e2e
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -88,6 +140,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Download E2E build from Build gate
+        uses: actions/download-artifact@v4
+        with:
+          name: next-build-${{ github.sha }}
+          path: .next-e2e
+
+      - name: Download selection plan
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-selection-${{ github.run_id }}
+          path: .e2e-plan
+
+      - name: Verify E2E configuration
+        shell: bash
+        env:
+          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          missing=()
+          [[ -n "$GERIT_API_BASE_URL" ]] || missing+=(GERIT_API_BASE_URL)
+          [[ -n "$E2E_USER_EMAIL" ]] || missing+=(E2E_USER_EMAIL)
+          [[ -n "$E2E_USER_PASSWORD" ]] || missing+=(E2E_USER_PASSWORD)
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Required E2E configuration is missing: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
       - name: Install Playwright Chromium
         shell: bash
         run: |
@@ -95,41 +175,67 @@ jobs:
             if npx playwright install --with-deps chromium; then
               exit 0
             fi
-            if [ "$attempt" -lt 3 ]; then
-              sleep $((attempt * 10))
-            fi
+            if [ "$attempt" -lt 3 ]; then sleep $((attempt * 10)); fi
           done
           echo "Playwright Chromium installation failed after 3 attempts."
           exit 1
 
-      - name: Verify E2E credentials are configured
-        env:
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
-        run: |
-          if [ -z "$E2E_USER_PASSWORD" ]; then
-            echo "E2E_USER_PASSWORD secret is required when GERIT_API_BASE_URL and E2E_USER_EMAIL are configured."
-            exit 1
-          fi
-
-      - name: Prepare isolated E2E build
-        run: npm run e2e:prepare
-        env:
-          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
-
-      - name: Run ${{ matrix.capability }} E2E
-        run: npm run test:e2e:capability -- ${{ matrix.capability }}
+      - name: Run selected E2E journeys
+        id: journeys
+        run: node scripts/e2e/run-selected-capabilities.mjs .e2e-plan/selection.json
         env:
           CI: true
           E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          EXPECTED_PLAN_DIGEST: ${{ needs.select-e2e.outputs.plan_digest }}
 
-      - name: Upload Playwright report and traces
+      - name: Upload selected E2E reports and evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.capability }}-playwright-report
+          name: selected-e2e-evidence-${{ github.run_id }}
           path: |
-            playwright-report/
-            test-results/
-          if-no-files-found: ignore
+            .e2e-artifacts/
+          include-hidden-files: true
+          if-no-files-found: error
+
+  e2e-validation:
+    name: E2E Validation
+    runs-on: ubuntu-24.04
+    if: ${{ always() }}
+    needs: [select-e2e, e2e]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Download E2E selection plan
+        if: ${{ always() && needs.select-e2e.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: e2e-selection-${{ github.run_id }}
+          path: .e2e-plan
+
+      - name: Download selected E2E evidence
+        if: ${{ always() && needs.select-e2e.outputs.e2e_required == 'true' && needs.e2e.result == 'success' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: selected-e2e-evidence-${{ github.run_id }}
+          path: .e2e-artifacts
+
+      - name: Validate E2E result and evidence
+        if: ${{ always() }}
+        env:
+          SELECTOR_RESULT: ${{ needs.select-e2e.result }}
+          E2E_RESULT: ${{ needs.e2e.result }}
+          E2E_REQUIRED: ${{ needs.select-e2e.outputs.e2e_required }}
+          EXPECTED_PLAN_DIGEST: ${{ needs.select-e2e.outputs.plan_digest }}
+          E2E_EVIDENCE_DIGEST: ${{ needs.e2e.outputs.evidence_digest }}
+        run: node scripts/e2e/validate-e2e-validation.mjs .e2e-plan/selection.json .e2e-artifacts/summary.json

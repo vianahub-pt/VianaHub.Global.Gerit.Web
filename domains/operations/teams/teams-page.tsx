@@ -1,8 +1,8 @@
 "use client";
 
 import clsx from "clsx";
-import { SquarePen, Trash2, UserRoundPlus, Power, PowerOff, Loader2 } from "lucide-react";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { Eye, SquarePen, Trash2, UserRoundPlus, Power, PowerOff, Loader2 } from "lucide-react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 
@@ -13,13 +13,16 @@ import {
   type HubGridColumn,
   type RowDensity,
 } from "@/shared/hub-grid";
+import {
+  buildTeamsQuery,
+  normalizeTeam,
+  normalizeTeamSummary,
+  toTeamPayload,
+  type TeamRecord,
+  type TeamStatusFilter,
+} from "@/domains/operations/teams/teams-contract";
 
-interface TeamItem {
-  id: number;
-  name: string;
-  description: string;
-  isActive: boolean;
-}
+type TeamItem = TeamRecord;
 
 interface TeamsPagedResponse {
   items?: unknown;
@@ -35,55 +38,15 @@ interface TeamFormState {
   description: string;
 }
 
-type SortColumn = "Name" | "Role" | "TaxNumber";
+type SortColumn = "Name";
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 500, 1000] as const;
 type PageSizeOption = (typeof PAGE_SIZE_OPTIONS)[number];
-type TeamStatusFilter = "active" | "inactive" | "all";
-type TeamDetailMode = "hidden" | "create" | "edit";
+type TeamDetailMode = "hidden" | "detail" | "create" | "edit";
 
 const initialTeamFormState: TeamFormState = {
   name: "",
   description: "",
 };
-
-function normalizeTeam(payload: unknown): TeamItem | null {
-  if (typeof payload !== "object" || payload === null) {
-    return null;
-  }
-
-  const candidate = payload as Record<string, unknown>;
-  const rawId =
-    typeof candidate.id === "number"
-      ? candidate.id
-      : typeof candidate.teamId === "number"
-        ? candidate.teamId
-        : null;
-
-  if (rawId === null) {
-    return null;
-  }
-
-  const nameValue = typeof candidate.name === "string" ? candidate.name : "";
-  const descriptionValue =
-    typeof candidate.description === "string" ? candidate.description : "";
-  const isActiveValue =
-    typeof candidate.isActive === "boolean"
-      ? candidate.isActive
-      : typeof candidate.active === "boolean"
-        ? candidate.active
-        : true;
-
-  if (!nameValue) {
-    return null;
-  }
-
-  return {
-    id: rawId,
-    name: nameValue,
-    description: descriptionValue,
-    isActive: Boolean(isActiveValue),
-  };
-}
 
 function normalizeErrorMessage(payload: unknown, fallback: string) {
   if (typeof payload !== "object" || payload === null) {
@@ -139,7 +102,7 @@ function parsePagedTeams(payload: unknown) {
       : [];
 
   const items = rawItems
-    .map(normalizeTeam)
+    .map(normalizeTeamSummary)
     .filter((item): item is TeamItem => item !== null);
 
   const totalItemsValue =
@@ -169,25 +132,24 @@ export function TeamsPage() {
   const [teams, setTeams] = useState<TeamItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<TeamItem | null>(null);
   const [teamDetailMode, setTeamDetailMode] =
     useState<TeamDetailMode>("hidden");
   const [formState, setFormState] =
     useState<TeamFormState>(initialTeamFormState);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const detailRequestSequence = useRef(0);
 
   const detailVisible = teamDetailMode !== "hidden";
+  const isEditing = teamDetailMode === "edit";
 
   const teamColumns = useMemo<HubGridColumn<TeamItem>[]>(
     () => [
       {
         key: "Name",
         label: t("teams.table.name"),
-        cellClassName: "text-foreground dark:text-foreground",
-      },
-      {
-        key: "Description",
-        label: t("teams.table.description"),
         cellClassName: "text-foreground dark:text-foreground",
       },
     ],
@@ -211,25 +173,52 @@ export function TeamsPage() {
   }, []);
 
   const hideDetail = useCallback(() => {
+    detailRequestSequence.current += 1;
     setSelectedTeam(null);
     setTeamDetailMode("hidden");
+    setDetailError(null);
     resetForm();
   }, [resetForm]);
 
   const showCreateForm = useCallback(() => {
+    detailRequestSequence.current += 1;
     setSelectedTeam(null);
     setTeamDetailMode("create");
+    setDetailError(null);
     resetForm();
   }, [resetForm]);
 
-  const handleTeamSelection = useCallback((team: TeamItem) => {
+  const handleTeamSelection = useCallback(async (team: TeamItem) => {
+    const requestSequence = ++detailRequestSequence.current;
     setSelectedTeam(team);
-    setFormState({
-      name: team.name,
-      description: team.description,
-    });
+    setTeamDetailMode("detail");
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const response = await fetchWithAuth(`/api/gerit/v1/teams/${team.id}/`, { method: "GET", cache: "no-store" });
+      if (!response) return;
+      const payload = await response.json().catch(() => null) as unknown;
+      if (requestSequence !== detailRequestSequence.current) return;
+      if (!response.ok) throw new Error(normalizeErrorMessage(payload, t("teams.errors.loadDetail")));
+      const detail = normalizeTeam(payload);
+      if (!detail || detail.id !== team.id) throw new Error(t("teams.errors.loadDetail"));
+      setSelectedTeam(detail);
+      setFormState({ name: detail.name, description: detail.description ?? "" });
+    } catch (error) {
+      if (requestSequence !== detailRequestSequence.current) return;
+      const message = error instanceof Error ? error.message : t("teams.errors.loadDetail");
+      setDetailError(message);
+      toast({ title: t("teams.toasts.errorTitle"), description: message, variant: "destructive" });
+    } finally {
+      if (requestSequence === detailRequestSequence.current) setDetailLoading(false);
+    }
+  }, [fetchWithAuth, t, toast]);
+
+  const startEditing = useCallback(() => {
+    if (!selectedTeam) return;
+    setFormState({ name: selectedTeam.name, description: selectedTeam.description ?? "" });
     setTeamDetailMode("edit");
-  }, []);
+  }, [selectedTeam]);
 
   const handleSort = useCallback(
     (columnKey: string) => {
@@ -267,21 +256,11 @@ export function TeamsPage() {
   const loadTeams = useCallback(async () => {
     setLoading(true);
 
-    const query = new URLSearchParams({
-      Search: search.trim(),
-      PageNumber: String(page),
-      PageSize: String(pageSize),
-      SortBy: sortBy,
-      SortDirection: sortDirection,
-    });
-
-    if (statusFilter !== "all") {
-      query.set("IsActive", statusFilter === "active" ? "true" : "false");
-    }
+    const query = buildTeamsQuery({ search, page, pageSize, sortBy, sortDirection, status: statusFilter });
 
     try {
       const response = await fetchWithAuth(
-        `/api/gerit/v1/teams/paged?${query.toString()}`,
+        `/api/gerit/v1/teams/paged/?${query.toString()}`,
         {
           method: "GET",
         },
@@ -351,7 +330,7 @@ export function TeamsPage() {
 
       try {
         const response = await fetchWithAuth(
-          `/api/gerit/v1/teams/${team.id}/${action}`,
+          `/api/gerit/v1/teams/${team.id}/${action}/`,
           {
             method: "PATCH",
           },
@@ -372,6 +351,8 @@ export function TeamsPage() {
             ? t("teams.toasts.deactivated")
             : t("teams.toasts.activated"),
         });
+
+        setSelectedTeam((current) => current?.id === team.id ? { ...current, isActive: !current.isActive } : current);
 
         void loadTeams();
       } catch (error) {
@@ -397,7 +378,7 @@ export function TeamsPage() {
       }
 
       try {
-        const response = await fetchWithAuth(`/api/gerit/v1/teams/${team.id}`, {
+        const response = await fetchWithAuth(`/api/gerit/v1/teams/${team.id}/`, {
           method: "DELETE",
         });
 
@@ -435,6 +416,11 @@ export function TeamsPage() {
         return;
       }
 
+      if (!file.name.toLowerCase().endsWith(".csv")) {
+        toast({ title: t("teams.toasts.validationTitle"), description: t("teams.bulk.upload.csvOnly"), variant: "destructive" });
+        return;
+      }
+
       setBulkUploading(true);
 
       try {
@@ -442,7 +428,7 @@ export function TeamsPage() {
         formData.append("file", file);
 
         const response = await fetchWithAuth(
-          "/api/gerit/v1/teams/bulk-upload",
+          "/api/gerit/v1/teams/bulk-upload/",
           {
             method: "POST",
             body: formData,
@@ -490,7 +476,7 @@ export function TeamsPage() {
   );
 
   const teamRowCells = useCallback(
-    (team: TeamItem) => [team.name, team.description || "-"],
+    (team: TeamItem) => [team.name],
     [],
   );
 
@@ -520,9 +506,10 @@ export function TeamsPage() {
             handleTeamSelection(team);
           }}
           className="inline-flex h-8 w-8 items-center justify-center text-foreground transition-colors hover:text-primary dark:border-border dark:text-muted-foreground dark:hover:text-foreground"
-          title={t("teams.actions.edit")}
+          title={t("teams.actions.viewDetails")}
+          aria-label={t("teams.actions.viewDetails")}
         >
-          <SquarePen className="h-4 w-4 text-foreground dark:text-foreground" />
+          <Eye className="h-4 w-4 text-foreground dark:text-foreground" aria-hidden="true" />
         </button>
         <button
           type="button"
@@ -536,6 +523,7 @@ export function TeamsPage() {
               ? t("teams.actions.deactivate")
               : t("teams.actions.activate")
           }
+          aria-label={team.isActive ? t("teams.actions.deactivate") : t("teams.actions.activate")}
         >
           {team.isActive
             ? <PowerOff className="h-4 w-4 text-red-500 dark:text-red-400" />
@@ -549,6 +537,7 @@ export function TeamsPage() {
           }}
           className="inline-flex h-8 w-8 items-center justify-center transition-colors hover:text-destructive"
           title={t("teams.actions.delete")}
+          aria-label={t("teams.actions.delete")}
         >
           <Trash2 className="h-4 w-4 text-red-500 dark:text-red-400" />
         </button>
@@ -568,7 +557,7 @@ export function TeamsPage() {
           <input
             type="file"
             accept=".csv"
-            className="hidden"
+            className="sr-only"
             disabled={bulkUploading}
             onChange={(event) => {
               const file = event.target.files?.[0] ?? null;
@@ -614,15 +603,11 @@ export function TeamsPage() {
     setSubmitting(true);
 
     try {
-      const payload = {
-        name,
-        description: description.length > 0 ? description : null,
-      };
+      const payload = toTeamPayload(name, description);
 
-      const isEditing = selectedTeam !== null;
       const endpoint = isEditing
-        ? `/api/gerit/v1/teams/${selectedTeam?.id ?? ""}`
-        : "/api/gerit/v1/teams";
+        ? `/api/gerit/v1/teams/${selectedTeam?.id ?? ""}/`
+        : "/api/gerit/v1/teams/";
 
       const response = await fetchWithAuth(endpoint, {
         method: isEditing ? "PUT" : "POST",
@@ -633,9 +618,9 @@ export function TeamsPage() {
       });
 
       if (!response) return;
-      const responsePayload = (await response
-        .json()
-        .catch(() => null)) as unknown;
+      const responsePayload = response.status === 204
+        ? null
+        : await response.json().catch(() => null) as unknown;
 
       if (!response.ok) {
         throw new Error(
@@ -643,16 +628,19 @@ export function TeamsPage() {
         );
       }
 
-      const normalized = normalizeTeam(responsePayload);
-
-      if (normalized) {
-        setSelectedTeam(normalized);
-        setFormState({
-          name: normalized.name,
-          description: normalized.description,
-        });
-        setTeamDetailMode("edit");
-      }
+      const teamId = isEditing
+        ? selectedTeam?.id
+        : typeof responsePayload === "object" && responsePayload !== null && typeof (responsePayload as { id?: unknown }).id === "number"
+          ? (responsePayload as { id: number }).id
+          : undefined;
+      if (!teamId) throw new Error(t("teams.errors.loadDetail"));
+      const detailResponse = await fetchWithAuth(`/api/gerit/v1/teams/${teamId}/`, { method: "GET", cache: "no-store" });
+      if (!detailResponse?.ok) throw new Error(t("teams.errors.loadDetail"));
+      const updatedTeam = normalizeTeam(await detailResponse.json().catch(() => null));
+      if (!updatedTeam || updatedTeam.id !== teamId) throw new Error(t("teams.errors.loadDetail"));
+      setSelectedTeam(updatedTeam);
+      setFormState({ name: updatedTeam.name, description: updatedTeam.description ?? "" });
+      setTeamDetailMode("detail");
 
       toast({
         title: t("teams.toasts.successTitle"),
@@ -762,17 +750,29 @@ export function TeamsPage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-foreground dark:text-foreground">
-                      {selectedTeam
-                        ? t("teams.form.editTitle")
-                        : t("teams.form.newTitle")}
+                      {teamDetailMode === "detail" ? t("teams.detail.title") : isEditing ? t("teams.form.editTitle") : t("teams.form.newTitle")}
                     </h2>
                     <p className="text-sm text-muted-foreground dark:text-muted-foreground">
                       {t("teams.form.subtitle")}
                     </p>
                   </div>
+                  {teamDetailMode === "detail" && selectedTeam ? (
+                    <button type="button" onClick={startEditing} className="inline-flex items-center gap-2 rounded-sm border border-input px-4 py-2 text-sm font-semibold" aria-label={t("teams.actions.edit")}>
+                      <SquarePen className="h-4 w-4" aria-hidden="true" />{t("teams.actions.edit")}
+                    </button>
+                  ) : null}
                 </div>
 
-                <form
+                {detailLoading ? <div role="status" className="mt-5 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />{t("teams.loadingDetail")}</div> : null}
+                {detailError ? <p role="alert" className="mt-5 text-sm text-destructive">{detailError}</p> : null}
+                {teamDetailMode === "detail" && !detailLoading && selectedTeam ? (
+                  <dl className="mt-5 grid gap-4 sm:grid-cols-3">
+                    <div><dt className="text-xs font-semibold text-muted-foreground">{t("teams.form.name")}</dt><dd className="mt-1 text-sm">{selectedTeam.name}</dd></div>
+                    <div><dt className="text-xs font-semibold text-muted-foreground">{t("teams.form.description")}</dt><dd className="mt-1 whitespace-pre-wrap text-sm">{selectedTeam.description || "—"}</dd></div>
+                    <div><dt className="text-xs font-semibold text-muted-foreground">{t("teams.table.status")}</dt><dd className="mt-1 text-sm">{t(selectedTeam.isActive ? "teams.status.active" : "teams.status.inactive")}</dd></div>
+                  </dl>
+                ) : null}
+                {teamDetailMode === "create" || isEditing ? <form
                   className="mt-5 grid gap-4 sm:grid-cols-3"
                   onSubmit={handleSubmit}
                 >
@@ -781,6 +781,7 @@ export function TeamsPage() {
                       {t("teams.form.name")}
                     </span>
                     <Input
+                      required
                       value={formState.name}
                       onChange={(event) =>
                         setFormState((current) => ({
@@ -789,6 +790,7 @@ export function TeamsPage() {
                         }))
                       }
                       placeholder={t("teams.form.name")}
+                      disabled={submitting}
                     />
                   </label>
                   <label className="block">
@@ -804,6 +806,8 @@ export function TeamsPage() {
                         }))
                       }
                       rows={3}
+                      disabled={submitting}
+                      aria-label={t("teams.form.description")}
                       className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring dark:border-border dark:bg-card dark:text-foreground"
                       placeholder={t("teams.form.description")}
                     />
@@ -825,7 +829,7 @@ export function TeamsPage() {
                       {t("teams.actions.save")}
                     </button>
                   </div>
-                </form>
+                </form> : null}
               </section>
             </div>
           ) : null}

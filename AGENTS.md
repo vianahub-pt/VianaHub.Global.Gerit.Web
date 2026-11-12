@@ -75,3 +75,21 @@ O framework do repositório está em `.codex/`, `agentic/` e `scripts/`. Consult
 Use ai-memory somente por MCP quando o servidor estiver disponível e as ferramentas reais forem anunciadas. Prefira consulta e escrita de conhecimento durável do projeto. A memória é auxiliar: journal, state e plano locais são a fonte de continuidade. Nunca adivinhe endpoints nem grave segredos ou PII.
 
 `agentic/journal/current.md` é append-only durante um goal. Ao concluir, salve snapshot em `agentic/journal/history/`. Planos ficam em `agentic/plans/`; goals ficam em `agentic/goals/`.
+
+## Exceção operacional — Teams CRUD
+
+Para a branch `feature/teams-crud`, com base em `develop`, o mantenedor autoriza expressamente um fluxo direto de desenvolvimento e entrega, sem utilização do supervisor Agentic.
+
+- Codex pode implementar, modificar e testar exclusivamente os ficheiros funcionais de Teams e os respetivos testes e traduções.
+- Codex pode executar diretamente os testes, lint, typecheck, build e E2E aplicáveis.
+- As revisões de segurança e de código continuam obrigatórias, com resultados documentados.
+- O operador autoriza Git mutável diretamente no PowerShell host para esta entrega, incluindo stage, commit, push da branch e criação do PR, após aprovação dos gates e revisões.
+- O ficheiro AGENTS.md pode ser incluído no commit exclusivamente para documentar esta exceção.
+- Não modificar o supervisor Agentic, os seus checkpoints, journals ou configurações.
+- Não alterar Actions, UserPreferences, a API ou a infraestrutura de produção.
+- Não fazer push direto para develop ou main.
+- Não executar force push, reset destrutivo ou merge automático.
+- O PR deve ter como base develop e aguardar merge exclusivamente humano.
+- A exceção termina após a conclusão da entrega Teams.
+
+Esta autorização não dispensa testes, segurança, revisão de código ou rastreabilidade.

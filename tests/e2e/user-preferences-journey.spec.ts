@@ -717,19 +717,24 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
                 const saved = new RegExp(savedPattern, "i");
                 const timeline: {
                   savingVisibleAt?: number;
+                  savingText?: string;
+                  putFinalResponseAt?: number;
                   savedVisibleAt?: number;
+                  savedText?: string;
                 } = {};
                 const recordVisibleState = () => {
                   const text = status.textContent?.trim() ?? "";
                   const timestamp = performance.timeOrigin + performance.now();
                   if (saving.test(text) && timeline.savingVisibleAt === undefined) {
                     timeline.savingVisibleAt = timestamp;
+                    timeline.savingText = text;
                   } else if (
                     saved.test(text) &&
                     timeline.savingVisibleAt !== undefined &&
                     timeline.savedVisibleAt === undefined
                   ) {
                     timeline.savedVisibleAt = timestamp;
+                    timeline.savedText = text;
                   }
                 };
                 const observer = new MutationObserver(recordVisibleState);
@@ -758,17 +763,27 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
             await control.focus();
             await page.keyboard.press("Space");
             await expect(control).toHaveJSProperty("checked", target);
-            if (isFirstEmailPreference) {
-              await expect(savingStatus).toContainText(savingFeedback);
-            }
+            if (isFirstEmailPreference) await expect(savingStatus).toContainText(savingFeedback);
             const response = await responsePromise;
             if (response.status() !== 200) throw new Error(`${item.field} update returned HTTP ${response.status()}.`);
             const payload = response.request().postDataJSON() as Record<string, unknown>;
             if (payload[item.field] !== target) throw new Error(`${item.field} was absent or incorrect in its PUT payload.`);
             if (isFirstEmailPreference) {
-              const putFinalResponseAt = await page.evaluate(
-                () => performance.timeOrigin + performance.now(),
-              );
+              const putFinalResponseAt = await page.evaluate((pathPattern) => {
+                const path = new RegExp(pathPattern, "i");
+                const response = performance.getEntriesByType("resource")
+                  .filter((entry): entry is PerformanceResourceTiming => {
+                    try {
+                      return entry.entryType === "resource" && path.test(new URL(entry.name).pathname);
+                    } catch {
+                      return false;
+                    }
+                  })
+                  .filter((entry) => entry.responseEnd > 0)
+                  .at(-1);
+                return response ? performance.timeOrigin + response.responseEnd : null;
+              }, preferencePath.source);
+              if (putFinalResponseAt === null) throw new Error("Final PUT response resource timing was unavailable.");
               await expect(savingStatus).toContainText(savedFeedback);
               await page.waitForFunction(() => {
                 const timeline = (window as Window & {
@@ -779,29 +794,36 @@ test("UserPreferences complete visual journey", async ({ page, context, browser 
                 }).__userPreferencesSavingTimeline;
                 return timeline?.savedVisibleAt !== undefined;
               });
-              const timing = await page.evaluate(() => {
+              const timing = await page.evaluate((putFinalResponseAt) => {
                 const browserWindow = window as Window & {
                   __userPreferencesSavingTimeline?: {
                     savingVisibleAt?: number;
+                    savingText?: string;
                     savedVisibleAt?: number;
+                    savedText?: string;
                   };
                   __userPreferencesSavingObserver?: MutationObserver;
                 };
                 browserWindow.__userPreferencesSavingObserver?.disconnect();
-                return browserWindow.__userPreferencesSavingTimeline ?? {};
-              });
+                return { ...browserWindow.__userPreferencesSavingTimeline, putFinalResponseAt };
+              }, putFinalResponseAt);
               if (
                 timing.savingVisibleAt === undefined ||
-                timing.savedVisibleAt === undefined
+                timing.savingText === undefined ||
+                timing.putFinalResponseAt === undefined ||
+                timing.savedVisibleAt === undefined ||
+                timing.savedText === undefined
               ) {
                 throw new Error("Saving feedback timestamps were not recorded.");
               }
+              expect(timing.savingText).toMatch(savingFeedback);
+              expect(timing.savedText).toMatch(savedFeedback);
               const savingVisibleMs = timing.savedVisibleAt - timing.savingVisibleAt;
-              expect(timing.savedVisibleAt).toBeGreaterThan(putFinalResponseAt);
+              expect(timing.savedVisibleAt).toBeGreaterThan(timing.putFinalResponseAt);
               expect(savingVisibleMs).toBeGreaterThanOrEqual(400);
               emailSavingFeedbackEvidence = {
                 savingVisibleAt: timing.savingVisibleAt,
-                putFinalResponseAt,
+                putFinalResponseAt: timing.putFinalResponseAt,
                 savedVisibleAt: timing.savedVisibleAt,
                 savingVisibleMs,
               };

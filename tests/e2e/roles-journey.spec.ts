@@ -8,6 +8,13 @@ const administrationLabel = /^(administration|administração|administración)$/
 const rolesLabel = /^(roles|funções|funciones)$/i;
 const searchPlaceholder = /^(search by name or description|pesquisar por nome ou descrição|buscar por nome ou descrição|buscar por nombre o descripción)$/i;
 
+async function waitForToastToClear(page: Page) {
+  await page.mouse.move(0, 0);
+  const openToasts = page.locator('[role="status"][data-state="open"], [role="alert"][data-state="open"]');
+  for (const toast of await openToasts.all()) await toast.locator('button[toast-close]').click();
+  await expect(openToasts).toHaveCount(0, { timeout: 2_000 });
+}
+
 async function api(page: Page, method: string, path: string, body?: unknown) {
   return page.evaluate(async ({ method, path, body }) => {
     const raw = localStorage.getItem("gerit.auth.session.v1");
@@ -150,6 +157,7 @@ test("Roles canonical CRUD, tenant-scoped auth, status filters, CSV and determin
 
     await search.fill("");
     await expect.poll(() => queryUrls.at(-1)?.searchParams.get("Search")).toBe("");
+    await waitForToastToClear(page);
     await pageSize.click();
     await page.getByRole("option", { name: "10", exact: true }).click();
     const nextPage = page.getByRole("button", { name: /next|seguinte|siguiente|próximo|proximo/i });

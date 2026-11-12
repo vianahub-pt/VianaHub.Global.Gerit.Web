@@ -11,8 +11,13 @@ const searchPlaceholder = /^(search by name or description|pesquisar por nome ou
 async function waitForToastToClear(page: Page) {
   await page.mouse.move(0, 0);
   const openToasts = page.locator('[role="status"][data-state="open"], [role="alert"][data-state="open"]');
-  for (const toast of await openToasts.all()) await toast.locator('button[toast-close]').click();
-  await expect(openToasts).toHaveCount(0, { timeout: 2_000 });
+  while (await openToasts.count() > 0) {
+    const countBeforeClose = await openToasts.count();
+    const closeButton = openToasts.first().locator('button[toast-close]');
+    await expect(closeButton).toBeVisible();
+    await closeButton.click();
+    await expect.poll(() => openToasts.count(), { timeout: 2_000 }).toBeLessThan(countBeforeClose);
+  }
 }
 
 async function api(page: Page, method: string, path: string, body?: unknown) {

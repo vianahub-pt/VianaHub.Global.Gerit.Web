@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -64,20 +65,17 @@ jobs:
       - name: Run build
         run: npm run build
 
-  e2e:
-    name: ${{ matrix.capability }} E2E
+  e2e-validation:
+    name: E2E Validation
     runs-on: ubuntu-24.04
-    if: ${{ vars.GERIT_API_BASE_URL != '' && vars.E2E_USER_EMAIL != '' }}
     concurrency:
       group: gerit-shared-e2e
       cancel-in-progress: false
-    strategy:
-      max-parallel: 1
-      matrix:
-        capability: [actions, user-preferences, teams, roles]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -85,10 +83,50 @@ jobs:
           node-version: 24
           cache: npm
 
+      - name: Test capability selection and E2E outcomes
+        run: node scripts/e2e/select-capabilities.mjs --self-test
+
+      - name: Select affected E2E journeys
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            plan=$(node scripts/e2e/select-capabilities.mjs --full-regression)
+          else
+            git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files.txt"
+            plan=$(node scripts/e2e/select-capabilities.mjs < "$RUNNER_TEMP/changed-files.txt")
+          fi
+          capabilities=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).capabilities))' "$plan")
+          run_e2e=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runE2E))' "$plan")
+          reason=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")
+          echo "Selected E2E capabilities: $capabilities"
+          echo "Selection reason: $reason"
+          echo "capabilities=$capabilities" >> "$GITHUB_OUTPUT"
+          echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+      - name: Verify E2E configuration
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
+        env:
+          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          if [ -z "$GERIT_API_BASE_URL" ] || [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
+            echo "GERIT_API_BASE_URL, E2E_USER_EMAIL, and E2E_USER_PASSWORD are required for selected E2E journeys."
+            exit 1
+          fi
+
       - name: Install dependencies
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         shell: bash
         run: |
           for attempt in 1 2 3; do
@@ -102,34 +140,54 @@ jobs:
           echo "Playwright Chromium installation failed after 3 attempts."
           exit 1
 
-      - name: Verify E2E credentials are configured
-        env:
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
-        run: |
-          if [ -z "$E2E_USER_PASSWORD" ]; then
-            echo "E2E_USER_PASSWORD secret is required when GERIT_API_BASE_URL and E2E_USER_EMAIL are configured."
-            exit 1
-          fi
-
       - name: Prepare isolated E2E build
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         run: npm run e2e:prepare
         env:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
 
-      - name: Run ${{ matrix.capability }} E2E
-        run: npm run test:e2e:capability -- ${{ matrix.capability }}
+      - name: Run selected E2E journeys
+        id: run-selected
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
+        shell: bash
         env:
           CI: true
           E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
+        run: |
+          result=0
+          while IFS= read -r capability; do
+            [ -n "$capability" ] || continue
+            if npm run test:e2e:capability -- "$capability"; then
+              echo "$capability E2E: PASS"
+            else
+              echo "$capability E2E: FAIL"
+              result=1
+            fi
+          done < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
+          exit "$result"
 
       - name: Upload Playwright report and traces
-        if: ${{ always() }}
+        if: ${{ always() && steps.select.outputs.run_e2e == 'true' }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.capability }}-playwright-report
+          name: selected-e2e-playwright-report
           path: |
             playwright-report/
             test-results/
           if-no-files-found: ignore
+
+      - name: Validate E2E Validation result
+        if: ${{ always() }}
+        env:
+          SELECTION_STATUS: ${{ steps.select.outcome }}
+          SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
+          RUN_E2E: ${{ steps.select.outputs.run_e2e }}
+          SELECTION_REASON: ${{ steps.select.outputs.reason }}
+          E2E_STATUS: ${{ steps.run-selected.outcome }}
+        run: |
+          node scripts/e2e/select-capabilities.mjs --validate-outcome <<EOF
+          {"selectionStatus":"$SELECTION_STATUS","capabilities":$SELECTED_CAPABILITIES,"runE2E":$RUN_E2E,"reason":"$SELECTION_REASON","e2eStatus":"$E2E_STATUS"}
+          EOF

@@ -37,7 +37,7 @@ Use o alias `@/*`. Componentes em PascalCase; hooks e funções em camelCase. Ad
 - Nunca exponha, copie ou registre passwords, tokens, JWT, cookies, chaves privadas, connection strings ou dados pessoais desnecessários.
 - Não armazene segredos em arquivos versionados, journal, goals ou memória compartilhada.
 - Valide autorização no servidor e mantenha isolamento por tenant. Não confie em permissões de UI como controle de acesso.
-- Produção é somente leitura durante goals de desenvolvimento. Não altere VPS, Cloudflare, Traefik, Docker de produção, banco, GitHub Environments ou secrets; não dispare deploy.
+- Produção é somente leitura por padrão durante desenvolvimento. Mutações de dados de teste em produção exigem autorização específica, prévia e delimitada, limitam-se a registos criados pela própria execução e requerem cleanup verificado. Não altere infraestrutura de produção (VPS, Cloudflare, Traefik, Docker, schema de banco, GitHub Environments ou secrets), não aceda nem modifique diretamente a base de dados e não faça deploy manual.
 - O deploy da aplicação é controlado por `.github/workflows/deploy.yml`. Mudanças funcionais não devem promover `develop` para `main` nem realizar merge automaticamente.
 
 ## Branches e PRs
@@ -46,13 +46,29 @@ Use o alias `@/*`. Componentes em PascalCase; hooks e funções em camelCase. Ad
 - Somente hotfix real de produção parte de `main`, usa `hotfix/*` e abre PR para `main`.
 - Nunca faça commit direto ou push para `develop`/`main`; nunca use force push, `reset --hard`, `clean -fd`, merge automático ou altere proteção de branch.
 - Antes de criar branch, confira `git status`, busque referências remotas e preserve qualquer trabalho local. Não descarte nem sobrescreva alterações alheias ao goal.
-- Todo trabalho autônomo termina em `WAITING_HUMAN_MERGE`. Uma pessoa revisa e faz o merge.
+- Todo trabalho autônomo termina com PR aberto, aguardando merge humano (`WAITING_HUMAN_MERGE`). Uma pessoa revisa e faz o merge.
 
 ## Quality gates
 
 Gates padrão: `git diff --check`, `npm ci`, `npm run lint`, `npm run build` e `npx tsc --project tsconfig.typecheck.json --noEmit`. Registre comando, código de saída, resultado e falhas reais. Não reporte PASS quando um comando falhar. Execute testes adicionais somente se existirem e forem aplicáveis.
 
-## Execução agentic com Codex
+## Fluxo de desenvolvimento do Codex Desktop
+
+O fluxo direto do Codex Desktop é o padrão. O supervisor Agentic é opcional e só é usado quando solicitado explicitamente ou exigido por uma política aplicável ao repositório.
+
+### Fluxo direto (padrão)
+
+- Codex verifica e prepara o workspace e branches de trabalho, preservando todos os ficheiros locais e alterações existentes.
+- Codex pode executar Git mutável somente em branches de trabalho autorizadas. Nunca faça commit ou push direto para `develop` ou `main`; nunca use force push, `reset --hard` ou `clean -fd`.
+- Codex implementa e executa os testes, gates e revisões de segurança e código aplicáveis. Registe comandos, códigos de saída, resultados e falhas reais; não declare PASS sem execução.
+- Se a sandbox bloquear uma operação legítima, solicite execução no host pelo mecanismo de autorização disponível. Não contorne nem enfraqueça controlos de segurança.
+- Após gates e revisões aprovados, Codex pode criar commit, fazer push somente da branch de trabalho e abrir PR para a base declarada.
+- Merge em `develop` ou `main` é exclusivamente humano. Não faça deploy manual nem altere proteções de branch sem autorização.
+- Produção permanece read-only, salvo autorização específica para uma operação delimitada. Nunca execute operações destrutivas em produção sem essa autorização.
+
+### Supervisor Agentic (opcional)
+
+As regras seguintes aplicam-se somente quando o supervisor Agentic for escolhido.
 
 O framework do repositório está em `.codex/`, `agentic/` e `scripts/`. Consulte `agentic/README.md` antes de executar o loop. Papéis disponíveis: `orchestrator`, `architect`, `implementer`, `tester`, `security` e `reviewer`.
 
@@ -70,9 +86,9 @@ O framework do repositório está em `.codex/`, `agentic/` e `scripts/`. Consult
 - Só o supervisor cria commit, push e PR depois de validar branch/base, escopo de arquivos, quality gates, security PASS e reviewer PASS. Push é limitado à branch de trabalho e PR usa a base declarada no goal. `WAITING_HUMAN_MERGE` só é válido depois de o supervisor verificar PR aberto com URL, número, head e base correspondentes. Não faça merge nem deploy.
 - Para iniciar trabalho pelo Codex Desktop, use `agentic/prompts/front-door.md` para preparar intake em `agentic/state/intake.md`. O operador deve executar `scripts/agentic-start.ps1` em PowerShell normal no host, fora do sandbox Codex, para que gates npm/nativos sejam executados pelo supervisor host. O Desktop não deve iniciar o supervisor dentro do sandbox. O supervisor valida árvore/allowlist, cria branch, materializa goal e invoca roles confinadas. Nunca inclua segredo, path absoluto, traversal, curingas ou repo inteiro. O fluxo mantém quota/resume e termina em `WAITING_HUMAN_MERGE` ou `FAILED`.
 
-## Memória e journal
+#### Memória e journal (no fluxo Agentic)
 
-Use ai-memory somente por MCP quando o servidor estiver disponível e as ferramentas reais forem anunciadas. Prefira consulta e escrita de conhecimento durável do projeto. A memória é auxiliar: journal, state e plano locais são a fonte de continuidade. Nunca adivinhe endpoints nem grave segredos ou PII.
+Quando o supervisor Agentic for escolhido, use ai-memory somente por MCP quando o servidor estiver disponível e as ferramentas reais forem anunciadas. Prefira consulta e escrita de conhecimento durável do projeto. A memória é auxiliar: journal, state e plano locais são a fonte de continuidade. Nunca adivinhe endpoints nem grave segredos ou PII.
 
 `agentic/journal/current.md` é append-only durante um goal. Ao concluir, salve snapshot em `agentic/journal/history/`. Planos ficam em `agentic/plans/`; goals ficam em `agentic/goals/`.
 
@@ -96,7 +112,7 @@ Esta autorização não dispensa testes, segurança, revisão de código ou rast
 
 ## Exceção operacional — Roles CRUD
 
-Para a entrega Roles CRUD, exclusivamente na branch `feature/roles-crud` criada a partir de `origin/develop` atualizado, o mantenedor autoriza o Codex Desktop a executar diretamente o desenvolvimento e a entrega sem utilizar o supervisor Agentic. Esta exceção prevalece sobre as regras gerais do supervisor somente para este objetivo e termina em `WAITING_HUMAN_MERGE`.
+Para a entrega Roles CRUD, exclusivamente na branch `feature/roles-crud` criada a partir de `origin/develop` atualizado, o mantenedor autorizou o Codex Desktop a executar diretamente o desenvolvimento e a entrega. Esta autorização específica foi limitada a esse objetivo e terminou em `WAITING_HUMAN_MERGE`.
 
 - O Codex pode consultar o remoto, criar somente `feature/roles-crud` a partir de `origin/develop` e executar operações Git nessa branch. Antes disso, deve verificar a working tree e as referências remotas, preservando todos os arquivos locais. Se uma colisão impedir a troca segura de branch, deve parar sem mover ou apagar arquivos.
 - Alterações funcionais ficam limitadas aos caminhos concretos autorizados no intake Roles. `AGENTS.md` pode ser incluído no commit somente para documentar esta exceção.

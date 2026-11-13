@@ -103,7 +103,10 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.getByRole("option", { name: "20", exact: true }).click();
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("20");
     await pageSize.click();
-    await page.getByRole("option", { name: "10", exact: true }).click();
+    // The Radix select can place the first item outside the popup viewport;
+    // use its accessible keyboard interaction to return to the default size.
+    await pageSize.press("Home");
+    await pageSize.press("Enter");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("10");
 
     await page.getByRole("button", { name: /add|adicionar|agregar/i }).click();

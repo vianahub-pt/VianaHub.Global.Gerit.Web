@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
 export const CAPABILITIES = ["actions", "user-preferences", "teams", "roles"];
@@ -11,6 +12,13 @@ const capabilityPaths = new Map([
 ]);
 
 const ciOnlyPaths = new Set([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]);
+const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
+const translationPrefixes = new Map([
+  ["actions.", "actions"],
+  ["preferences.", "user-preferences"],
+  ["teams.", "teams"],
+  ["roles.", "roles"],
+]);
 
 function normalizePath(file) {
   return file.replaceAll("\\", "/").replace(/^\.\//, "");
@@ -20,7 +28,7 @@ function isDocumentation(file) {
   return file.startsWith("docs/") || /(?:^|\/)[^/]+\.(?:md|mdx)$/i.test(file);
 }
 
-export function selectCapabilities(files, { fullRegression = false } = {}) {
+export function selectCapabilities(files, { fullRegression = false, translationAnalysis } = {}) {
   if (fullRegression) return { capabilities: [...CAPABILITIES], runE2E: true, reason: "manual-full-regression" };
 
   const changedFiles = files.map((file) => normalizePath(file.trim())).filter(Boolean);
@@ -31,6 +39,9 @@ export function selectCapabilities(files, { fullRegression = false } = {}) {
   const selected = new Set();
   let hasUnmappedChange = false;
   let hasNonDocumentationChange = false;
+  let hasTranslationAnalysisFailure = false;
+  let hasLocaleCatalogChange = false;
+  let hasOtherNonCiChange = false;
 
   for (const file of changedFiles) {
     if (isDocumentation(file)) continue;
@@ -38,6 +49,28 @@ export function selectCapabilities(files, { fullRegression = false } = {}) {
     hasNonDocumentationChange = true;
     if (ciOnlyPaths.has(file)) continue;
 
+    if (localeCommonPath.test(file)) {
+      hasLocaleCatalogChange = true;
+      if (!translationAnalysis?.ok || !Array.isArray(translationAnalysis.changedKeys) || !Array.isArray(translationAnalysis.removedKeys)) {
+        hasTranslationAnalysisFailure = true;
+        continue;
+      }
+      if (translationAnalysis.removedKeys.length > 0) {
+        hasUnmappedChange = true;
+        continue;
+      }
+      for (const key of translationAnalysis.changedKeys) {
+        const matches = [...translationPrefixes].filter(([prefix]) => key.startsWith(prefix));
+        if (matches.length !== 1) {
+          hasUnmappedChange = true;
+          continue;
+        }
+        selected.add(matches[0][1]);
+      }
+      continue;
+    }
+
+    hasOtherNonCiChange = true;
     let matched = false;
     for (const [capability, paths] of capabilityPaths) {
       if (paths.some((path) => (path.endsWith("/") ? file.startsWith(path) : file === path))) {
@@ -48,11 +81,58 @@ export function selectCapabilities(files, { fullRegression = false } = {}) {
     if (!matched) hasUnmappedChange = true;
   }
 
+  if (hasTranslationAnalysisFailure) {
+    return { capabilities: [...CAPABILITIES], runE2E: true, reason: "translation-analysis-failed" };
+  }
   if (hasUnmappedChange) return { capabilities: [...CAPABILITIES], runE2E: true, reason: "unmapped-impact" };
   const capabilities = CAPABILITIES.filter((capability) => selected.has(capability));
   if (capabilities.length > 0) return { capabilities, runE2E: true, reason: "capability-impact" };
+  if (hasLocaleCatalogChange && !hasOtherNonCiChange) {
+    return { capabilities: [], runE2E: false, reason: "translation-no-semantic-change" };
+  }
   if (hasNonDocumentationChange) return { capabilities: [], runE2E: false, reason: "ci-validation-only" };
   return { capabilities: [], runE2E: false, reason: "documentation-only" };
+}
+
+function parseLocale(content) {
+  const parsed = JSON.parse(content);
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("Locale catalog must be a JSON object.");
+  }
+  for (const value of Object.values(parsed)) {
+    if (typeof value !== "string") throw new Error("Locale catalog values must be strings.");
+  }
+  return parsed;
+}
+
+export function analyzeTranslationChanges(files, baseContents, headContents) {
+  const changedKeys = new Set();
+  const removedKeys = new Set();
+
+  try {
+    for (const file of files.map(normalizePath).filter((path) => localeCommonPath.test(path))) {
+      if (!Object.hasOwn(baseContents, file) || !Object.hasOwn(headContents, file)) {
+        throw new Error(`Missing locale content for ${file}.`);
+      }
+      const base = parseLocale(baseContents[file]);
+      const head = parseLocale(headContents[file]);
+      for (const key of new Set([...Object.keys(base), ...Object.keys(head)])) {
+        if (!Object.hasOwn(head, key)) {
+          removedKeys.add(key);
+        } else if (!Object.hasOwn(base, key) || base[key] !== head[key]) {
+          changedKeys.add(key);
+        }
+      }
+    }
+  } catch {
+    return { ok: false, changedKeys: [], removedKeys: [] };
+  }
+
+  return {
+    ok: true,
+    changedKeys: [...changedKeys].sort(),
+    removedKeys: [...removedKeys].sort(),
+  };
 }
 
 export function validateE2EOutcome({ selectionStatus, capabilities, runE2E, reason, e2eStatus }) {
@@ -71,7 +151,7 @@ export function validateE2EOutcome({ selectionStatus, capabilities, runE2E, reas
   }
 
   if (capabilities.length !== 0) return { pass: false, reason: "capabilities-were-omitted" };
-  if (!["documentation-only", "ci-validation-only"].includes(reason)) {
+  if (!["documentation-only", "ci-validation-only", "translation-no-semantic-change"].includes(reason)) {
     return { pass: false, reason: "e2e-exemption-not-validated" };
   }
   return { pass: true, reason };
@@ -102,7 +182,66 @@ function selfTest() {
   assert.equal(validateE2EOutcome({ selectionStatus: "success", capabilities: [], runE2E: false, reason: "ci-validation-only" }).pass, true);
   assert.equal(validateE2EOutcome({ selectionStatus: "success", capabilities: [], runE2E: false, reason: "unmapped-impact" }).pass, false);
   assert.equal(validateE2EOutcome({ selectionStatus: "success", capabilities: [], runE2E: false, reason: "documentation-only", e2eStatus: "skipped" }).pass, true);
-  console.log("E2E selection and validation: 23 scenarios passed.");
+
+  const localeFile = "locales/pt-PT/common.json";
+  const localeAnalysis = (base, head) => analyzeTranslationChanges(
+    [localeFile],
+    { [localeFile]: JSON.stringify(base) },
+    { [localeFile]: JSON.stringify(head) },
+  );
+  const roleOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Voltar atrás" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: roleOnly }).capabilities, ["roles"]);
+  const preferencesFile = "locales/pt-PT/common.json";
+  const preferencesOnly = localeAnalysis({ "preferences.title": "Preferências" }, { "preferences.title": "As minhas preferências" });
+  assert.deepEqual(selectCapabilities([preferencesFile], { translationAnalysis: preferencesOnly }).capabilities, ["user-preferences"]);
+  const usersWithoutJourney = localeAnalysis({ "users.title": "Utilizadores" }, { "users.title": "Contas" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: usersWithoutJourney }).capabilities, CAPABILITIES);
+  const multiCapability = localeAnalysis(
+    { "roles.actions.back": "Voltar", "teams.actions.back": "Voltar" },
+    { "roles.actions.back": "Regressar", "teams.actions.back": "Voltar atrás" },
+  );
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: multiCapability }).capabilities, ["teams", "roles"]);
+  const sharedKey = localeAnalysis({ "navigation.back": "Voltar" }, { "navigation.back": "Regressar" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: sharedKey }).capabilities, CAPABILITIES);
+  const unknownKey = localeAnalysis({ "futureCapability.label": "Antes" }, { "futureCapability.label": "Depois" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: unknownKey }).capabilities, CAPABILITIES);
+  const removedKey = localeAnalysis({ "roles.actions.back": "Voltar" }, {});
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: removedKey }).capabilities, CAPABILITIES);
+  const failedAnalysis = analyzeTranslationChanges([localeFile], { [localeFile]: "{" }, { [localeFile]: "{}" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: failedAnalysis }), {
+    capabilities: [...CAPABILITIES], runE2E: true, reason: "translation-analysis-failed",
+  });
+  assert.deepEqual(selectCapabilities([localeFile]), {
+    capabilities: [...CAPABILITIES], runE2E: true, reason: "translation-analysis-failed",
+  });
+  const formattingOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Voltar" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: formattingOnly }), {
+    capabilities: [], runE2E: false, reason: "translation-no-semantic-change",
+  });
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success", capabilities: [], runE2E: false, reason: "translation-no-semantic-change",
+  }).pass, true);
+  console.log("E2E selection, locale key comparison, and fallback self-tests passed.");
+}
+
+function readGitFile(ref, file) {
+  return execFileSync("git", ["show", `${ref}:${file}`], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+}
+
+function compareRefsPlan(files, baseRef, headRef) {
+  const localeFiles = files.map(normalizePath).filter((file) => localeCommonPath.test(file));
+  const baseContents = {};
+  const headContents = {};
+  try {
+    for (const file of localeFiles) {
+      baseContents[file] = readGitFile(baseRef, file);
+      headContents[file] = readGitFile(headRef, file);
+    }
+  } catch {
+    return { capabilities: [...CAPABILITIES], runE2E: true, reason: "translation-analysis-failed" };
+  }
+  const translationAnalysis = analyzeTranslationChanges(localeFiles, baseContents, headContents);
+  return selectCapabilities(files, { translationAnalysis });
 }
 
 if (process.argv.includes("--self-test")) {
@@ -121,5 +260,9 @@ if (process.argv.includes("--self-test")) {
 } else {
   const fullRegression = process.argv.includes("--full-regression");
   const input = fullRegression ? [] : readFileSync(0, "utf8").split(/\r?\n/);
-  process.stdout.write(`${JSON.stringify(selectCapabilities(input, { fullRegression }))}\n`);
+  const compareIndex = process.argv.indexOf("--compare");
+  const plan = compareIndex >= 0
+    ? compareRefsPlan(input, process.argv[compareIndex + 1], process.argv[compareIndex + 2])
+    : selectCapabilities(input, { fullRegression });
+  process.stdout.write(`${JSON.stringify(plan)}\n`);
 }

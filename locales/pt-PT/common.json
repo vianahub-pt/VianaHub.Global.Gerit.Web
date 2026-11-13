@@ -802,6 +802,7 @@
   "roles.actions.activate": "Ativar",
   "roles.actions.deactivate": "Desativar",
   "roles.actions.cancel": "Cancelar",
+  "roles.actions.back": "Voltar",
   "roles.actions.save": "Guardar",
   "roles.pagination.previous": "Anterior",
   "roles.pagination.next": "Seguinte",

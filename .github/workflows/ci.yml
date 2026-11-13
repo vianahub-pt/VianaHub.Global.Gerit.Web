@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -13,6 +14,17 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Verify E2E configuration
+        env:
+          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          if [ -z "$GERIT_API_BASE_URL" ] || [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
+            echo "GERIT_API_BASE_URL, E2E_USER_EMAIL, and E2E_USER_PASSWORD are required for selected E2E journeys."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -64,20 +76,69 @@ jobs:
       - name: Run build
         run: npm run build
 
-  e2e:
-    name: ${{ matrix.capability }} E2E
+  e2e-selection:
+    name: E2E Selection
     runs-on: ubuntu-24.04
-    if: ${{ vars.GERIT_API_BASE_URL != '' && vars.E2E_USER_EMAIL != '' }}
-    concurrency:
-      group: gerit-shared-e2e
-      cancel-in-progress: false
-    strategy:
-      max-parallel: 1
-      matrix:
-        capability: [actions, user-preferences, teams, roles]
+    outputs:
+      capabilities: ${{ steps.select.outputs.capabilities }}
+      run_e2e: ${{ steps.select.outputs.run_e2e }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Test capability selection
+        run: node scripts/e2e/select-capabilities.mjs --self-test
+
+      - name: Select affected E2E journeys
+        id: select
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            plan=$(node scripts/e2e/select-capabilities.mjs --full-regression)
+          else
+            git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files.txt"
+            plan=$(node scripts/e2e/select-capabilities.mjs < "$RUNNER_TEMP/changed-files.txt")
+          fi
+          capabilities=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).capabilities))' "$plan")
+          run_e2e=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runE2E))' "$plan")
+          echo "Selected E2E capabilities: $capabilities"
+          echo "Selection reason: $(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")"
+          echo "capabilities=$capabilities" >> "$GITHUB_OUTPUT"
+          echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-24.04
+    needs: e2e-selection
+    if: ${{ needs.e2e-selection.outputs.run_e2e == 'true' }}
+    concurrency:
+      group: gerit-shared-e2e
+      cancel-in-progress: false
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Verify E2E configuration
+        env:
+          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
+          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
+        run: |
+          if [ -z "$GERIT_API_BASE_URL" ] || [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
+            echo "GERIT_API_BASE_URL, E2E_USER_EMAIL, and E2E_USER_PASSWORD are required for selected E2E journeys."
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -102,33 +163,37 @@ jobs:
           echo "Playwright Chromium installation failed after 3 attempts."
           exit 1
 
-      - name: Verify E2E credentials are configured
-        env:
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
-        run: |
-          if [ -z "$E2E_USER_PASSWORD" ]; then
-            echo "E2E_USER_PASSWORD secret is required when GERIT_API_BASE_URL and E2E_USER_EMAIL are configured."
-            exit 1
-          fi
-
       - name: Prepare isolated E2E build
         run: npm run e2e:prepare
         env:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
 
-      - name: Run ${{ matrix.capability }} E2E
-        run: npm run test:e2e:capability -- ${{ matrix.capability }}
+      - name: Run selected E2E journeys
+        shell: bash
         env:
           CI: true
           E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
+          SELECTED_CAPABILITIES: ${{ needs.e2e-selection.outputs.capabilities }}
+        run: |
+          result=0
+          while IFS= read -r capability; do
+            [ -n "$capability" ] || continue
+            if npm run test:e2e:capability -- "$capability"; then
+              echo "$capability E2E: PASS"
+            else
+              echo "$capability E2E: FAIL"
+              result=1
+            fi
+          done < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
+          exit "$result"
 
       - name: Upload Playwright report and traces
         if: ${{ always() }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.capability }}-playwright-report
+          name: selected-e2e-playwright-report
           path: |
             playwright-report/
             test-results/

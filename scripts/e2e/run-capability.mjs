@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { resolveCapabilitySpecPaths } from "./capability-specs.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "../..");
@@ -13,15 +14,12 @@ function fail(message) {
   process.exit(1);
 }
 
-const slug = process.argv[2];
-if (process.argv.length !== 3 || !slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-  fail("Provide exactly one capability slug using lowercase letters, digits, and single hyphens.");
-}
-
-const nativeSpecPath = resolve(repoRoot, "tests", "e2e", `${slug}-journey.spec.ts`);
-const canonicalDirectory = resolve(repoRoot, "tests", "e2e");
-if (!nativeSpecPath.startsWith(`${canonicalDirectory}${sep}`) || !existsSync(nativeSpecPath)) {
-  fail(`Canonical journey not found for capability '${slug}'.`);
+const slugs = process.argv.slice(2);
+let specPaths;
+try {
+  specPaths = resolveCapabilitySpecPaths(slugs, repoRoot);
+} catch (error) {
+  fail(error instanceof Error ? error.message : "Invalid E2E capability selection.");
 }
 
 let playwrightCli;
@@ -37,8 +35,7 @@ try {
   fail(`Unable to resolve the installed Playwright CLI (${error instanceof Error ? error.message : "package metadata unavailable"}).`);
 }
 
-const specPath = `tests/e2e/${slug}-journey.spec.ts`;
-const child = spawn(process.execPath, [playwrightCli, "test", specPath, "--project=journey"], {
+const child = spawn(process.execPath, [playwrightCli, "test", ...specPaths, "--project=journey"], {
   cwd: repoRoot,
   env: process.env,
   shell: false,

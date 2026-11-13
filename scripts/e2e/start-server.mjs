@@ -4,7 +4,6 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { stopServerProcess } from "./server-lifecycle.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const host = "127.0.0.1";
@@ -155,39 +154,36 @@ async function waitForReadiness(child) {
   throw new Error(`[E2E] Production application readiness failed within 15s: ${lastReason}.`);
 }
 
-function stopWindowsChildTree(child) {
-  if (!child.pid) return;
-  try {
-    const command = `
-      $root = ${child.pid}
-      $all = @(Get-CimInstance Win32_Process)
-      $ids = [System.Collections.Generic.List[int]]::new()
-      $ids.Add($root)
-      $changed = $true
-      while ($changed) {
-        $changed = $false
-        foreach ($item in $all) {
-          $processIdValue = [int]$item.ProcessId
-          if ($ids.Contains([int]$item.ParentProcessId) -and -not $ids.Contains($processIdValue)) { $ids.Add($processIdValue); $changed = $true }
-        }
-      }
-      for ($index = $ids.Count - 1; $index -ge 0; $index--) { Stop-Process -Id $ids[$index] -Force -ErrorAction SilentlyContinue }
-    `;
-    execFileSync("powershell.exe", ["-NoProfile", "-Command", command], { stdio: "ignore" });
-  } catch {
-    child.kill();
-  }
-}
-
 async function stopChild(child) {
-  const released = await stopServerProcess(child, {
-    host,
-    port,
-    isWindows,
-    stopWindowsTree: () => stopWindowsChildTree(child),
-  });
-  if (!released) console.error(`[E2E] Failed to release ${host}:${port} after stopping the owned server process.`);
-  return released;
+  if (!child.pid || child.exitCode !== null) return;
+  if (isWindows) {
+    try {
+      const command = `
+        $root = ${child.pid}
+        $all = @(Get-CimInstance Win32_Process)
+        $ids = [System.Collections.Generic.List[int]]::new()
+        $ids.Add($root)
+        $changed = $true
+        while ($changed) {
+          $changed = $false
+          foreach ($item in $all) {
+            $processIdValue = [int]$item.ProcessId
+            if ($ids.Contains([int]$item.ParentProcessId) -and -not $ids.Contains($processIdValue)) { $ids.Add($processIdValue); $changed = $true }
+          }
+        }
+        for ($index = $ids.Count - 1; $index -ge 0; $index--) { Stop-Process -Id $ids[$index] -Force -ErrorAction SilentlyContinue }
+      `;
+      execFileSync("powershell.exe", ["-NoProfile", "-Command", command], { stdio: "ignore" });
+    } catch {
+      child.kill();
+    }
+  } else {
+    try {
+      process.kill(-child.pid, "SIGTERM");
+    } catch {
+      child.kill("SIGTERM");
+    }
+  }
 }
 
 let child;
@@ -195,8 +191,8 @@ let shuttingDown = false;
 async function shutdown(exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
-  const released = child ? await stopChild(child) : true;
-  process.exitCode = exitCode === 0 && !released ? 1 : exitCode;
+  if (child) await stopChild(child);
+  process.exitCode = exitCode;
 }
 
 try {
@@ -240,12 +236,8 @@ try {
   process.on("SIGINT", () => { void shutdown(0); });
   process.on("SIGTERM", () => { void shutdown(0); });
   await new Promise((resolveExit) => child.once("exit", resolveExit));
-  if (!shuttingDown) {
-    const released = await stopChild(child);
-    if (!released) process.exitCode = 1;
-  }
 } catch (error) {
-  if (child && !(await stopChild(child))) process.exitCode = 1;
+  if (child) await stopChild(child);
   console.error(error instanceof Error ? error.message : "[E2E] Production server startup failed.");
   process.exitCode = 1;
 }

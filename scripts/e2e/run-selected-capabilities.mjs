@@ -25,11 +25,11 @@ const results = {};
 const reports = [];
 let allPassed = true;
 
-function runCapability(capability) {
+function runCapabilities(capabilities) {
   const script = resolve(repoRoot, "scripts/e2e/run-capability.mjs");
   if (!script.startsWith(`${resolve(repoRoot, "scripts/e2e")}${sep}`)) throw new Error("Capability runner resolved outside scripts/e2e.");
   return new Promise((resolveRun) => {
-    const child = spawn(process.execPath, [script, capability], {
+    const child = spawn(process.execPath, [script, ...capabilities], {
       cwd: repoRoot,
       env: process.env,
       shell: false,
@@ -40,14 +40,14 @@ function runCapability(capability) {
   });
 }
 
+console.log(`[E2E selection] Starting journeys in one Playwright session: ${plan.capabilities.join(", ")}.`);
+const exitCode = await runCapabilities(plan.capabilities);
+const reportSource = resolve(repoRoot, "playwright-report");
+const resultsSource = resolve(repoRoot, "test-results");
 for (const capability of plan.capabilities) {
-  console.log(`[E2E selection] Starting ${capability} journey.`);
-  const exitCode = await runCapability(capability);
-  const reportSource = resolve(repoRoot, "playwright-report");
   const reportRelative = `${capability}/playwright-report/index.html`;
   const reportTarget = resolve(artifactRoot, capability, "playwright-report");
   if (existsSync(reportSource)) await cp(reportSource, reportTarget, { recursive: true, force: true });
-  const resultsSource = resolve(repoRoot, "test-results");
   if (existsSync(resultsSource)) await cp(resultsSource, resolve(artifactRoot, capability, "test-results"), { recursive: true, force: true });
 
   const validReport = existsSync(resolve(artifactRoot, capability, "playwright-report", "index.html"));

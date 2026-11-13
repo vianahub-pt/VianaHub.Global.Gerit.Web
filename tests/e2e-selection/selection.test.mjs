@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
+import { createConnection, createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { stopServerProcess, waitForPortRelease } from "../../scripts/e2e/server-lifecycle.mjs";
 import {
   createSelectionPlan,
   selectCapabilities,
@@ -14,6 +16,39 @@ import {
 
 const baseSha = "a".repeat(40);
 const headSha = "b".repeat(40);
+
+async function reservePort() {
+  const server = createServer();
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(0, "127.0.0.1", resolveListen);
+  });
+  const address = server.address();
+  await new Promise((resolveClose) => server.close(resolveClose));
+  return address.port;
+}
+
+function isPortListening(port) {
+  return new Promise((resolveListening) => {
+    const socket = createConnection({ host: "127.0.0.1", port });
+    socket.once("connect", () => { socket.destroy(); resolveListening(true); });
+    socket.once("error", () => resolveListening(false));
+  });
+}
+
+async function closeServer(server) {
+  if (!server.listening) return;
+  await new Promise((resolveClose) => server.close(resolveClose));
+}
+
+async function waitForPortListening(port, timeoutMs = 3_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await isPortListening(port)) return true;
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+  }
+  return isPortListening(port);
+}
 
 test("isolated Roles change selects only Roles E2E", () => {
   assert.deepEqual(selectCapabilities(["domains/operations/roles/roles-page.tsx"]).capabilities, ["roles"]);
@@ -122,6 +157,111 @@ test("selected E2E passes aggregation only with a matching report for every capa
     evidenceFiles: ["roles/playwright-report/index.html"],
   });
   assert.equal(result.pass, true);
+});
+
+test("E2E server shutdown waits for the Windows process-tree cleanup to release the port", async () => {
+  const host = "127.0.0.1";
+  const port = await reservePort();
+  const server = createServer();
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, host, resolveListen);
+  });
+  let stopCalls = 0;
+
+  try {
+    const released = await stopServerProcess({ pid: 1 }, {
+      host,
+      port,
+      isWindows: true,
+      graceMs: 2_000,
+      stopWindowsTree: () => {
+        stopCalls += 1;
+        server.close();
+      },
+    });
+
+    assert.equal(released, true);
+    assert.equal(stopCalls, 1);
+    assert.equal(await waitForPortRelease(host, port, 100), true);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("E2E server shutdown retries Windows process-tree cleanup when graceful stop does not release the port", async () => {
+  const host = "127.0.0.1";
+  const port = await reservePort();
+  const server = createServer();
+  await new Promise((resolveListen, rejectListen) => {
+    server.once("error", rejectListen);
+    server.listen(port, host, resolveListen);
+  });
+  let stopCalls = 0;
+
+  try {
+    const released = await stopServerProcess({ pid: 1 }, {
+      host,
+      port,
+      isWindows: true,
+      graceMs: 100,
+      forceMs: 1_000,
+      stopWindowsTree: () => {
+        stopCalls += 1;
+        if (stopCalls === 2) server.close();
+      },
+    });
+
+    assert.equal(released, true);
+    assert.equal(stopCalls, 2);
+    assert.equal(await waitForPortRelease(host, port, 100), true);
+  } finally {
+    await closeServer(server);
+  }
+});
+
+test("E2E server shutdown waits for its process group to release the port", { skip: process.platform === "win32" }, async () => {
+  const host = "127.0.0.1";
+  const port = await reservePort();
+  const serverScript = [
+    "const { createServer } = require('node:net');",
+    "const server = createServer();",
+    `server.listen(${port}, '${host}');`,
+    "process.on('SIGTERM', () => setTimeout(() => server.close(() => process.exit(0)), 150));",
+  ].join(" ");
+  const child = spawn(process.execPath, ["-e", serverScript], { detached: true, stdio: "ignore" });
+
+  try {
+    assert.equal(await waitForPortListening(port), true, "test server should start listening");
+    assert.equal(await stopServerProcess(child, { host, port, graceMs: 2_000, forceMs: 1_000 }), true);
+    assert.equal(await waitForPortRelease(host, port, 100), true);
+  } finally {
+    if (child.pid) {
+      try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error?.code !== "ESRCH") throw error; }
+    }
+  }
+});
+
+test("E2E server shutdown force-stops a process group that ignores SIGTERM", { skip: process.platform === "win32" }, async () => {
+  const host = "127.0.0.1";
+  const port = await reservePort();
+  const serverScript = [
+    "const { createServer } = require('node:net');",
+    "const server = createServer();",
+    `server.listen(${port}, '${host}');`,
+    "process.on('SIGTERM', () => {});",
+  ].join(" ");
+  const child = spawn(process.execPath, ["-e", serverScript], { detached: true, stdio: "ignore" });
+
+  try {
+    assert.equal(await waitForPortListening(port), true, "test server should start listening");
+    assert.equal(await stopServerProcess(child, { host, port, graceMs: 300, forceMs: 2_000 }), true);
+    assert.equal(await waitForPortRelease(host, port, 100), true);
+  } finally {
+    if (child.pid) {
+      try { process.kill(-child.pid, "SIGKILL"); } catch (error) { if (error?.code !== "ESRCH") throw error; }
+    }
+  }
 });
 
 test("validation CLI accepts a complete, digest-matched Playwright artifact", async () => {

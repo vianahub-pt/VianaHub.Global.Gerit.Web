@@ -98,7 +98,7 @@ jobs:
             plan=$(node scripts/e2e/select-capabilities.mjs --full-regression)
           else
             git diff --name-only "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files.txt"
-            plan=$(node scripts/e2e/select-capabilities.mjs < "$RUNNER_TEMP/changed-files.txt")
+            plan=$(node scripts/e2e/select-capabilities.mjs --compare "$BASE_SHA" "$HEAD_SHA" < "$RUNNER_TEMP/changed-files.txt")
           fi
           capabilities=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).capabilities))' "$plan")
           run_e2e=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runE2E))' "$plan")

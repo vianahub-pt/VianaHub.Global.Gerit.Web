@@ -65,12 +65,12 @@ jobs:
       - name: Run build
         run: npm run build
 
-  e2e-selection:
-    name: E2E Selection
+  e2e-validation:
+    name: E2E Validation
     runs-on: ubuntu-24.04
-    outputs:
-      capabilities: ${{ steps.select.outputs.capabilities }}
-      run_e2e: ${{ steps.select.outputs.run_e2e }}
+    concurrency:
+      group: gerit-shared-e2e
+      cancel-in-progress: false
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,8 +81,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
-      - name: Test capability selection
+      - name: Test capability selection and E2E outcomes
         run: node scripts/e2e/select-capabilities.mjs --self-test
 
       - name: Select affected E2E journeys
@@ -101,24 +102,15 @@ jobs:
           fi
           capabilities=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).capabilities))' "$plan")
           run_e2e=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runE2E))' "$plan")
+          reason=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")
           echo "Selected E2E capabilities: $capabilities"
-          echo "Selection reason: $(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")"
+          echo "Selection reason: $reason"
           echo "capabilities=$capabilities" >> "$GITHUB_OUTPUT"
           echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
-
-  e2e:
-    name: E2E
-    runs-on: ubuntu-24.04
-    needs: e2e-selection
-    if: ${{ needs.e2e-selection.outputs.run_e2e == 'true' }}
-    concurrency:
-      group: gerit-shared-e2e
-      cancel-in-progress: false
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
 
       - name: Verify E2E configuration
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         env:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
           E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
@@ -129,16 +121,12 @@ jobs:
             exit 1
           fi
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-
       - name: Install dependencies
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         run: npm ci
 
       - name: Install Playwright Chromium
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         shell: bash
         run: |
           for attempt in 1 2 3; do
@@ -153,18 +141,21 @@ jobs:
           exit 1
 
       - name: Prepare isolated E2E build
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         run: npm run e2e:prepare
         env:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
 
       - name: Run selected E2E journeys
+        id: run-selected
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
         shell: bash
         env:
           CI: true
           E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
           E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
-          SELECTED_CAPABILITIES: ${{ needs.e2e-selection.outputs.capabilities }}
+          SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
         run: |
           result=0
           while IFS= read -r capability; do
@@ -179,7 +170,7 @@ jobs:
           exit "$result"
 
       - name: Upload Playwright report and traces
-        if: ${{ always() }}
+        if: ${{ always() && steps.select.outputs.run_e2e == 'true' }}
         uses: actions/upload-artifact@v4
         with:
           name: selected-e2e-playwright-report
@@ -187,3 +178,16 @@ jobs:
             playwright-report/
             test-results/
           if-no-files-found: ignore
+
+      - name: Validate E2E Validation result
+        if: ${{ always() }}
+        env:
+          SELECTION_STATUS: ${{ steps.select.outcome }}
+          SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
+          RUN_E2E: ${{ steps.select.outputs.run_e2e }}
+          SELECTION_REASON: ${{ steps.select.outputs.reason }}
+          E2E_STATUS: ${{ steps.run-selected.outcome }}
+        run: |
+          node scripts/e2e/select-capabilities.mjs --validate-outcome <<EOF
+          {"selectionStatus":"$SELECTION_STATUS","capabilities":$SELECTED_CAPABILITIES,"runE2E":$RUN_E2E,"reason":"$SELECTION_REASON","e2eStatus":"$E2E_STATUS"}
+          EOF

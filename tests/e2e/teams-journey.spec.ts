@@ -150,6 +150,9 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.getByRole("button", { name: /back|voltar|volver/i }).last().click();
     await expect(page).toHaveURL(/\/teams\/?$/);
     await expect(page.getByTestId("teams-page-root")).toBeVisible();
+    const search = page.getByPlaceholder(searchPlaceholder);
+    await search.fill(teamName);
+    await expect.poll(() => queries.at(-1)?.searchParams.get("Search")).toBe(teamName);
     const row = page.getByRole("row").filter({ hasText: teamName });
     await expect(row).toBeVisible();
     await row.click();
@@ -167,6 +170,8 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
       .toMatchObject({ name: `${teamName} edited`, description: updatedDescription });
     await expect(page).toHaveURL(/\/teams\/?$/);
     await waitForToastToClear(page);
+    await search.fill(`${teamName} edited`);
+    await expect.poll(() => queries.at(-1)?.searchParams.get("Search")).toBe(`${teamName} edited`);
     const updatedRow = page.getByRole("row").filter({ hasText: `${teamName} edited` });
     await expect(updatedRow).toBeVisible();
 
@@ -181,7 +186,6 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.getByRole("option", { name: /show all|mostrar todos/i }).click();
     await expect.poll(() => queries.at(-1)?.searchParams.has("IsActive")).toBe(false);
 
-    const search = page.getByPlaceholder(searchPlaceholder);
     await search.fill(teamName);
     await expect(updatedRow).toBeVisible();
     await expect.poll(() => queries.at(-1)?.searchParams.get("Search")).toBe(teamName);

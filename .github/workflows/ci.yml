@@ -15,17 +15,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Verify E2E configuration
-        env:
-          GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
-          E2E_USER_EMAIL: ${{ vars.E2E_USER_EMAIL }}
-          E2E_USER_PASSWORD: ${{ secrets.E2E_USER_PASSWORD }}
-        run: |
-          if [ -z "$GERIT_API_BASE_URL" ] || [ -z "$E2E_USER_EMAIL" ] || [ -z "$E2E_USER_PASSWORD" ]; then
-            echo "GERIT_API_BASE_URL, E2E_USER_EMAIL, and E2E_USER_PASSWORD are required for selected E2E journeys."
-            exit 1
-          fi
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:

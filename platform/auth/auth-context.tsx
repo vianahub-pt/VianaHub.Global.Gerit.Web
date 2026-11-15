@@ -11,6 +11,7 @@ import {
 } from "react";
 import { STORAGE_KEYS } from "@/core/constants/storage-keys";
 import { DEFAULT_LANGUAGE, normalizeLanguageTag } from "@/platform/i18n/language";
+import { hasClaimPermission } from "@/platform/auth/permission-claims";
 import {
   getStorageItem,
   removeStorageItem,
@@ -583,10 +584,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   const hasPermission = useCallback(
-    (resource: string, action: string) => {
-      const allowedActions = permissions[resource] ?? [];
-      return allowedActions.includes(action);
-    },
+    (resource: string, action: string) => hasClaimPermission(permissions, resource, action),
     [permissions],
   );
 

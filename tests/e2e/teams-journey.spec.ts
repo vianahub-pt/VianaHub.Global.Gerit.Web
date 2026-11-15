@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateFromLogin } from "./helpers/auth";
+import { discoverCsvTeamIds, reconcileTeamsRun } from "./helpers/teams-cleanup";
+import { selectHubGridPageSize } from "./helpers/hub-grid-page-size";
 
 const nameLabel = /^(name|nome|nombre)$/i;
 const descriptionLabel = /^(description|descrição|descripción|descripcion)$/i;
@@ -72,11 +74,17 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
   const description = `E2E Description ${unique}`;
   const updatedDescription = `E2E Updated ${unique}`;
   const csvName = `E2E CSV ${unique}`;
+  let csvImportAttempted = false;
   const queries: URL[] = [];
+  const queryResponses: URL[] = [];
 
   page.on("request", (request) => {
     const url = new URL(request.url());
     if (url.pathname.endsWith("/teams/paged") || url.pathname.endsWith("/teams/paged/")) queries.push(url);
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.endsWith("/teams/paged") || url.pathname.endsWith("/teams/paged/")) queryResponses.push(url);
   });
 
   try {
@@ -98,13 +106,15 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await expect(page.getByTestId("teams-page-root")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageNumber")).toBe("1");
-    const pageSize = page.getByRole("combobox", { name: /per page|por página|por pagina/i });
-    await pageSize.click();
-    await page.getByRole("option", { name: "20", exact: true }).click();
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("10");
+    const pageSize20Request = await selectHubGridPageSize(page, 20);
+    expect(new URL(pageSize20Request.url()).searchParams.get("PageSize")).toBe("20");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("20");
-    await pageSize.click();
-    await page.getByRole("option", { name: "10", exact: true }).click();
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("20");
+    const pageSize10Request = await selectHubGridPageSize(page, 10);
+    expect(new URL(pageSize10Request.url()).searchParams.get("PageSize")).toBe("10");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("10");
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("10");
 
     await page.getByRole("button", { name: /add|adicionar|agregar/i }).click();
     await expect(page).toHaveURL(/\/teams\/new\/?$/);
@@ -213,7 +223,19 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await waitForToastToClear(page);
 
     const csv = `Name;Description\n${csvName};CSV description ${unique}\n`;
+    const existingCsvIds = await discoverCsvTeamIds(
+      csvName,
+      (pageNumber, pageSize) => api(
+        page,
+        "GET",
+        "/api/gerit/v1/teams/paged/?Search=" + encodeURIComponent(csvName) +
+          "&PageNumber=" + pageNumber + "&PageSize=" + pageSize + "&SortBy=Name&SortDirection=asc",
+      ),
+      0,
+    );
+    expect(existingCsvIds).toEqual([]);
     const uploadResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/teams/bulk-upload/"));
+    csvImportAttempted = true;
     await csvInput.setInputFiles({ name: "teams.csv", mimeType: "text/csv", buffer: Buffer.from(csv, "utf8") });
     const uploadResponse = await uploadResponsePromise;
     expect(uploadResponse.status()).toBe(200);
@@ -221,21 +243,68 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await search.fill(csvName);
     await expect(page.getByRole("row").filter({ hasText: csvName })).toBeVisible();
   } finally {
-    const imported = await api(page, "GET", `/api/gerit/v1/teams/paged/?Search=${encodeURIComponent(csvName)}&PageNumber=1&PageSize=10&SortBy=Name&SortDirection=asc`).catch(() => null);
-    const importedBody = imported?.body as { items?: Array<{ id?: unknown; name?: unknown }> } | null;
-    for (const item of importedBody?.items ?? []) if (item.name === csvName && typeof item.id === "number") createdIds.add(item.id);
-    const cleanupErrors: string[] = [];
-    for (const id of createdIds) {
-      const result = await api(page, "DELETE", `/api/gerit/v1/teams/${id}/`).catch(() => null);
-      if (result && result.status !== 200 && result.status !== 404 && result.status !== 410) {
-        cleanupErrors.push(`DELETE ${id} returned HTTP ${result.status}`);
-      }
-
-      const verification = await api(page, "GET", `/api/gerit/v1/teams/${id}/`).catch(() => null);
-      if (!verification || (verification.status !== 404 && verification.status !== 410)) {
-        cleanupErrors.push(`GET ${id} did not confirm removal`);
-      }
+    const cleanup = await reconcileTeamsRun({
+      knownIds: createdIds,
+      csvImportAttempted,
+      csvName,
+      api: {
+        getPage: (pageNumber, pageSize) => api(
+          page,
+          "GET",
+          "/api/gerit/v1/teams/paged/?Search=" + encodeURIComponent(csvName) +
+            "&PageNumber=" + pageNumber + "&PageSize=" + pageSize + "&SortBy=Name&SortDirection=asc",
+        ),
+        deleteById: (id) => api(page, "DELETE", "/api/gerit/v1/teams/" + id + "/").catch(() => null),
+        getById: (id) => api(page, "GET", "/api/gerit/v1/teams/" + id + "/").catch(() => null),
+      },
+    });
+    if (cleanup.errors.length > 0) {
+      const pending = cleanup.pendingIdentifiers.length > 0
+        ? " Pending synthetic identifiers requiring recovery: " + cleanup.pendingIdentifiers.join(", ") + "."
+        : "";
+      throw new Error("Teams E2E cleanup failed: " + cleanup.errors.join("; ") + "." + pending);
     }
-    if (cleanupErrors.length > 0) throw new Error(`Teams E2E cleanup failed: ${cleanupErrors.join("; ")}.`);
   }
+});
+
+test("Teams pagination size remains operable without writes", async ({ page }) => {
+  await installVisualPointer(page);
+  const observedPageSizes: string[] = [];
+  const apiWrites: string[] = [];
+  const respondedPageSizes: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/gerit/v1/") && request.method() !== "GET") {
+      apiWrites.push(request.method() + " " + url.pathname);
+    }
+    if (url.pathname.endsWith("/teams/paged/") || url.pathname.endsWith("/teams/paged")) {
+      observedPageSizes.push(url.searchParams.get("PageSize") ?? "");
+    }
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.endsWith("/teams/paged/") || url.pathname.endsWith("/teams/paged")) {
+      respondedPageSizes.push(url.searchParams.get("PageSize") ?? "");
+    }
+  });
+
+  await page.goto("/login/", { waitUntil: "domcontentloaded" });
+  await authenticateFromLogin(page);
+  const sidebar = page.getByTestId("desktop-sidebar");
+  const teamsSectionButton = sidebar.getByRole("button", { name: teamsResourcesLabel });
+  if (await teamsSectionButton.getAttribute("aria-expanded") === "false") await teamsSectionButton.click();
+  await sidebar.getByRole("link", { name: teamsMenuLabel }).click();
+  await expect(page.getByTestId("teams-page-root")).toBeVisible();
+
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("10");
+  const pageSize20Request = await selectHubGridPageSize(page, 20);
+  expect(new URL(pageSize20Request.url()).searchParams.get("PageSize")).toBe("20");
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("20");
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("20");
+  const pageSize10Request = await selectHubGridPageSize(page, 10);
+  expect(new URL(pageSize10Request.url()).searchParams.get("PageSize")).toBe("10");
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("10");
+  expect(apiWrites).toEqual([]);
 });

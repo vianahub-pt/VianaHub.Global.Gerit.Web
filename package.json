@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node --test tests/actions/*.test.mjs tests/preferences/*.test.mjs",
+    "test": "node --test tests/actions/*.test.mjs tests/preferences/*.test.mjs tests/users/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:capability": "node scripts/e2e/run-capability.mjs",
     "test:e2e:headed": "playwright test --headed",

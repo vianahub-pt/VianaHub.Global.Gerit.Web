@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateFromLogin } from "./helpers/auth";
+import { discoverCsvTeamIds, reconcileTeamsRun } from "./helpers/teams-cleanup";
 
 const nameLabel = /^(name|nome|nombre)$/i;
 const descriptionLabel = /^(description|descrição|descripción|descripcion)$/i;
@@ -72,6 +73,7 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
   const description = `E2E Description ${unique}`;
   const updatedDescription = `E2E Updated ${unique}`;
   const csvName = `E2E CSV ${unique}`;
+  let csvImportAttempted = false;
   const queries: URL[] = [];
 
   page.on("request", (request) => {
@@ -215,7 +217,19 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await waitForToastToClear(page);
 
     const csv = `Name;Description\n${csvName};CSV description ${unique}\n`;
+    const existingCsvIds = await discoverCsvTeamIds(
+      csvName,
+      (pageNumber, pageSize) => api(
+        page,
+        "GET",
+        "/api/gerit/v1/teams/paged/?Search=" + encodeURIComponent(csvName) +
+          "&PageNumber=" + pageNumber + "&PageSize=" + pageSize + "&SortBy=Name&SortDirection=asc",
+      ),
+      0,
+    );
+    expect(existingCsvIds).toEqual([]);
     const uploadResponsePromise = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/teams/bulk-upload/"));
+    csvImportAttempted = true;
     await csvInput.setInputFiles({ name: "teams.csv", mimeType: "text/csv", buffer: Buffer.from(csv, "utf8") });
     const uploadResponse = await uploadResponsePromise;
     expect(uploadResponse.status()).toBe(200);
@@ -223,22 +237,27 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await search.fill(csvName);
     await expect(page.getByRole("row").filter({ hasText: csvName })).toBeVisible();
   } finally {
-    const imported = await api(page, "GET", `/api/gerit/v1/teams/paged/?Search=${encodeURIComponent(csvName)}&PageNumber=1&PageSize=10&SortBy=Name&SortDirection=asc`).catch(() => null);
-    const importedBody = imported?.body as { items?: Array<{ id?: unknown; name?: unknown }> } | null;
-    for (const item of importedBody?.items ?? []) if (item.name === csvName && typeof item.id === "number") createdIds.add(item.id);
-    const cleanupErrors: string[] = [];
-    for (const id of createdIds) {
-      const result = await api(page, "DELETE", `/api/gerit/v1/teams/${id}/`).catch(() => null);
-      if (result && result.status !== 200 && result.status !== 404 && result.status !== 410) {
-        cleanupErrors.push(`DELETE ${id} returned HTTP ${result.status}`);
-      }
-
-      const verification = await api(page, "GET", `/api/gerit/v1/teams/${id}/`).catch(() => null);
-      if (!verification || (verification.status !== 404 && verification.status !== 410)) {
-        cleanupErrors.push(`GET ${id} did not confirm removal`);
-      }
+    const cleanup = await reconcileTeamsRun({
+      knownIds: createdIds,
+      csvImportAttempted,
+      csvName,
+      api: {
+        getPage: (pageNumber, pageSize) => api(
+          page,
+          "GET",
+          "/api/gerit/v1/teams/paged/?Search=" + encodeURIComponent(csvName) +
+            "&PageNumber=" + pageNumber + "&PageSize=" + pageSize + "&SortBy=Name&SortDirection=asc",
+        ),
+        deleteById: (id) => api(page, "DELETE", "/api/gerit/v1/teams/" + id + "/").catch(() => null),
+        getById: (id) => api(page, "GET", "/api/gerit/v1/teams/" + id + "/").catch(() => null),
+      },
+    });
+    if (cleanup.errors.length > 0) {
+      const pending = cleanup.pendingIdentifiers.length > 0
+        ? " Pending synthetic identifiers requiring recovery: " + cleanup.pendingIdentifiers.join(", ") + "."
+        : "";
+      throw new Error("Teams E2E cleanup failed: " + cleanup.errors.join("; ") + "." + pending);
     }
-    if (cleanupErrors.length > 0) throw new Error(`Teams E2E cleanup failed: ${cleanupErrors.join("; ")}.`);
   }
 });
 

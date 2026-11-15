@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { expect, test, type Page } from "@playwright/test";
 import { authenticateFromLogin } from "./helpers/auth";
 import { discoverCsvTeamIds, reconcileTeamsRun } from "./helpers/teams-cleanup";
+import { selectHubGridPageSize } from "./helpers/hub-grid-page-size";
 
 const nameLabel = /^(name|nome|nombre)$/i;
 const descriptionLabel = /^(description|descrição|descripción|descripcion)$/i;
@@ -75,10 +76,15 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
   const csvName = `E2E CSV ${unique}`;
   let csvImportAttempted = false;
   const queries: URL[] = [];
+  const queryResponses: URL[] = [];
 
   page.on("request", (request) => {
     const url = new URL(request.url());
     if (url.pathname.endsWith("/teams/paged") || url.pathname.endsWith("/teams/paged/")) queries.push(url);
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.endsWith("/teams/paged") || url.pathname.endsWith("/teams/paged/")) queryResponses.push(url);
   });
 
   try {
@@ -100,15 +106,15 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await expect(page.getByTestId("teams-page-root")).toBeVisible();
     await expect(page.getByRole("table")).toBeVisible();
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageNumber")).toBe("1");
-    const pageSize = page.getByRole("combobox", { name: /per page|por página|por pagina/i });
-    await pageSize.click();
-    await page.getByRole("option", { name: "20", exact: true }).click();
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("10");
+    const pageSize20Request = await selectHubGridPageSize(page, 20);
+    expect(new URL(pageSize20Request.url()).searchParams.get("PageSize")).toBe("20");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("20");
-    await pageSize.click();
-    await expect(page.getByRole("listbox")).toBeVisible();
-    await page.keyboard.press("ArrowUp");
-    await page.keyboard.press("Enter");
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("20");
+    const pageSize10Request = await selectHubGridPageSize(page, 10);
+    expect(new URL(pageSize10Request.url()).searchParams.get("PageSize")).toBe("10");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("10");
+    await expect.poll(() => queryResponses.at(-1)?.searchParams.get("PageSize")).toBe("10");
 
     await page.getByRole("button", { name: /add|adicionar|agregar/i }).click();
     await expect(page).toHaveURL(/\/teams\/new\/?$/);
@@ -264,10 +270,21 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
 test("Teams pagination size remains operable without writes", async ({ page }) => {
   await installVisualPointer(page);
   const observedPageSizes: string[] = [];
+  const apiWrites: string[] = [];
+  const respondedPageSizes: string[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (url.pathname.startsWith("/api/gerit/v1/") && request.method() !== "GET") {
+      apiWrites.push(request.method() + " " + url.pathname);
+    }
     if (url.pathname.endsWith("/teams/paged/") || url.pathname.endsWith("/teams/paged")) {
       observedPageSizes.push(url.searchParams.get("PageSize") ?? "");
+    }
+  });
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (url.pathname.endsWith("/teams/paged/") || url.pathname.endsWith("/teams/paged")) {
+      respondedPageSizes.push(url.searchParams.get("PageSize") ?? "");
     }
   });
 
@@ -279,15 +296,15 @@ test("Teams pagination size remains operable without writes", async ({ page }) =
   await sidebar.getByRole("link", { name: teamsMenuLabel }).click();
   await expect(page.getByTestId("teams-page-root")).toBeVisible();
 
-  const pageSize = page.getByRole("combobox", { name: /per page|por página|por pagina/i });
   await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
-  await pageSize.click();
-  await expect(page.getByRole("listbox")).toBeVisible();
-  await page.getByRole("option", { name: "20", exact: true }).click();
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("10");
+  const pageSize20Request = await selectHubGridPageSize(page, 20);
+  expect(new URL(pageSize20Request.url()).searchParams.get("PageSize")).toBe("20");
   await expect.poll(() => observedPageSizes.at(-1)).toBe("20");
-  await pageSize.click();
-  await expect(page.getByRole("listbox")).toBeVisible();
-  await page.keyboard.press("ArrowUp");
-  await page.keyboard.press("Enter");
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("20");
+  const pageSize10Request = await selectHubGridPageSize(page, 10);
+  expect(new URL(pageSize10Request.url()).searchParams.get("PageSize")).toBe("10");
   await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
+  await expect.poll(() => respondedPageSizes.at(-1)).toBe("10");
+  expect(apiWrites).toEqual([]);
 });

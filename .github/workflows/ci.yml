@@ -159,17 +159,13 @@ jobs:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
           SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
         run: |
-          result=0
-          while IFS= read -r capability; do
-            [ -n "$capability" ] || continue
-            if npm run test:e2e:capability -- "$capability"; then
-              echo "$capability E2E runner: PASS (coverage mode is reported by the runner)"
-            else
-              echo "$capability E2E runner: FAIL"
-              result=1
-            fi
-          done < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
-          exit "$result"
+          mapfile -t capabilities < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
+          if [ "${#capabilities[@]}" -eq 0 ]; then
+            echo "E2E selection requested execution but returned no capabilities."
+            exit 1
+          fi
+          printf 'Running selected capabilities in one Playwright process: %s\n' "${capabilities[*]}"
+          npm run test:e2e:capability -- "${capabilities[@]}"
 
       - name: Upload Playwright report and traces
         if: ${{ always() && steps.select.outputs.run_e2e == 'true' }}

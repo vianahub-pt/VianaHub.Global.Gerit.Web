@@ -21,6 +21,15 @@ function getRunPlan(capability, env = process.env) {
   return { spec: `tests/e2e/${capability}-journey.spec.ts`, project: "journey", mode: "canonical-journey" };
 }
 
+function getBatchPlan(capabilities, env = process.env) {
+  const plans = capabilities.map((capability) => getRunPlan(capability, env));
+  return {
+    specs: [...new Set(plans.map((plan) => plan.spec))],
+    projects: [...new Set(plans.map((plan) => plan.project))],
+    nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode === "nonmutating-regression"),
+  };
+}
+
 function selfTest() {
   assert.deepEqual(getRunPlan("users", { CI: "true", E2E_USERS_QA_MUTATION_APPROVAL: "configured" }), {
     spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression",
@@ -32,6 +41,11 @@ function selfTest() {
   assert.deepEqual(getRunPlan("teams", { CI: "true" }), {
     spec: "tests/e2e/teams-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
+  assert.deepEqual(getBatchPlan(["actions", "users"], { CI: "true" }), {
+    specs: ["tests/e2e/actions-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"],
+    projects: ["journey", "chromium"],
+    nonmutatingCapabilities: ["users"],
+  });
   console.log("E2E capability runner self-tests passed.");
 }
 
@@ -40,16 +54,18 @@ if (process.argv.includes("--self-test")) {
   process.exit(0);
 }
 
-const slug = process.argv[2];
-if (process.argv.length !== 3 || !slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-  fail("Provide exactly one capability slug using lowercase letters, digits, and single hyphens.");
+const capabilities = process.argv.slice(2);
+if (capabilities.length === 0 || capabilities.some((capability) => !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(capability)) || new Set(capabilities).size !== capabilities.length) {
+  fail("Provide one or more unique capability slugs using lowercase letters, digits, and single hyphens.");
 }
 
-const runPlan = getRunPlan(slug);
-const nativeSpecPath = resolve(repoRoot, runPlan.spec);
+const batchPlan = getBatchPlan(capabilities);
 const canonicalDirectory = resolve(repoRoot, "tests", "e2e");
-if (!nativeSpecPath.startsWith(`${canonicalDirectory}${sep}`) || !existsSync(nativeSpecPath)) {
-  fail(`Canonical journey not found for capability '${slug}'.`);
+for (const spec of batchPlan.specs) {
+  const nativeSpecPath = resolve(repoRoot, spec);
+  if (!nativeSpecPath.startsWith(`${canonicalDirectory}${sep}`) || !existsSync(nativeSpecPath)) {
+    fail(`Canonical E2E spec not found: '${spec}'.`);
+  }
 }
 
 let playwrightCli;
@@ -65,10 +81,12 @@ try {
   fail(`Unable to resolve the installed Playwright CLI (${error instanceof Error ? error.message : "package metadata unavailable"}).`);
 }
 
-if (runPlan.mode === "nonmutating-regression") {
-  console.log(`[E2E capability] Running ${slug} nonmutating regression: ${runPlan.spec}. The CRUD/CSV mutative journey will NOT run in CI or without per-run QA approval.`);
+for (const capability of batchPlan.nonmutatingCapabilities) {
+  console.log(`[E2E capability] Running ${capability} nonmutating regression. The CRUD/CSV mutative journey will NOT run in CI or without per-run QA approval.`);
 }
-const child = spawn(process.execPath, [playwrightCli, "test", runPlan.spec, `--project=${runPlan.project}`], {
+const playwrightArgs = [playwrightCli, "test", ...batchPlan.specs, ...batchPlan.projects.map((project) => `--project=${project}`)];
+console.log(`[E2E capability] Starting one Playwright run for capabilities: ${capabilities.join(", ")}.`);
+const child = spawn(process.execPath, playwrightArgs, {
   cwd: repoRoot,
   env: process.env,
   shell: false,

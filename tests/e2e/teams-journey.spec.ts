@@ -103,7 +103,9 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.getByRole("option", { name: "20", exact: true }).click();
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("20");
     await pageSize.click();
-    await page.getByRole("option", { name: "10", exact: true }).click();
+    await expect(page.getByRole("listbox")).toBeVisible();
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("Enter");
     await expect.poll(() => queries.at(-1)?.searchParams.get("PageSize")).toBe("10");
 
     await page.getByRole("button", { name: /add|adicionar|agregar/i }).click();
@@ -238,4 +240,35 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     }
     if (cleanupErrors.length > 0) throw new Error(`Teams E2E cleanup failed: ${cleanupErrors.join("; ")}.`);
   }
+});
+
+test("Teams pagination size remains operable without writes", async ({ page }) => {
+  await installVisualPointer(page);
+  const observedPageSizes: string[] = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.endsWith("/teams/paged/") || url.pathname.endsWith("/teams/paged")) {
+      observedPageSizes.push(url.searchParams.get("PageSize") ?? "");
+    }
+  });
+
+  await page.goto("/login/", { waitUntil: "domcontentloaded" });
+  await authenticateFromLogin(page);
+  const sidebar = page.getByTestId("desktop-sidebar");
+  const teamsSectionButton = sidebar.getByRole("button", { name: teamsResourcesLabel });
+  if (await teamsSectionButton.getAttribute("aria-expanded") === "false") await teamsSectionButton.click();
+  await sidebar.getByRole("link", { name: teamsMenuLabel }).click();
+  await expect(page.getByTestId("teams-page-root")).toBeVisible();
+
+  const pageSize = page.getByRole("combobox", { name: /per page|por página|por pagina/i });
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
+  await pageSize.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.getByRole("option", { name: "20", exact: true }).click();
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("20");
+  await pageSize.click();
+  await expect(page.getByRole("listbox")).toBeVisible();
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => observedPageSizes.at(-1)).toBe("10");
 });

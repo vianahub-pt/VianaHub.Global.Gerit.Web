@@ -84,7 +84,9 @@ jobs:
           cache: npm
 
       - name: Test capability selection and E2E outcomes
-        run: node scripts/e2e/select-capabilities.mjs --self-test
+        run: |
+          node scripts/e2e/select-capabilities.mjs --self-test
+          node scripts/e2e/run-capability.mjs --self-test
 
       - name: Select affected E2E journeys
         id: select
@@ -161,9 +163,9 @@ jobs:
           while IFS= read -r capability; do
             [ -n "$capability" ] || continue
             if npm run test:e2e:capability -- "$capability"; then
-              echo "$capability E2E: PASS"
+              echo "$capability E2E runner: PASS (coverage mode is reported by the runner)"
             else
-              echo "$capability E2E: FAIL"
+              echo "$capability E2E runner: FAIL"
               result=1
             fi
           done < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')

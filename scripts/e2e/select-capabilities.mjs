@@ -9,10 +9,10 @@ const capabilityPaths = new Map([
   ["user-preferences", ["app/(workspace)/preferences/", "domains/identity/preferences/", "tests/e2e/user-preferences-journey.spec.ts"]],
   ["teams", ["app/(workspace)/teams/", "domains/operations/teams/", "tests/e2e/teams-journey.spec.ts"]],
   ["roles", ["app/(workspace)/roles/", "domains/operations/roles/", "tests/e2e/roles-journey.spec.ts"]],
-  ["users", ["app/(workspace)/users/", "domains/operations/users/", "tests/users/", "tests/e2e/users-journey.spec.ts"]],
+  ["users", ["app/(workspace)/users/", "domains/operations/users/", "tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
 ]);
 
-const ciOnlyPaths = new Set([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]);
+const ciOnlyPaths = new Set([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs", "scripts/e2e/run-capability.mjs"]);
 const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
 const translationPrefixes = new Map([
   ["actions.", "actions"],
@@ -171,6 +171,7 @@ function selfTest() {
   assert.deepEqual(selectCapabilities(["src/new-capability/page.tsx"]).capabilities, CAPABILITIES);
   assert.equal(selectCapabilities(["README.md", "docs/ci.md"]).runE2E, false);
   assert.equal(selectCapabilities([".github/workflows/ci.yml"]).runE2E, false);
+  assert.equal(selectCapabilities(["scripts/e2e/run-capability.mjs"]).runE2E, false);
   assert.deepEqual(selectCapabilities([".github/workflows/ci.yml", "domains/operations/teams/teams-page.tsx"]).capabilities, ["teams"]);
   assert.deepEqual(selectCapabilities([], { fullRegression: true }).capabilities, CAPABILITIES);
   assert.deepEqual(selectCapabilities([]).capabilities, CAPABILITIES);

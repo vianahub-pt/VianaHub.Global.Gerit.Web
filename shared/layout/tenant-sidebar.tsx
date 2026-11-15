@@ -117,7 +117,7 @@ export function TenantSidebar({ collapsed }: { collapsed: boolean }) {
           {
             key: "users",
             label: t("workspace.sidebar.users"),
-            href: "/operations/users",
+            href: "/users",
             icon: User,
           },
           {

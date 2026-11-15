@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-export const CAPABILITIES = ["actions", "user-preferences", "teams", "roles"];
+export const CAPABILITIES = ["actions", "user-preferences", "teams", "roles", "users"];
 
 const capabilityPaths = new Map([
   ["actions", ["app/(workspace)/actions/", "domains/operations/actions/", "tests/e2e/actions-journey.spec.ts"]],
   ["user-preferences", ["app/(workspace)/preferences/", "domains/identity/preferences/", "tests/e2e/user-preferences-journey.spec.ts"]],
   ["teams", ["app/(workspace)/teams/", "domains/operations/teams/", "tests/e2e/teams-journey.spec.ts"]],
   ["roles", ["app/(workspace)/roles/", "domains/operations/roles/", "tests/e2e/roles-journey.spec.ts"]],
+  ["users", ["app/(workspace)/users/", "domains/operations/users/", "tests/users/", "tests/e2e/users-journey.spec.ts"]],
 ]);
 
 const ciOnlyPaths = new Set([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]);
@@ -18,6 +19,7 @@ const translationPrefixes = new Map([
   ["preferences.", "user-preferences"],
   ["teams.", "teams"],
   ["roles.", "roles"],
+  ["users.", "users"],
 ]);
 
 function normalizePath(file) {
@@ -160,6 +162,7 @@ export function validateE2EOutcome({ selectionStatus, capabilities, runE2E, reas
 function selfTest() {
   assert.deepEqual(selectCapabilities(["domains/operations/teams/teams-page.tsx"]).capabilities, ["teams"]);
   assert.deepEqual(selectCapabilities(["domains/operations/roles/roles-page.tsx"]).capabilities, ["roles"]);
+  assert.deepEqual(selectCapabilities(["domains/operations/users/users-page.tsx"]).capabilities, ["users"]);
   assert.deepEqual(selectCapabilities(["domains/operations/actions/actions-page.tsx"]).capabilities, ["actions"]);
   assert.deepEqual(selectCapabilities(["domains/identity/preferences/user-preferences-page.tsx"]).capabilities, ["user-preferences"]);
   assert.deepEqual(selectCapabilities(["app/(workspace)/teams/page.tsx", "app/(workspace)/roles/page.tsx"]).capabilities, ["teams", "roles"]);
@@ -194,8 +197,8 @@ function selfTest() {
   const preferencesFile = "locales/pt-PT/common.json";
   const preferencesOnly = localeAnalysis({ "preferences.title": "Preferências" }, { "preferences.title": "As minhas preferências" });
   assert.deepEqual(selectCapabilities([preferencesFile], { translationAnalysis: preferencesOnly }).capabilities, ["user-preferences"]);
-  const usersWithoutJourney = localeAnalysis({ "users.title": "Utilizadores" }, { "users.title": "Contas" });
-  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: usersWithoutJourney }).capabilities, CAPABILITIES);
+  const usersTranslation = localeAnalysis({ "users.title": "Utilizadores" }, { "users.title": "Contas" });
+  assert.deepEqual(selectCapabilities([localeFile], { translationAnalysis: usersTranslation }).capabilities, ["users"]);
   const multiCapability = localeAnalysis(
     { "roles.actions.back": "Voltar", "teams.actions.back": "Voltar" },
     { "roles.actions.back": "Regressar", "teams.actions.back": "Voltar atrás" },

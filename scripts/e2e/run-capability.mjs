@@ -5,6 +5,8 @@ import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
 
+const CAPABILITIES = ["actions", "user-preferences", "teams", "roles", "users"];
+
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "../..");
 const require = createRequire(import.meta.url);
@@ -30,6 +32,39 @@ function getBatchPlan(capabilities, env = process.env) {
   };
 }
 
+function parseInvocation(args) {
+  let scopeValue = null;
+  let scopeApproved = false;
+  const capabilities = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--scope") {
+      scopeValue = args[index + 1] ?? null;
+      index += 1;
+    } else if (argument === "--scope-approved") {
+      scopeApproved = true;
+    } else if (argument.startsWith("--")) {
+      throw new Error("Unknown runner option " + argument + ".");
+    } else {
+      capabilities.push(argument);
+    }
+  }
+  if (!scopeValue) throw new Error("An explicit E2E scope is required.");
+  const scope = scopeValue.split(",").map((item) => item.trim()).filter(Boolean);
+  if (scope.length === 0 || scope.some((item) => !CAPABILITIES.includes(item))) {
+    throw new Error("The E2E scope contains an unknown or missing capability.");
+  }
+  if (new Set(scope).size !== scope.length) throw new Error("The E2E scope contains duplicate capabilities.");
+  if (scope.length > 1 && !scopeApproved) throw new Error("Multiple E2E capabilities require explicit scope approval.");
+  if (capabilities.length !== scope.length || scope.some((item) => !capabilities.includes(item))) {
+    throw new Error("Selected E2E capabilities must exactly match the declared scope.");
+  }
+  if (new Set(capabilities).size !== capabilities.length || capabilities.some((item) => !CAPABILITIES.includes(item))) {
+    throw new Error("Provide unique, supported capability slugs.");
+  }
+  return { capabilities, scope, scopeApproved };
+}
+
 function selfTest() {
   assert.deepEqual(getRunPlan("users", { CI: "true", E2E_USERS_QA_MUTATION_APPROVAL: "configured" }), {
     spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression",
@@ -46,6 +81,12 @@ function selfTest() {
     projects: ["journey", "chromium"],
     nonmutatingCapabilities: ["users"],
   });
+  assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
+    capabilities: ["users"], scope: ["users"], scopeApproved: false,
+  });
+  assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
+  assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
+  assert.deepEqual(parseInvocation(["--scope", "users,teams", "--scope-approved", "users", "teams"]).scope, ["users", "teams"]);
   console.log("E2E capability runner self-tests passed.");
 }
 
@@ -54,10 +95,14 @@ if (process.argv.includes("--self-test")) {
   process.exit(0);
 }
 
-const capabilities = process.argv.slice(2);
-if (capabilities.length === 0 || capabilities.some((capability) => !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(capability)) || new Set(capabilities).size !== capabilities.length) {
-  fail("Provide one or more unique capability slugs using lowercase letters, digits, and single hyphens.");
+let invocation;
+try {
+  invocation = parseInvocation(process.argv.slice(2));
+} catch (error) {
+  fail(error instanceof Error ? error.message : "Invalid E2E scope invocation.");
 }
+const { capabilities } = invocation;
+if (capabilities.length === 0) fail("Provide one or more capability slugs.");
 
 const batchPlan = getBatchPlan(capabilities);
 const canonicalDirectory = resolve(repoRoot, "tests", "e2e");

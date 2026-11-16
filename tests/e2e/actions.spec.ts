@@ -27,7 +27,6 @@ const labels = {
   name: /^(name|nome|nombre)$/i,
   description: /^(description|descrição|descripcion)$/i,
   search: /^(search by name or description|pesquisar por nome ou descrição|buscar por nome ou descrição|buscar por nombre o descripción)$/i,
-  breadcrumb: /^(breadcrumb|navegação estrutural|ruta de navegación)$/i,
 };
 
 const rawTranslationKeyPattern = /^[a-z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)+$/;
@@ -158,9 +157,8 @@ async function assertListReady(page: Page) {
   await expect.poll(async () => await table.getAttribute("aria-busy"), { timeout: 6_000 }).toBe("false");
 }
 
-async function returnToListByBreadcrumb(page: Page) {
-  const breadcrumb = page.getByRole("navigation", { name: labels.breadcrumb });
-  await breadcrumb.getByRole("button", { name: labels.actionsLink }).click({ timeout: 4_000 });
+async function returnToListByBackButton(page: Page) {
+  await page.getByRole("button", { name: labels.back }).first().click({ timeout: 4_000 });
   await expect(page).toHaveURL(/\/actions\/?$/, { timeout: 5_000 });
   await assertListReady(page);
 }
@@ -301,7 +299,7 @@ test("Actions CRUD aggregates every step and continues after failures", async ({
       "Read Name",
       "Read Description",
       "Read Active status",
-      "Return to list via breadcrumb",
+      "Return to list via back button",
       "Find created Action by name",
       "Open edit from row action",
       "Update Description",
@@ -358,8 +356,8 @@ test("Actions CRUD aggregates every step and continues after failures", async ({
     await expect(page.getByLabel(/^(code|código)$/i)).toHaveCount(0);
   });
 
-  await recordStep(page, testInfo, results, "Return to list via breadcrumb", async () => {
-    await returnToListByBreadcrumb(page);
+  await recordStep(page, testInfo, results, "Return to list via back button", async () => {
+    await returnToListByBackButton(page);
   });
   if (currentPath(page) !== "/actions" && currentPath(page) !== "/actions/") {
     await recordStep(page, testInfo, results, "Recovery: return to Actions list", async () => {
@@ -401,7 +399,7 @@ test("Actions CRUD aggregates every step and continues after failures", async ({
 
   if (currentPath(page) !== "/actions" && currentPath(page) !== "/actions/") {
     await recordStep(page, testInfo, results, "Recovery: return to list after update", async () => {
-      await returnToListByBreadcrumb(page);
+      await returnToListByBackButton(page);
     });
   }
   await recordStep(page, testInfo, results, "Reopen Action after update", async () => {

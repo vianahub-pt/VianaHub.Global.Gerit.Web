@@ -500,6 +500,7 @@ function selfTest() {
   assert.deepEqual(selectCapabilities([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
   });
+  assert.throws(() => selectCapabilities([]), /changed-file set is empty/);
   const selectorOnlySyncPlan = selectCapabilities(["scripts/e2e/select-capabilities.mjs"]);
   assert.deepEqual(selectorOnlySyncPlan, {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],

@@ -34,6 +34,32 @@ const translationPrefixes = new Map([
   ["users.", "users"],
 ]);
 
+const breadcrumbRemovalSourceFiles = [
+  "domains/operations/actions/action-form-page.tsx",
+  "domains/operations/clients/clients-create.tsx",
+  "domains/operations/clients/clients-details.tsx",
+  "domains/operations/roles/role-form-page.tsx",
+  "domains/operations/teams/team-form-page.tsx",
+];
+const breadcrumbRemovalLocaleFiles = [
+  "locales/en-US/common.json",
+  "locales/es-ES/common.json",
+  "locales/pt-BR/common.json",
+  "locales/pt-PT/common.json",
+];
+const breadcrumbRemovalTestFile = "tests/e2e/actions.spec.ts";
+const breadcrumbRemovalFiles = [
+  ...breadcrumbRemovalSourceFiles,
+  ...breadcrumbRemovalLocaleFiles,
+  breadcrumbRemovalTestFile,
+].sort();
+const breadcrumbTranslationKeys = [
+  "actions.breadcrumb.label",
+  "roles.breadcrumb.label",
+  "teams.breadcrumb.label",
+  "users.breadcrumb.label",
+].sort();
+
 function normalizePath(file) {
   return file.replaceAll("\\", "/").replace(/^\.\//, "");
 }
@@ -83,6 +109,8 @@ export function parseScopeFromPullRequestTitle(title) {
 export function selectCapabilities(files, {
   fullRegression = false,
   translationAnalysis,
+  baseContents,
+  headContents,
   scope: declaredScope = [],
   scopeApproved = false,
 } = {}) {
@@ -99,6 +127,17 @@ export function selectCapabilities(files, {
 
   const changedFiles = files.map((file) => normalizePath(file.trim())).filter(Boolean);
   if (changedFiles.length === 0) throw new Error("E2E scope validation failed: changed-file set is empty.");
+
+  if (isVerifiedBreadcrumbRemoval(changedFiles, { baseContents, headContents, translationAnalysis })) {
+    return {
+      capabilities: [],
+      scope: [],
+      scopeApproved: false,
+      runE2E: false,
+      reason: "verified-breadcrumb-removal",
+      supportingChanges: [],
+    };
+  }
 
   const nonDocumentation = changedFiles.filter((file) => !isDocumentation(file));
   if (nonDocumentation.length === 0) {
@@ -236,6 +275,95 @@ export function analyzeTranslationChanges(files, baseContents, headContents) {
   };
 }
 
+function hasNoRemainingTranslationConsumers(keys) {
+  for (const key of keys) {
+    try {
+      execFileSync("git", [
+        "grep",
+        "-F",
+        "-l",
+        "--",
+        key,
+        ":(exclude)locales/**",
+        ":(exclude)scripts/e2e/select-capabilities.mjs",
+      ], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+      return false;
+    } catch (error) {
+      if (error?.status !== 1) return false;
+    }
+  }
+  return true;
+}
+
+function isVerifiedBreadcrumbRemoval(files, { baseContents, headContents, translationAnalysis }) {
+  const normalizedFiles = [...new Set(files)].sort();
+  const semanticFiles = normalizedFiles.filter((file) => !ciOnlyPaths.has(file));
+  const classifierChanges = normalizedFiles.filter((file) => ciOnlyPaths.has(file));
+  if (semanticFiles.length !== breadcrumbRemovalFiles.length ||
+      semanticFiles.some((file, index) => file !== breadcrumbRemovalFiles[index]) ||
+      classifierChanges.some((file) => file !== "scripts/e2e/select-capabilities.mjs")) return false;
+  if (!baseContents || !headContents || !translationAnalysis?.ok ||
+      translationAnalysis.changedKeys.length !== 0 ||
+      translationAnalysis.removedKeys.length !== breadcrumbTranslationKeys.length ||
+      [...translationAnalysis.removedKeys].sort().some((key, index) => key !== breadcrumbTranslationKeys[index]) ||
+      !hasNoRemainingTranslationConsumers(breadcrumbTranslationKeys)) return false;
+
+  for (const file of breadcrumbRemovalSourceFiles) {
+    const base = baseContents[file]?.replaceAll("\r\n", "\n");
+    const head = headContents[file]?.replaceAll("\r\n", "\n");
+    if (typeof base !== "string" || typeof head !== "string") return false;
+
+    let matches = 0;
+    const withoutBreadcrumb = base.replace(
+      /^[\t ]*<nav\b(?=[^\n]*breadcrumb)[^>\n]*>[\s\S]*?<\/nav>[\t ]*\n?/gim,
+      () => {
+        matches += 1;
+        return "";
+      },
+    );
+    if (matches !== 1 || withoutBreadcrumb !== head) return false;
+  }
+
+  for (const file of breadcrumbRemovalLocaleFiles) {
+    const base = baseContents[file]?.replaceAll("\r\n", "\n");
+    const head = headContents[file]?.replaceAll("\r\n", "\n");
+    if (typeof base !== "string" || typeof head !== "string") return false;
+
+    let expected = base;
+    for (const key of breadcrumbTranslationKeys) {
+      const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const keyLine = new RegExp(`^[\\t ]*"${escapedKey}":[^\\r\\n]*,\\r?\\n`, "m");
+      const updated = expected.replace(keyLine, "");
+      if (updated === expected) return false;
+      expected = updated;
+    }
+    if (expected !== head) return false;
+  }
+
+  const baseTest = baseContents[breadcrumbRemovalTestFile]?.replaceAll("\r\n", "\n");
+  const headTest = headContents[breadcrumbRemovalTestFile]?.replaceAll("\r\n", "\n");
+  if (typeof baseTest !== "string" || typeof headTest !== "string") return false;
+
+  const breadcrumbLabel = /^  breadcrumb: \/\^\(breadcrumb\|navegação estrutural\|ruta de navegación\)\$\/i,\r?\n/m;
+  if (!breadcrumbLabel.test(baseTest)) return false;
+  let expectedTest = baseTest.replace(breadcrumbLabel, "");
+
+  const oldFunction = /^async function returnToListByBreadcrumb\(page: Page\) \{\r?\n[\s\S]*?^\}/m;
+  const newFunction = [
+    "async function returnToListByBackButton(page: Page) {",
+    "  await page.getByRole(\"button\", { name: labels.back }).first().click({ timeout: 4_000 });",
+    "  await expect(page).toHaveURL(/\\/actions\\/?$/, { timeout: 5_000 });",
+    "  await assertListReady(page);",
+    "}",
+  ].join("\n");
+  if (!oldFunction.test(expectedTest)) return false;
+  expectedTest = expectedTest.replace(oldFunction, newFunction);
+  expectedTest = expectedTest
+    .replaceAll("Return to list via breadcrumb", "Return to list via back button")
+    .replaceAll("returnToListByBreadcrumb", "returnToListByBackButton");
+  return expectedTest === headTest;
+}
+
 export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, e2eStatus }) {
   if (selectionStatus !== "success") return { pass: false, reason: "selection-did-not-succeed" };
   if (!Array.isArray(capabilities) || capabilities.some((item) => !CAPABILITIES.includes(item))) {
@@ -261,7 +389,7 @@ export function validateE2EOutcome({ selectionStatus, capabilities, scope, scope
   }
 
   if (capabilities.length !== 0) return { pass: false, reason: "capabilities-were-omitted" };
-  if (!["documentation-only", "ci-validation-only"].includes(reason)) {
+  if (!["documentation-only", "ci-validation-only", "verified-breadcrumb-removal"].includes(reason)) {
     return { pass: false, reason: "e2e-exemption-not-validated" };
   }
   return { pass: true, reason };
@@ -275,8 +403,68 @@ function localeAnalysis(base, head, file = "locales/pt-PT/common.json") {
   );
 }
 
+function breadcrumbRemovalFixture() {
+  const files = [...breadcrumbRemovalFiles];
+  const baseContents = {};
+  const headContents = {};
+  const baseNavigation = '<nav aria-label="Breadcrumb"><ol>Path</ol></nav><h1>Title</h1>\n';
+  const headNavigation = "<h1>Title</h1>\n";
+  for (const file of breadcrumbRemovalSourceFiles) {
+    baseContents[file] = baseNavigation;
+    headContents[file] = headNavigation;
+  }
+
+  const translations = `\n${breadcrumbTranslationKeys.map((key) => `  "${key}": "Breadcrumb label",`).join("\n")}\n  "other.title": "Keep this translation"\n`;
+  const remainingTranslations = '\n  "other.title": "Keep this translation"\n';
+  for (const file of breadcrumbRemovalLocaleFiles) {
+    baseContents[file] = `{${translations}}`;
+    headContents[file] = `{${remainingTranslations}}`;
+  }
+
+  baseContents[breadcrumbRemovalTestFile] = `  breadcrumb: /^(breadcrumb|navegação estrutural|ruta de navegación)$/i,\nasync function returnToListByBreadcrumb(page: Page) {\n  const breadcrumb = page.getByRole("navigation", { name: labels.breadcrumb });\n  await breadcrumb.getByRole("button", { name: labels.actionsLink }).click({ timeout: 4_000 });\n}\n"Return to list via breadcrumb"\n`;
+  headContents[breadcrumbRemovalTestFile] = `async function returnToListByBackButton(page: Page) {\n  await page.getByRole("button", { name: labels.back }).first().click({ timeout: 4_000 });\n  await expect(page).toHaveURL(/\\/actions\\/?$/, { timeout: 5_000 });\n  await assertListReady(page);\n}\n"Return to list via back button"\n`;
+
+  const localeFiles = breadcrumbRemovalLocaleFiles;
+  return {
+    files,
+    baseContents,
+    headContents,
+    translationAnalysis: analyzeTranslationChanges(localeFiles, baseContents, headContents),
+  };
+}
+
 function selfTest() {
   const scoped = (files, scope, scopeApproved = false) => selectCapabilities(files, { scope, scopeApproved });
+  const breadcrumbFixture = breadcrumbRemovalFixture();
+  const breadcrumbPlan = selectCapabilities(
+    [...breadcrumbFixture.files, "scripts/e2e/select-capabilities.mjs"],
+    breadcrumbFixture,
+  );
+  assert.deepEqual(breadcrumbPlan, {
+    capabilities: [],
+    scope: [],
+    scopeApproved: false,
+    runE2E: false,
+    reason: "verified-breadcrumb-removal",
+    supportingChanges: [],
+  });
+  const breadcrumbWithFunctionalChange = {
+    ...breadcrumbFixture,
+    headContents: {
+      ...breadcrumbFixture.headContents,
+      [breadcrumbRemovalSourceFiles[0]]: breadcrumbFixture.headContents[breadcrumbRemovalSourceFiles[0]] + "// unrelated behavior\n",
+    },
+    scope: ["actions", "teams", "roles"],
+    scopeApproved: true,
+  };
+  assert.throws(
+    () => selectCapabilities([...breadcrumbFixture.files, "scripts/e2e/select-capabilities.mjs"], breadcrumbWithFunctionalChange),
+    /unclassified changed path/,
+  );
+  assert.throws(
+    () => selectCapabilities([...breadcrumbFixture.files, "scripts/e2e/run-capability.mjs"], breadcrumbFixture),
+    /E2E capability scope is required/,
+  );
   assert.deepEqual(scoped(["domains/operations/users/users-page.tsx", "shared/ui/button.tsx"], ["users"]).capabilities, ["users"]);
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
   assert.deepEqual(scoped(["domains/operations/roles/roles-page.tsx"], ["roles"]).capabilities, ["roles"]);
@@ -342,6 +530,14 @@ function selfTest() {
     selectionStatus: "success", capabilities: [], scope: [], scopeApproved: false,
     runE2E: false, reason: "unmapped-impact",
   }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success", capabilities: [], scope: [], scopeApproved: false,
+    runE2E: false, reason: "verified-breadcrumb-removal",
+  }).pass, true);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success", capabilities: ["teams"], scope: [], scopeApproved: false,
+    runE2E: false, reason: "verified-breadcrumb-removal",
+  }).pass, false);
 
   const roleOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Regressar" });
   assert.deepEqual(selectCapabilities(["locales/pt-PT/common.json"], { scope: ["roles"], translationAnalysis: roleOnly }).capabilities, ["roles"]);
@@ -359,6 +555,10 @@ function readGitFile(ref, file) {
   return execFileSync("git", ["show", ref + ":" + file], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
 }
 
+function readComparedFile(ref, file) {
+  return ref === "WORKTREE" ? readFileSync(file, "utf8") : readGitFile(ref, file);
+}
+
 function compareRefsPlan(files, baseRef, headRef, options) {
   const localeFiles = files.map(normalizePath).filter((file) => localeCommonPath.test(file));
   const baseContents = {};
@@ -366,13 +566,33 @@ function compareRefsPlan(files, baseRef, headRef, options) {
   try {
     for (const file of localeFiles) {
       baseContents[file] = readGitFile(baseRef, file);
-      headContents[file] = readGitFile(headRef, file);
+      headContents[file] = readComparedFile(headRef, file);
     }
   } catch {
     throw new Error("E2E scope validation failed: locale content could not be compared between base and head.");
   }
   const translationAnalysis = analyzeTranslationChanges(localeFiles, baseContents, headContents);
-  return selectCapabilities(files, { ...options, translationAnalysis });
+  const comparisonBase = {};
+  const comparisonHead = {};
+  const normalizedFiles = files.map((file) => normalizePath(file.trim())).filter(Boolean).sort();
+  const semanticFiles = normalizedFiles.filter((file) => !ciOnlyPaths.has(file));
+  if (semanticFiles.length === breadcrumbRemovalFiles.length &&
+      semanticFiles.every((file, index) => file === breadcrumbRemovalFiles[index])) {
+    try {
+      for (const file of breadcrumbRemovalFiles) {
+        comparisonBase[file] = readGitFile(baseRef, file);
+        comparisonHead[file] = readComparedFile(headRef, file);
+      }
+    } catch {
+      throw new Error("E2E scope validation failed: Breadcrumb removal diff could not be compared between base and head.");
+    }
+  }
+  return selectCapabilities(files, {
+    ...options,
+    translationAnalysis,
+    baseContents: comparisonBase,
+    headContents: comparisonHead,
+  });
 }
 
 function readOption(args, name) {

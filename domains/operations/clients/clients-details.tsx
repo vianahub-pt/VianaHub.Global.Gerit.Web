@@ -4333,21 +4333,6 @@ export function ClientsDetailsPage({ clientId: clientIdProp }: { clientId?: stri
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <nav aria-label="Breadcrumb" className="mb-1">
-                  <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <li>
-                      <button type="button" onClick={() => router.push("/clients/")} className="hover:text-primary transition-colors">
-                        {t("clients.title")}
-                      </button>
-                    </li>
-                    <li aria-hidden="true">/</li>
-                    <li className="text-foreground font-medium" aria-current="page">
-                      {isEditing
-                        ? client?.individual?.fullName ?? client?.name ?? t("clients.form.editTitle")
-                        : t("clients.form.newTitle")}
-                    </li>
-                  </ol>
-                </nav>
                 <div className="flex items-center gap-3">
                   <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">
                     {isEditing

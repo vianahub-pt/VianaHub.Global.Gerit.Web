@@ -312,6 +312,15 @@ function selfTest() {
   assert.deepEqual(selectCapabilities([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
   });
+  const selectorOnlySyncPlan = selectCapabilities(["scripts/e2e/select-capabilities.mjs"]);
+  assert.deepEqual(selectorOnlySyncPlan, {
+    capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
+  });
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...selectorOnlySyncPlan,
+    e2eStatus: "skipped",
+  }).pass, true);
   assert.deepEqual(selectCapabilities([], { fullRegression: true }).capabilities, CAPABILITIES);
 
   const valid = (overrides = {}) => validateE2EOutcome({

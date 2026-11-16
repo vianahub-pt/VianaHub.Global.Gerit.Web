@@ -183,13 +183,6 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
           <div className="flex items-center gap-4">
             <button type="button" onClick={() => router.push("/actions/")} className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title={t("actions.actions.back")} aria-label={t("actions.actions.back")}><ArrowLeft className="h-5 w-5" /></button>
             <div>
-              <nav aria-label={t("actions.breadcrumb.label")} className="mb-1">
-                <ol className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <li><button type="button" onClick={() => router.push("/actions/")} className="transition-colors hover:text-primary">{t("actions.title")}</button></li>
-                  <li aria-hidden="true">/</li>
-                  <li className="font-medium text-foreground" aria-current="page">{pageTitle}</li>
-                </ol>
-              </nav>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">{pageTitle}</h1>
                 {editing && currentAction ? <span className={clsx("inline-flex rounded-full px-3 py-1 text-xs font-semibold", currentAction.isActive ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400")}>{t(currentAction.isActive ? "actions.status.active" : "actions.status.inactive")}</span> : null}

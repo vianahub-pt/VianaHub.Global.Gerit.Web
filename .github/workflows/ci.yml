@@ -86,6 +86,7 @@ jobs:
 
       - name: Test capability selection and E2E outcomes
         run: |
+          node scripts/e2e/preflight.mjs --self-test
           node scripts/e2e/select-capabilities.mjs --self-test
           node scripts/e2e/run-capability.mjs --self-test
 

@@ -1,11 +1,12 @@
-import { spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import assert from "node:assert/strict";
-
-const CAPABILITIES = ["actions", "user-preferences", "teams", "roles", "users"];
+import { evaluatePreflight, loadConfig, portIsAvailable } from "./preflight.mjs";
+import { CAPABILITIES } from "./capabilities.mjs";
+import { runCapabilityLifecycle } from "./runner-core.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "../..");
@@ -35,6 +36,7 @@ function getBatchPlan(capabilities, env = process.env) {
 function parseInvocation(args) {
   let scopeValue = null;
   let scopeApproved = false;
+  let mutatingApproved = false;
   const capabilities = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -43,6 +45,8 @@ function parseInvocation(args) {
       index += 1;
     } else if (argument === "--scope-approved") {
       scopeApproved = true;
+    } else if (argument === "--mutating-approved") {
+      mutatingApproved = true;
     } else if (argument.startsWith("--")) {
       throw new Error("Unknown runner option " + argument + ".");
     } else {
@@ -62,7 +66,7 @@ function parseInvocation(args) {
   if (new Set(capabilities).size !== capabilities.length || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     throw new Error("Provide unique, supported capability slugs.");
   }
-  return { capabilities, scope, scopeApproved };
+  return { capabilities, scope, scopeApproved, mutatingApproved };
 }
 
 function selfTest() {
@@ -76,17 +80,24 @@ function selfTest() {
   assert.deepEqual(getRunPlan("teams", { CI: "true" }), {
     spec: "tests/e2e/teams-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
+  assert.deepEqual(getRunPlan("equipment-types", { CI: "true" }), {
+    spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
+  });
+  assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
+    specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],
+  });
   assert.deepEqual(getBatchPlan(["actions", "users"], { CI: "true" }), {
     specs: ["tests/e2e/actions-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"],
     projects: ["journey", "chromium"],
     nonmutatingCapabilities: ["users"],
   });
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
-    capabilities: ["users"], scope: ["users"], scopeApproved: false,
+    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false,
   });
   assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
   assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
   assert.deepEqual(parseInvocation(["--scope", "users,teams", "--scope-approved", "users", "teams"]).scope, ["users", "teams"]);
+  assert.equal(parseInvocation(["--scope", "equipment-types", "--mutating-approved", "equipment-types"]).mutatingApproved, true);
   console.log("E2E capability runner self-tests passed.");
 }
 
@@ -101,10 +112,21 @@ try {
 } catch (error) {
   fail(error instanceof Error ? error.message : "Invalid E2E scope invocation.");
 }
-const { capabilities } = invocation;
+const { capabilities, mutatingApproved } = invocation;
 if (capabilities.length === 0) fail("Provide one or more capability slugs.");
 
 const batchPlan = getBatchPlan(capabilities);
+const localExecution = process.platform === "win32" && process.env.CI !== "true";
+if (process.env.CI !== "true" && process.platform !== "win32") {
+  fail("Local E2E execution is supported only on the authorized Windows host.");
+}
+if (localExecution && capabilities.length !== 1) {
+  fail("Local E2E execution requires exactly one selected capability.");
+}
+const e2eEnvironment = localExecution
+  ? { ...process.env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" }
+  : process.env;
+if (localExecution) delete e2eEnvironment.E2E_ALLOW_EXISTING_STORAGE_STATE;
 const canonicalDirectory = resolve(repoRoot, "tests", "e2e");
 for (const spec of batchPlan.specs) {
   const nativeSpecPath = resolve(repoRoot, spec);
@@ -130,18 +152,101 @@ for (const capability of batchPlan.nonmutatingCapabilities) {
   console.log(`[E2E capability] Running ${capability} nonmutating regression. The CRUD/CSV mutative journey will NOT run in CI or without per-run QA approval.`);
 }
 const playwrightArgs = [playwrightCli, "test", ...batchPlan.specs, ...batchPlan.projects.map((project) => `--project=${project}`)];
+if (localExecution) playwrightArgs.push("--headed");
 console.log(`[E2E capability] Starting one Playwright run for capabilities: ${capabilities.join(", ")}.`);
-const child = spawn(process.execPath, playwrightArgs, {
-  cwd: repoRoot,
-  env: process.env,
-  shell: false,
-  stdio: "inherit",
+let ownedPlaywrightChild;
+let playwrightStartedAt = 0;
+let storageStateExistedBeforeRun = false;
+const runPlaywright = () => new Promise((resolveResult) => {
+  playwrightStartedAt = Date.now();
+  const storageStatePath = resolve(repoRoot, "playwright/.auth/user.json");
+  storageStateExistedBeforeRun = existsSync(storageStatePath);
+  ownedPlaywrightChild = spawn(process.execPath, playwrightArgs, {
+    cwd: repoRoot,
+    env: e2eEnvironment,
+    shell: false,
+    stdio: "inherit",
+  });
+  const onSigint = () => ownedPlaywrightChild.kill("SIGINT");
+  const onSigterm = () => ownedPlaywrightChild.kill("SIGTERM");
+  process.once("SIGINT", onSigint);
+  process.once("SIGTERM", onSigterm);
+  ownedPlaywrightChild.once("error", (error) => {
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigterm);
+    console.error("[E2E capability] Failed to start Playwright (" + error.message + ").");
+    resolveResult({ code: 1 });
+  });
+  ownedPlaywrightChild.once("exit", (code, signal) => {
+    process.removeListener("SIGINT", onSigint);
+    process.removeListener("SIGTERM", onSigterm);
+    resolveResult({ code: code ?? (signal ? 1 : 0) });
+  });
 });
 
-child.once("error", (error) => {
-  console.error(`[E2E capability] Failed to start Playwright (${error.message}).`);
-  process.exitCode = 1;
-});
-child.once("exit", (code, signal) => {
-  process.exitCode = code ?? (signal ? 1 : 0);
-});
+async function cleanupOwnedPlaywright() {
+  const owned = ownedPlaywrightChild;
+  if (!owned || !owned.pid) return true;
+  if (owned.exitCode === null) {
+    try {
+      execFileSync("taskkill.exe", ["/PID", String(owned.pid), "/T", "/F"], { stdio: "ignore" });
+    } catch {
+      try { owned.kill("SIGTERM"); } catch {}
+    }
+    await Promise.race([
+      new Promise((resolveExit) => owned.once("exit", resolveExit)),
+      new Promise((resolveTimeout) => setTimeout(resolveTimeout, 5_000)),
+    ]);
+  }
+  if (owned.exitCode === null) return false;
+  const storageStatePath = resolve(repoRoot, "playwright/.auth/user.json");
+  try {
+    if (!storageStateExistedBeforeRun && existsSync(storageStatePath) && statSync(storageStatePath).mtimeMs >= playwrightStartedAt) {
+      rmSync(storageStatePath, { force: true });
+      console.log("[E2E cleanup] This run's authenticated storage state was removed.");
+    }
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+if (localExecution) {
+  const mode = batchPlan.nonmutatingCapabilities.includes(capabilities[0]) ? "read-only" : "mutating";
+  if (mode === "mutating" && !mutatingApproved) {
+    fail("Mutating E2E requires the explicit --mutating-approved option for this run.");
+  }
+  const config = await loadConfig();
+  const lifecycle = await runCapabilityLifecycle({
+    preflight: async (stage) => {
+      const report = await evaluatePreflight({
+        capability: capabilities[0],
+        mode,
+        stage,
+        mutatingApproved,
+        config,
+      });
+      console.log("[E2E preflight] " + JSON.stringify(report));
+      return {
+        pass: report.status === "PRECHECK_CONFIG_PASS" && !report.authorization.endsWith("_PENDING"),
+        reason: report.status === "PRECHECK_CONFIG_PASS" ? report.authorization : "configuration-preflight-blocked",
+      };
+    },
+    prepareBuild: async () => {
+      const build = spawnSync("cmd.exe", ["/d", "/s", "/c", "npm run e2e:prepare"], {
+        cwd: repoRoot,
+        env: { ...process.env },
+        stdio: "inherit",
+      });
+      return build.error ? 1 : (build.status ?? 1);
+    },
+    runPlaywright,
+    cleanup: cleanupOwnedPlaywright,
+    isPortFree: portIsAvailable,
+  });
+  console.log("[E2E lifecycle] " + JSON.stringify(lifecycle));
+  process.exitCode = lifecycle.status === "E2E_PASS" ? 0 : 1;
+} else {
+  const result = await runPlaywright();
+  process.exitCode = result.code;
+}

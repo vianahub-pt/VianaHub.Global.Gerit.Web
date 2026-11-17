@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { CAPABILITIES } from "./capabilities.mjs";
 
-export const CAPABILITIES = ["actions", "user-preferences", "teams", "roles", "users"];
+export { CAPABILITIES };
 
 const capabilityCodePaths = new Map([
   ["actions", ["app/(workspace)/actions/", "domains/operations/actions/"]],
@@ -10,6 +11,7 @@ const capabilityCodePaths = new Map([
   ["teams", ["app/(workspace)/teams/", "domains/operations/teams/"]],
   ["roles", ["app/(workspace)/roles/", "domains/operations/roles/"]],
   ["users", ["app/(workspace)/users/", "domains/operations/users/"]],
+  ["equipment-types", ["app/(workspace)/equipment-types/", "domains/operations/equipment-types/"]],
 ]);
 
 const capabilityTestPaths = new Map([
@@ -18,6 +20,7 @@ const capabilityTestPaths = new Map([
   ["teams", ["tests/teams/", "tests/e2e/teams-journey.spec.ts"]],
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
+  ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
 ]);
 
 const ciOnlyPaths = new Set([
@@ -32,6 +35,7 @@ const translationPrefixes = new Map([
   ["teams.", "teams"],
   ["roles.", "roles"],
   ["users.", "users"],
+  ["equipmentTypes.", "equipment-types"],
 ]);
 
 const breadcrumbRemovalSourceFiles = [
@@ -77,10 +81,12 @@ function isKnownSharedSupport(file) {
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||
+    file === "tests/e2e/preflight.test.mjs" ||
     file.startsWith("scripts/e2e/") ||
     file.startsWith("locales/") ||
     file === "package.json" ||
     file === "package-lock.json" ||
+    file === "playwright.config.ts" ||
     file === "app/layout.tsx" ||
     file === "app/(workspace)/layout.tsx";
 }
@@ -467,6 +473,13 @@ function selfTest() {
   );
   assert.deepEqual(scoped(["domains/operations/users/users-page.tsx", "shared/ui/button.tsx"], ["users"]).capabilities, ["users"]);
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
+  assert.deepEqual(scoped(["domains/operations/equipment-types/equipment-types-page.tsx"], ["equipment-types"]).capabilities, ["equipment-types"]);
+  assert.deepEqual(scoped([
+    "domains/operations/equipment-types/equipment-types-page.tsx",
+    "playwright.config.ts",
+    "scripts/e2e/preflight.mjs",
+    "tests/e2e/preflight.test.mjs",
+  ], ["equipment-types"]).capabilities, ["equipment-types"]);
   assert.deepEqual(scoped(["domains/operations/roles/roles-page.tsx"], ["roles"]).capabilities, ["roles"]);
   assert.deepEqual(scoped(["domains/operations/actions/actions-page.tsx"], ["actions"]).capabilities, ["actions"]);
   assert.deepEqual(scoped([

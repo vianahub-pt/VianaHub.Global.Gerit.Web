@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { validateE2EBuild } from "./build-fingerprint.mjs";
+import policy from "./environment-policy.json" with { type: "json" };
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const host = "127.0.0.1";
@@ -94,9 +96,20 @@ function assertE2EBuildValid() {
   const requiredFiles = ["BUILD_ID", "prerender-manifest.json", "routes-manifest.json", "required-server-files.json"];
   const missing = requiredFiles.filter((file) => !existsSync(resolve(repoRoot, e2eBuildDir, file)));
   if (missing.length > 0) {
-    throw new Error(`[E2E] Production build ${e2eBuildDir} is invalid; missing ${missing.join(", ")}. Run the isolated E2E build before starting the server.`);
+    throw new Error(`[E2E] E2E build ${e2eBuildDir} is invalid; missing ${missing.join(", ")}. Run the isolated E2E build before starting the server.`);
   }
-  console.log(`[E2E] production build validated: ${e2eBuildDir}`);
+  console.log(`[E2E] E2E build validated: ${e2eBuildDir}`);
+}
+
+async function assertBuildFingerprintCurrent() {
+  const buildCheck = await validateE2EBuild(
+    process.env.GERIT_API_BASE_URL || policy.apiOrigin,
+    repoRoot,
+  );
+  if (!buildCheck.current) {
+    throw new Error("[E2E] E2E build is stale or targets a different QA API origin (" + buildCheck.reason + ").");
+  }
+  console.log("[E2E] current E2E build fingerprint validated.");
 }
 
 async function checkReadinessOnce() {
@@ -151,7 +164,7 @@ async function waitForReadiness(child) {
       serverExit,
     ]);
   }
-  throw new Error(`[E2E] Production application readiness failed within 15s: ${lastReason}.`);
+  throw new Error(`[E2E] Local application readiness failed within 15s: ${lastReason}.`);
 }
 
 async function stopChild(child) {
@@ -175,7 +188,11 @@ async function stopChild(child) {
       `;
       execFileSync("powershell.exe", ["-NoProfile", "-Command", command], { stdio: "ignore" });
     } catch {
-      child.kill();
+      try {
+        execFileSync("taskkill.exe", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+      } catch {
+        child.kill();
+      }
     }
   } else {
     try {
@@ -205,6 +222,7 @@ try {
   }
 
   assertE2EBuildValid();
+  await assertBuildFingerprintCurrent();
   console.log(`[E2E] using prebuilt artifact: ${e2eBuildDir}`);
 
   assertNoRepoNextProcesses();
@@ -231,13 +249,13 @@ try {
   });
 
   await waitForReadiness(child);
-  console.log(`[E2E] production server start complete: ${((performance.now() - serverStartedAt) / 1000).toFixed(2)}s`);
+  console.log(`[E2E] local server start complete: ${((performance.now() - serverStartedAt) / 1000).toFixed(2)}s`);
 
   process.on("SIGINT", () => { void shutdown(0); });
   process.on("SIGTERM", () => { void shutdown(0); });
   await new Promise((resolveExit) => child.once("exit", resolveExit));
 } catch (error) {
   if (child) await stopChild(child);
-  console.error(error instanceof Error ? error.message : "[E2E] Production server startup failed.");
+  console.error(error instanceof Error ? error.message : "[E2E] Local server startup failed.");
   process.exitCode = 1;
 }

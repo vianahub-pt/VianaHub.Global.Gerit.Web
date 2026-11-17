@@ -3,12 +3,20 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
+import { existsSync } from "node:fs";
+import { computeSourceFingerprint, writeE2EBuildManifest } from "./build-fingerprint.mjs";
+import policy from "./environment-policy.json" with { type: "json" };
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const nextEnvPath = resolve(repoRoot, "next-env.d.ts");
 const e2eBuildDir = ".next-e2e";
 const environment = { ...process.env, NEXT_DIST_DIR: e2eBuildDir };
+if (existsSync(resolve(repoRoot, ".env.e2e.local")) && typeof process.loadEnvFile === "function") {
+  process.loadEnvFile(resolve(repoRoot, ".env.e2e.local"));
+}
+if (process.env.GERIT_API_BASE_URL) environment.GERIT_API_BASE_URL = process.env.GERIT_API_BASE_URL;
 const canonicalNextEnv = await readFile(nextEnvPath);
+const fingerprintBeforeBuild = await computeSourceFingerprint(repoRoot);
 const startedAt = performance.now();
 const isWindows = process.platform === "win32";
 const command = isWindows ? "cmd.exe" : "npm";
@@ -37,4 +45,17 @@ try {
 }
 
 console.log(`[E2E] artifact preparation ${buildExitCode === 0 ? "complete" : "failed"} (${((performance.now() - startedAt) / 1000).toFixed(1)}s)`);
-process.exitCode = buildExitCode;
+if (buildExitCode === 0) {
+  const fingerprintAfterBuild = await computeSourceFingerprint(repoRoot);
+  if (fingerprintBeforeBuild !== fingerprintAfterBuild) {
+    console.error("[E2E] source files changed during build; artifact was not certified.");
+    process.exitCode = 1;
+  } else {
+    const manifest = await writeE2EBuildManifest(
+      process.env.GERIT_API_BASE_URL || policy.apiOrigin,
+      repoRoot,
+    );
+    console.log("[E2E] source fingerprint recorded: " + manifest.sourceFingerprint.slice(0, 12));
+  }
+}
+if (buildExitCode !== 0) process.exitCode = buildExitCode;

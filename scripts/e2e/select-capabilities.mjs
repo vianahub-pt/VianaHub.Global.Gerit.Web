@@ -399,9 +399,11 @@ export function validateE2EOutcome({ selectionStatus, capabilities, scope, scope
 
   if (capabilities.length !== 0) return { pass: false, reason: "capabilities-were-omitted" };
   if (reason === "verified-structural-sync") {
-    return structuralSyncVerified === true
+    const isEmptyStructuralPlan = Array.isArray(scope) && scope.length === 0 &&
+      scopeApproved === false && e2eStatus === "skipped";
+    return structuralSyncVerified === true && isEmptyStructuralPlan
       ? { pass: true, reason }
-      : { pass: false, reason: "structural-sync-proof-missing" };
+      : { pass: false, reason: "structural-sync-plan-invalid" };
   }
   if (structuralSyncVerified === true || !["documentation-only", "ci-validation-only", "verified-breadcrumb-removal"].includes(reason)) {
     return { pass: false, reason: "e2e-exemption-not-validated" };
@@ -630,6 +632,23 @@ function selfTest() {
     ...verifiedStructuralPlan,
     structuralSyncVerified: false,
     e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    scope: ["users"],
+    e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    scopeApproved: true,
+    e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    e2eStatus: "success",
   }).pass, false);
 
   assert.throws(() => structuralPlan(structuralSyncContext({

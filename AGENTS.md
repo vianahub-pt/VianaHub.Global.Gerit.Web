@@ -66,6 +66,20 @@ O fluxo direto do Codex Desktop é o padrão. O supervisor Agentic é opcional e
 - Merge em `develop` ou `main` é exclusivamente humano. Não faça deploy manual nem altere proteções de branch sem autorização.
 - Produção permanece read-only, salvo autorização específica para uma operação delimitada. Nunca execute operações destrutivas em produção sem essa autorização.
 
+## Política obrigatória de execução Windows Host — Git, GitHub e Playwright
+
+Esta política complementa o fluxo direto deste repositório. Aplica-se ao Gerit Web; qualquer adoção no repositório Gerit API exige revisão própria.
+
+- Antes de iniciar uma capability, confirme o repositório físico, a branch, o estado da working tree, o número de worktrees e o contexto efetivo de execução. Preserve todo trabalho existente e use o workspace Windows original; não crie cópias ou worktrees temporários como alternativa a uma operação bloqueada.
+- Para operações Git que escrevam em `.git` ou dependam de rede autenticada — incluindo `fetch`, `switch`/`checkout`, `add`, `commit`, `push` e equivalentes — use o mecanismo aprovado de execução no Windows host autorizado. Solicite aprovação pontual no momento da operação quando necessária. Se a sandbox negar a operação por acesso read-only ou falta de credenciais, não repita a tentativa nela.
+- Execute `gh` no mesmo contexto Windows autorizado que contém a autenticação existente. Não conclua que o host está sem autenticação apenas porque `gh` não está autenticado dentro da sandbox. Não mostre nem copie tokens, passwords ou arquivos de credenciais.
+- A integração GitHub MCP pode ter acesso somente de leitura. Se uma escrita nela for recusada por permissão, tente uma vez a operação equivalente pelo `gh` autorizado no host; não repita chamadas equivalentes à integração sem alteração de permissões. Verifique PRs, refs, checks e mergeabilidade remotamente antes de reportar conclusão.
+- Use os scripts e runners Playwright oficiais do repositório e o Chromium iniciado pelo próprio Playwright, em modo headed quando exigido. Não solicite nem use Computer Control, automação genérica de desktop, nem controle de janelas, rato ou teclado do utilizador.
+- A sandbox continua apropriada para leituras e comandos que funcionem nela. Quando uma operação legítima autorizada for bloqueada, solicite imediatamente a aprovação pontual suportada para executá-la no host. Se a aprovação for recusada ou não estiver disponível, reporte a operação e o motivo verificável e pare; não altere ACLs, não solicite administrador e não contorne a política.
+- Computer Control é permanentemente proibido. Full access não é autorizado por padrão. Nunca modifique ACLs, copie credenciais, use force push, faça merge automático ou desative proteções de branch.
+- Antes de cada capability, confirme também o mecanismo autorizado de escrita Git, o acesso GitHub necessário à criação de PRs e a disponibilidade dos runners Playwright aplicáveis. Se houver autorização adicional, solicite-a pontualmente no momento da operação em vez de iniciar diagnósticos repetidos.
+- Quando o supervisor Agentic for escolhido, esta política não transfere autoridade Git às roles: o supervisor host continua sendo o único responsável pelas operações Git mutáveis, e as roles permanecem sujeitas às proibições de execução descritas na seção do supervisor.
+
 ### Supervisor Agentic (opcional)
 
 As regras seguintes aplicam-se somente quando o supervisor Agentic for escolhido.

@@ -1,0 +1,10 @@
+{
+  "classification": "QA / Homologação",
+  "apiOrigin": "https://gerit-api.vianahub.pt",
+  "webOrigin": "https://gerit.vianahub.pt",
+  "localE2EOrigin": "http://127.0.0.1:3100",
+  "legacyGitHubEnvironmentName": "production-vianahub",
+  "legacyEnvironmentNameIsClassification": false,
+  "readOnlySmokeAuthorized": true,
+  "mutatingApprovalRequiredPerRun": true
+}

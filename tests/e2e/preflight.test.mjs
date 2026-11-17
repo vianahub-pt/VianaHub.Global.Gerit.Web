@@ -35,6 +35,16 @@ test("preflight accepts official local E2E configuration and dirty preserved wor
   assert.equal(result.git.workingTreeDirty, true);
 });
 
+test("preflight accepts the authorized EquipmentTypes visual hotfix branch", async () => {
+  const result = await evaluatePreflight({
+    ...valid,
+    git: { ...git, branch: "hotfix/equipment-types-form-design" },
+  });
+  assert.equal(result.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(result.checks.branch, true);
+  assert.equal(result.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+});
+
 test("preflight blocks wrong local URL, unknown capability, missing credentials and stale build", async () => {
   assert.equal((await evaluatePreflight({ ...valid, config: { ...config, E2E_BASE_URL: "http://localhost:3000" } })).status, "PREFLIGHT_BLOCKED");
   assert.equal((await evaluatePreflight({ ...valid, capability: "unknown" })).checks.capabilityAllowed, false);

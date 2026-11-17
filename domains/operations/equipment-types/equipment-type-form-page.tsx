@@ -9,6 +9,7 @@ import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
 import { normalizeCreatedEquipmentTypeId, normalizeEquipmentTypeDetail, toEquipmentTypePayload, validateEquipmentType, type EquipmentTypeDetail } from "@/domains/operations/equipment-types/equipment-types-contract";
 
 interface EquipmentTypeFormPageProps { equipmentTypeId?: string }
@@ -160,15 +161,18 @@ export function EquipmentTypeFormPage({ equipmentTypeId }: EquipmentTypeFormPage
       {!detailLoading && loadError ? <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{loadError}</section> : null}
       {!detailLoading && (!editing || currentItem) ? <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
         <section data-testid="equipment-type-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]">
+          <div className={clsx("grid grid-cols-1 gap-8", currentItem && "lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]")}>
             <div className="space-y-5">
               <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.form.name")}</span><Input id="equipment-type-name" required maxLength={200} autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} /></label>
-              <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.form.description")}</span><textarea id="equipment-type-description" maxLength={500} rows={5} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} className="flex w-full rounded-sm border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" /></label>
+              <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.form.description")}</span><Textarea id="equipment-type-description" maxLength={500} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} className="h-20 min-h-[80px] resize-y px-4" /></label>
             </div>
-            {currentItem ? <aside className="space-y-3 rounded-sm border border-border bg-card p-4 text-sm"><h2 className="font-semibold">{t("equipmentTypes.detail.metadata")}</h2><p>{t("equipmentTypes.detail.id", { id: currentItem.id })}</p><p>{t("equipmentTypes.detail.createdAt", { date: dateLabel })}</p></aside> : null}
+            {currentItem ? <aside className="space-y-4 rounded-sm border border-border bg-card p-4 text-sm"><h2 className="font-semibold">{t("equipmentTypes.detail.metadata")}</h2><label htmlFor="equipment-type-id" className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.detail.idLabel")}</span><Input id="equipment-type-id" value={currentItem.id} readOnly className="bg-muted text-muted-foreground" /></label><label htmlFor="equipment-type-created-at" className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.detail.createdAtLabel")}</span><Input id="equipment-type-created-at" value={dateLabel} readOnly className="bg-muted text-muted-foreground" /></label></aside> : null}
           </div>
         </section>
-        {(editing ? canUpdate : canCreate) ? <div className="flex justify-end"><button type="submit" disabled={submitting || deleteSubmitting} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}{t("equipmentTypes.actions.save")}</button></div> : null}
+        <div className="flex justify-start gap-3">
+          <button type="button" onClick={() => router.push("/equipment-types/")} disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t("equipmentTypes.actions.back")}</button>
+          {(editing ? canUpdate : canCreate) ? <button type="submit" disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}{t("equipmentTypes.actions.save")}</button> : null}
+        </div>
       </form> : null}
     </div>
     <ConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }} title={t("equipmentTypes.actions.delete")} description={t("equipmentTypes.confirm.delete", { name: currentItem?.name ?? "" })} confirmLabel={t("equipmentTypes.actions.delete")} cancelLabel={t("equipmentTypes.actions.cancel")} onConfirm={() => void deleteItem()} />

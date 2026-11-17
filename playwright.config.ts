@@ -13,6 +13,7 @@ const defaultLocalBaseURL = "http://127.0.0.1:3100";
 const baseURL = process.env.E2E_BASE_URL || defaultLocalBaseURL;
 const storageStatePath = "playwright/.auth/user.json";
 const visualE2E = process.env.E2E_VISUAL === "true" && process.env.CI !== "true";
+const sanitizedE2EArtifacts = process.env.E2E_SANITIZED_ARTIFACTS === "true";
 const visualJourneyDevice = Object.fromEntries(
   Object.entries(devices["Desktop Chrome"]).filter(
     ([property]) => !["viewport", "screen", "deviceScaleFactor"].includes(property),
@@ -43,9 +44,9 @@ export default defineConfig({
     baseURL,
     actionTimeout: 5_000,
     navigationTimeout: 10_000,
-    trace: "on-first-retry",
-    screenshot: "only-on-failure",
-    video: "on",
+    trace: sanitizedE2EArtifacts ? "off" : "on-first-retry",
+    screenshot: sanitizedE2EArtifacts ? "off" : "only-on-failure",
+    video: sanitizedE2EArtifacts ? "off" : "on",
   },
   projects: [
     {
@@ -81,9 +82,9 @@ export default defineConfig({
         launchOptions: visualE2E
           ? { args: ["--start-maximized"], slowMo: 300 }
           : undefined,
-        trace: "on",
-        screenshot: "only-on-failure",
-        video: "on",
+        trace: sanitizedE2EArtifacts ? "off" : "on",
+        screenshot: sanitizedE2EArtifacts ? "off" : "only-on-failure",
+        video: sanitizedE2EArtifacts ? "off" : "on",
       },
     },
   ],

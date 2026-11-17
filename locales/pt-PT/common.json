@@ -920,6 +920,8 @@
   "equipmentTypes.form.name": "Nome",
   "equipmentTypes.form.description": "Descrição",
   "equipmentTypes.detail.metadata": "Detalhes do registo",
+  "equipmentTypes.detail.idLabel": "Identificador",
+  "equipmentTypes.detail.createdAtLabel": "Criado em",
   "equipmentTypes.detail.id": "Identificador: {{id}}",
   "equipmentTypes.detail.createdAt": "Criado em: {{date}}",
   "equipmentTypes.validation.fields": "Indique um nome até 200 caracteres e uma descrição até 500 caracteres.",

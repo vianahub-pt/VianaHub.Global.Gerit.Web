@@ -40,8 +40,10 @@ function inspectGit() {
 }
 
 function isExpectedBranch(branch, capability) {
-  if (capability === "equipment-types") return branch === "feature/equipment-types-crud";
-  return /^(feature|fix)\/[a-z0-9][a-z0-9-]*$/i.test(branch);
+  if (capability === "equipment-types") {
+    return branch === "feature/equipment-types-crud" || branch === "hotfix/equipment-types-form-design";
+  }
+  return /^(feature|fix|hotfix)\/[a-z0-9][a-z0-9-]*$/i.test(branch);
 }
 
 export function portIsAvailable(port = 3100, host = "127.0.0.1") {
@@ -175,6 +177,12 @@ async function selfTest() {
   const pass = await evaluatePreflight(common);
   assert.equal(pass.status, "PRECHECK_CONFIG_PASS");
   assert.equal(pass.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  const hotfixBranch = await evaluatePreflight({
+    ...common,
+    git: { ...validGit, branch: "hotfix/equipment-types-form-design" },
+  });
+  assert.equal(hotfixBranch.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(hotfixBranch.checks.branch, true);
   const wrongUrl = await evaluatePreflight({ ...common, config: { ...validConfig, E2E_BASE_URL: "http://localhost:3000" } });
   assert.equal(wrongUrl.status, "PREFLIGHT_BLOCKED");
   const unknown = await evaluatePreflight({ ...common, capability: "unknown" });

@@ -916,6 +916,8 @@
   "equipmentTypes.form.name": "Nombre",
   "equipmentTypes.form.description": "Descripción",
   "equipmentTypes.detail.metadata": "Detalles del registro",
+  "equipmentTypes.detail.idLabel": "Identificador",
+  "equipmentTypes.detail.createdAtLabel": "Creado",
   "equipmentTypes.detail.id": "Identificador: {{id}}",
   "equipmentTypes.detail.createdAt": "Creado: {{date}}",
   "equipmentTypes.validation.fields": "Indique un nombre de hasta 200 caracteres y una descripción de hasta 500 caracteres.",

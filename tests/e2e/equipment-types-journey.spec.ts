@@ -66,6 +66,35 @@ test("EquipmentTypes CRUD, lifecycle, CSV and deterministic cleanup", async ({ p
     await page.getByRole("button", { name: /add|adicionar|añadir/i }).click();
     await expect(page).toHaveURL(/\/equipment-types\/new\/$/);
     await expect(page.getByTestId("equipment-types-create-page-root")).toBeVisible();
+    const createForm = page.locator("form");
+    const createBackButton = createForm.getByRole("button", { name: /back|voltar|volver/i });
+    const createSaveButton = createForm.getByRole("button", { name: /save|guardar|salvar/i });
+    const createFieldsSection = page.getByTestId("equipment-type-fields-section");
+    const createFieldsGrid = createFieldsSection.locator(":scope > div");
+    await expect(createBackButton).toHaveAttribute("type", "button");
+    await expect(createSaveButton).toHaveAttribute("type", "submit");
+    await expect(createForm.locator("div.flex.justify-start.gap-3")).toContainText(/back|voltar|volver/i);
+    await expect(createFieldsGrid).toHaveClass(/grid-cols-1/);
+    await expect(createFieldsGrid).not.toHaveClass(/lg:grid-cols-/);
+    const createNameBounds = await createFieldsSection.getByLabel(nameLabel).boundingBox();
+    const createDescriptionBounds = await createFieldsSection.getByRole("textbox", { name: descriptionLabel }).boundingBox();
+    expect(createNameBounds).not.toBeNull();
+    expect(createDescriptionBounds).not.toBeNull();
+    expect(Math.abs(createNameBounds!.width - createDescriptionBounds!.width)).toBeLessThanOrEqual(1);
+    await expect(createFieldsSection.getByRole("textbox", { name: descriptionLabel })).toHaveAttribute("maxlength", "500");
+    const createThemeIsDark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    const createDesktopViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    try {
+      await testInfo.attach("equipment-types-create-light-desktop", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+      await page.evaluate(() => document.documentElement.classList.add("dark"));
+      await testInfo.attach("equipment-types-create-dark-desktop", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+      await page.evaluate((isDark) => document.documentElement.classList.toggle("dark", isDark), createThemeIsDark);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await testInfo.attach("equipment-types-create-light-mobile", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+    } finally {
+      await page.evaluate((isDark) => document.documentElement.classList.toggle("dark", isDark), createThemeIsDark);
+      await page.setViewportSize(createDesktopViewport);
+    }
     await page.getByLabel(nameLabel).fill(createdNames[0]);
     await page.getByRole("textbox", { name: descriptionLabel }).fill(`${unique} description`);
     const createResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.replace(/\/$/, "") === "/api/gerit/v1/equipment-types");
@@ -79,12 +108,40 @@ test("EquipmentTypes CRUD, lifecycle, CSV and deterministic cleanup", async ({ p
     primaryId = createdBody.id;
     await expect(page).toHaveURL(new RegExp(`/equipment-types/${primaryId}/$`));
     await expect(page.getByTestId("equipment-type-details-page-root")).toBeVisible();
+    const detailForm = page.locator("form");
+    const detailBackButton = detailForm.getByRole("button", { name: /back|voltar|volver/i });
+    const detailSaveButton = detailForm.getByRole("button", { name: /save|guardar|salvar/i });
+    await expect(detailBackButton).toHaveAttribute("type", "button");
+    await expect(detailSaveButton).toHaveAttribute("type", "submit");
+    await expect(detailForm.locator("div.flex.justify-start.gap-3")).toContainText(/back|voltar|volver/i);
+    const idField = page.getByLabel(/identifier|identificador/i);
+    const createdField = page.getByLabel(/created|creado|criado/i);
+    await expect(page.getByTestId("equipment-type-fields-section").getByRole("complementary")).toBeVisible();
+    await expect(idField).toHaveAttribute("readonly", "");
+    await expect(idField).toHaveValue(String(primaryId));
+    await expect(createdField).toHaveAttribute("readonly", "");
+    await expect(createdField).toHaveValue(/.+/);
+    const initialThemeIsDark = await page.evaluate(() => document.documentElement.classList.contains("dark"));
+    const desktopViewport = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    try {
+      await testInfo.attach("equipment-types-detail-light-desktop", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+      await page.evaluate(() => document.documentElement.classList.add("dark"));
+      await testInfo.attach("equipment-types-detail-dark-desktop", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+      await page.evaluate((isDark) => document.documentElement.classList.toggle("dark", isDark), initialThemeIsDark);
+      await page.setViewportSize({ width: 390, height: 844 });
+      await testInfo.attach("equipment-types-detail-light-mobile", { body: await page.screenshot({ fullPage: true, animations: "disabled" }), contentType: "image/png" });
+    } finally {
+      await page.evaluate((isDark) => document.documentElement.classList.toggle("dark", isDark), initialThemeIsDark);
+      await page.setViewportSize(desktopViewport);
+    }
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/equipment-types/${primaryId}`)).body).toMatchObject({ id: primaryId, name: createdNames[0], isActive: true });
 
     await page.getByRole("textbox", { name: descriptionLabel }).fill(`${unique} updated`);
     const updateResponse = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/equipment-types/${primaryId}/`));
     await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
-    httpEvidence.update = (await updateResponse).status();
+    const update = await updateResponse;
+    httpEvidence.update = update.status();
+    expect(update.request().postDataJSON()).toEqual({ name: createdNames[0], description: `${unique} updated` });
     expect(httpEvidence.update).toBe(204);
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/equipment-types/${primaryId}`)).body).toMatchObject({ description: `${unique} updated` });
 
@@ -99,7 +156,7 @@ test("EquipmentTypes CRUD, lifecycle, CSV and deterministic cleanup", async ({ p
     expect(httpEvidence.activate).toBe(200);
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/equipment-types/${primaryId}`)).body).toMatchObject({ isActive: true });
 
-    await page.getByRole("button", { name: /back|voltar/i }).click();
+    await detailForm.getByRole("button", { name: /back|voltar|volver/i }).click();
     await expect(page).toHaveURL(/\/equipment-types\/$/);
     const search = page.getByPlaceholder(searchLabel);
     await search.fill(unique);

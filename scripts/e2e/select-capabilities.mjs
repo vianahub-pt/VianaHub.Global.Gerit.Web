@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { CAPABILITIES } from "./capabilities.mjs";
+import { verifyStructuralSync } from "./structural-sync.mjs";
 
 export { CAPABILITIES };
 
@@ -27,6 +28,7 @@ const ciOnlyPaths = new Set([
   ".github/workflows/ci.yml",
   "scripts/e2e/select-capabilities.mjs",
   "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/structural-sync.mjs",
 ]);
 const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
 const translationPrefixes = new Map([
@@ -118,6 +120,7 @@ export function selectCapabilities(files, {
   baseContents,
   headContents,
   scope: declaredScope = [],
+  scopeTitle = "",
   scopeApproved = false,
 } = {}) {
   if (fullRegression) {
@@ -155,7 +158,7 @@ export function selectCapabilities(files, {
     return { capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [] };
   }
 
-  const scope = normalizeScope(declaredScope);
+  const scope = normalizeScope(declaredScope.length > 0 ? declaredScope : parseScopeFromPullRequestTitle(scopeTitle));
   if (scope.length > 1 && scopeApproved !== true) {
     throw new Error("E2E scope validation failed: multiple capabilities require the e2e-scope-approved label.");
   }
@@ -370,7 +373,7 @@ function isVerifiedBreadcrumbRemoval(files, { baseContents, headContents, transl
   return expectedTest === headTest;
 }
 
-export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, e2eStatus }) {
+export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, structuralSyncVerified, e2eStatus }) {
   if (selectionStatus !== "success") return { pass: false, reason: "selection-did-not-succeed" };
   if (!Array.isArray(capabilities) || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     return { pass: false, reason: "invalid-capability-selection" };
@@ -395,7 +398,14 @@ export function validateE2EOutcome({ selectionStatus, capabilities, scope, scope
   }
 
   if (capabilities.length !== 0) return { pass: false, reason: "capabilities-were-omitted" };
-  if (!["documentation-only", "ci-validation-only", "verified-breadcrumb-removal"].includes(reason)) {
+  if (reason === "verified-structural-sync") {
+    const isEmptyStructuralPlan = Array.isArray(scope) && scope.length === 0 &&
+      scopeApproved === false && e2eStatus === "skipped";
+    return structuralSyncVerified === true && isEmptyStructuralPlan
+      ? { pass: true, reason }
+      : { pass: false, reason: "structural-sync-plan-invalid" };
+  }
+  if (structuralSyncVerified === true || !["documentation-only", "ci-validation-only", "verified-breadcrumb-removal"].includes(reason)) {
     return { pass: false, reason: "e2e-exemption-not-validated" };
   }
   return { pass: true, reason };
@@ -553,6 +563,127 @@ function selfTest() {
     runE2E: false, reason: "verified-breadcrumb-removal",
   }).pass, false);
 
+  assert.deepEqual(selectCapabilities([".github/workflows/ci.yml"], {
+    scopeTitle: "chore(sync): structural branch alignment",
+  }).reason, "ci-validation-only");
+  assert.throws(() => selectCapabilities([], {
+    scopeTitle: "chore(sync): structural branch alignment",
+  }), /changed-file set is empty/);
+  assert.throws(() => selectCapabilities(["domains/operations/users/users-page.tsx"], {
+    scopeTitle: "fix(unknown): change a functional page",
+  }), /unknown capability/);
+
+  const structuralSyncContext = ({
+    eventName = "pull_request",
+    repositoryName = "vianahub-pt/VianaHub.Global.Gerit.Web",
+    repositoryFullName = "vianahub-pt/VianaHub.Global.Gerit.Web",
+    repositoryId = 731,
+    baseRepositoryId = repositoryId,
+    headRepositoryId = repositoryId,
+    baseRepositoryName = repositoryFullName,
+    headRepositoryName = repositoryFullName,
+    baseRef = "develop",
+    headRef = "main",
+    baseSha = "a".repeat(40),
+    headSha = "b".repeat(40),
+    pullRequestBaseSha = baseSha,
+    pullRequestHeadSha = headSha,
+  } = {}) => ({
+    eventName,
+    repositoryName,
+    repository: { id: repositoryId, full_name: repositoryFullName },
+    pullRequest: {
+      base: { ref: baseRef, sha: pullRequestBaseSha, repo: { id: baseRepositoryId, full_name: baseRepositoryName } },
+      head: { ref: headRef, sha: pullRequestHeadSha, repo: { id: headRepositoryId, full_name: headRepositoryName } },
+    },
+    baseSha,
+    headSha,
+    changedFiles: [],
+  });
+  const identicalTreeEvidence = {
+    isAncestor: true,
+    baseTree: "tree-identical",
+    headTree: "tree-identical",
+    changedFiles: [],
+  };
+  const structuralPlan = (context = structuralSyncContext(), evidence = identicalTreeEvidence, files = []) =>
+    compareRefsPlan(files, context.baseSha, context.headSha, {
+      scopeTitle: "chore(sync): structural branch alignment",
+      structuralSyncContext: context,
+    }, () => evidence);
+
+  const verifiedStructuralPlan = structuralPlan();
+  assert.deepEqual(verifiedStructuralPlan, {
+    capabilities: [],
+    scope: [],
+    scopeApproved: false,
+    runE2E: false,
+    reason: "verified-structural-sync",
+    structuralSyncVerified: true,
+    supportingChanges: [],
+  });
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    e2eStatus: "skipped",
+  }).pass, true);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    structuralSyncVerified: false,
+    e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    scope: ["users"],
+    e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    scopeApproved: true,
+    e2eStatus: "skipped",
+  }).pass, false);
+  assert.equal(validateE2EOutcome({
+    selectionStatus: "success",
+    ...verifiedStructuralPlan,
+    e2eStatus: "success",
+  }).pass, false);
+
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    repositoryFullName: "another-owner/another-repository",
+  })), /official repository/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    headRepositoryName: "fork-owner/VianaHub.Global.Gerit.Web",
+    headRepositoryId: 999,
+  })), /official repository/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    headRepositoryId: 999,
+  })), /repository IDs/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    baseRef: "main",
+  })), /changed-file set is empty/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    headRef: "develop",
+  })), /changed-file set is empty/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    eventName: "workflow_dispatch",
+  })), /changed-file set is empty/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    baseRepositoryId: 999,
+  })), /repository IDs/);
+  assert.throws(() => structuralPlan(structuralSyncContext({
+    pullRequestHeadSha: "c".repeat(40),
+  })), /event SHAs/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), identicalTreeEvidence, ["README.md"]), /changed-file list/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, isAncestor: false }), /not an ancestor/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, headTree: "different-tree" }), /trees are not identical/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), {
+    ...identicalTreeEvidence,
+    changedFiles: ["domains/operations/users/users-page.tsx"],
+  }), /Git reports changed files/);
+
   const roleOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Regressar" });
   assert.deepEqual(selectCapabilities(["locales/pt-PT/common.json"], { scope: ["roles"], translationAnalysis: roleOnly }).capabilities, ["roles"]);
   const unknownKey = localeAnalysis({ "navigation.back": "Voltar" }, { "navigation.back": "Regressar" });
@@ -573,7 +704,28 @@ function readComparedFile(ref, file) {
   return ref === "WORKTREE" ? readFileSync(file, "utf8") : readGitFile(ref, file);
 }
 
-function compareRefsPlan(files, baseRef, headRef, options) {
+function compareRefsPlan(files, baseRef, headRef, options, readStructuralSyncEvidence) {
+  const normalizedFiles = files.map((file) => normalizePath(file.trim())).filter(Boolean).sort();
+  if (options.structuralSyncContext) {
+    const structuralSync = verifyStructuralSync({
+      ...options.structuralSyncContext,
+      baseSha: baseRef,
+      headSha: headRef,
+      changedFiles: normalizedFiles,
+    }, readStructuralSyncEvidence);
+    if (structuralSync.verified) {
+      return {
+        capabilities: [],
+        scope: [],
+        scopeApproved: false,
+        runE2E: false,
+        reason: "verified-structural-sync",
+        structuralSyncVerified: true,
+        supportingChanges: [],
+      };
+    }
+  }
+
   const localeFiles = files.map(normalizePath).filter((file) => localeCommonPath.test(file));
   const baseContents = {};
   const headContents = {};
@@ -588,7 +740,6 @@ function compareRefsPlan(files, baseRef, headRef, options) {
   const translationAnalysis = analyzeTranslationChanges(localeFiles, baseContents, headContents);
   const comparisonBase = {};
   const comparisonHead = {};
-  const normalizedFiles = files.map((file) => normalizePath(file.trim())).filter(Boolean).sort();
   const semanticFiles = normalizedFiles.filter((file) => !ciOnlyPaths.has(file));
   if (semanticFiles.length === breadcrumbRemovalFiles.length &&
       semanticFiles.every((file, index) => file === breadcrumbRemovalFiles[index])) {
@@ -639,8 +790,23 @@ try {
       const compareIndex = args.indexOf("--compare");
       const title = readOption(args, "--scope-title");
       const approvedValue = readOption(args, "--scope-approved");
-      const scope = parseScopeFromPullRequestTitle(title ?? "");
-      const options = { scope, scopeApproved: approvedValue === "true" };
+      const eventName = readOption(args, "--event-name");
+      const eventPath = readOption(args, "--event-path");
+      const repositoryName = readOption(args, "--repository-name");
+      let structuralSyncContext;
+      if (eventPath) {
+        if (!eventName || !repositoryName) {
+          throw new Error("Structural sync validation failed: pull request event context is incomplete.");
+        }
+        const event = JSON.parse(readFileSync(eventPath, "utf8"));
+        structuralSyncContext = {
+          eventName,
+          repositoryName,
+          repository: event.repository,
+          pullRequest: event.pull_request,
+        };
+      }
+      const options = { scopeTitle: title ?? "", scopeApproved: approvedValue === "true", structuralSyncContext };
       const files = readFileSync(0, "utf8").split(/\r?\n/);
       const plan = compareIndex >= 0
         ? compareRefsPlan(files, args[compareIndex + 1], args[compareIndex + 2], options)

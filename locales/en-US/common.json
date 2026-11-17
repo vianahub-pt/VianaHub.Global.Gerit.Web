@@ -918,6 +918,8 @@
   "equipmentTypes.detail.metadata": "Record details",
   "equipmentTypes.detail.idLabel": "Identifier",
   "equipmentTypes.detail.createdAtLabel": "Created",
+  "equipmentTypes.detail.id": "Identifier: {{id}}",
+  "equipmentTypes.detail.createdAt": "Created: {{date}}",
   "equipmentTypes.validation.fields": "Enter a name up to 200 characters and a description up to 500 characters.",
   "equipmentTypes.errors.load": "Could not load equipment types.",
   "equipmentTypes.errors.loadDetail": "Could not load equipment type details.",

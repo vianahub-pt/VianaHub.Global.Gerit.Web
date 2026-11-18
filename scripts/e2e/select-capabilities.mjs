@@ -29,6 +29,7 @@ const ciOnlyPaths = new Set([
   "scripts/e2e/select-capabilities.mjs",
   "scripts/e2e/run-capability.mjs",
   "scripts/e2e/structural-sync.mjs",
+  "tests/e2e/auth.setup.ts",
 ]);
 const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
 const translationPrefixes = new Map([
@@ -521,6 +522,9 @@ function selfTest() {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "documentation-only", supportingChanges: [],
   });
   assert.deepEqual(selectCapabilities([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]), {
+    capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
+  });
+  assert.deepEqual(selectCapabilities(["tests/e2e/auth.setup.ts"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
   });
   assert.throws(() => selectCapabilities([]), /changed-file set is empty/);

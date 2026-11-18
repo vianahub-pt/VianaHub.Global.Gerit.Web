@@ -6,13 +6,24 @@ const authFile = "playwright/.auth/user.json";
 const diagnosticFile = "test-results/auth-diagnostic.json";
 
 type AuthDiagnostic = {
+  emailFieldFound: boolean;
+  passwordFieldFound: boolean;
+  submitButtonFound: boolean;
+  submitButtonEnabled: boolean;
   emailDomFilled: boolean;
   passwordDomFilled: boolean;
   validationErrorVisible: boolean;
+  initialHydrationState: string | null;
+  componentHydrated: boolean;
+  loginSubmitHandlerEntered: boolean;
+  prepareSubmitOk: boolean | null;
+  loginSignInCalled: boolean;
   submitButtonClickObserved: boolean;
   formSubmitObserved: boolean;
   loginRequestObserved: boolean;
   loginResponseStatus: number | null;
+  failedRequests: string[];
+  navigationPaths: string[];
   consoleErrors: string[];
   pageErrors: string[];
   finalUrl: string;
@@ -55,13 +66,24 @@ setup("authenticate", async ({ page, context }, testInfo) => {
   const password = process.env.E2E_USER_PASSWORD;
   const secrets = [email, password].filter((value): value is string => Boolean(value));
   const diagnostic: AuthDiagnostic = {
+    emailFieldFound: false,
+    passwordFieldFound: false,
+    submitButtonFound: false,
+    submitButtonEnabled: false,
     emailDomFilled: false,
     passwordDomFilled: false,
     validationErrorVisible: false,
+    initialHydrationState: null,
+    componentHydrated: false,
+    loginSubmitHandlerEntered: false,
+    prepareSubmitOk: null,
+    loginSignInCalled: false,
     submitButtonClickObserved: false,
     formSubmitObserved: false,
     loginRequestObserved: false,
     loginResponseStatus: null,
+    failedRequests: [],
+    navigationPaths: [],
     consoleErrors: [],
     pageErrors: [],
     finalUrl: "",
@@ -85,7 +107,18 @@ setup("authenticate", async ({ page, context }, testInfo) => {
       if (eventName === "submitButtonClickObserved") diagnostic.submitButtonClickObserved = true;
       if (eventName === "formSubmitObserved") diagnostic.formSubmitObserved = true;
     });
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) diagnostic.navigationPaths.push(safeUrl(frame.url()));
+    });
+    page.on("requestfailed", (request) => {
+      if (diagnostic.failedRequests.length >= 10) return;
+      const failure = request.failure()?.errorText ?? "request failed";
+      diagnostic.failedRequests.push(
+        safeMessage(`${request.method()} ${safeUrl(request.url())}: ${failure}`, secrets),
+      );
+    });
     await page.addInitScript(() => {
+      (window as Window & { __GERIT_E2E_DIAGNOSTICS__?: boolean }).__GERIT_E2E_DIAGNOSTICS__ = true;
       type AuthEvent = "submitButtonClickObserved" | "formSubmitObserved";
       const diagnosticWindow = window as Window & {
         __recordE2EAuthEvent?: (eventName: AuthEvent) => Promise<void>;
@@ -125,7 +158,10 @@ setup("authenticate", async ({ page, context }, testInfo) => {
 
     diagnostic.failurePhase = "open login page";
     await page.goto("/login/", { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("login-screen-root")).toBeVisible();
+    const loginRoot = page.getByTestId("login-screen-root");
+    await expect(loginRoot).toBeVisible();
+    diagnostic.initialHydrationState = await loginRoot.getAttribute("data-hydrated");
+    await expect(loginRoot).toHaveAttribute("data-hydrated", "true");
 
     diagnostic.failurePhase = "locate login form";
     const emailInput = page.locator('input[type="email"]');
@@ -133,14 +169,18 @@ setup("authenticate", async ({ page, context }, testInfo) => {
     const submitButton = page.getByRole("button", {
       name: /authenticate|autenticar|sign in|log in|entrar|iniciar sesión|iniciar sess[aã]o/i,
     });
+    diagnostic.emailFieldFound = (await emailInput.count()) === 1;
     await expect(emailInput).toHaveCount(1);
     await expect(emailInput).toBeVisible();
     await expect(emailInput).toBeEnabled();
+    diagnostic.passwordFieldFound = (await passwordInput.count()) === 1;
     await expect(passwordInput).toHaveCount(1);
     await expect(passwordInput).toBeVisible();
     await expect(passwordInput).toBeEnabled();
+    diagnostic.submitButtonFound = (await submitButton.count()) === 1;
     await expect(submitButton).toHaveCount(1);
     await expect(submitButton).toBeVisible();
+    diagnostic.submitButtonEnabled = await submitButton.isEnabled();
     await expect(submitButton).toBeEnabled();
 
     diagnostic.failurePhase = "fill login form";
@@ -218,6 +258,27 @@ setup("authenticate", async ({ page, context }, testInfo) => {
     );
   } finally {
     diagnostic.finalUrl = safeUrl(page.url());
+    try {
+      const componentDiagnostic = await page.evaluate(() => {
+        const diagnosticWindow = window as Window & {
+          __GERIT_E2E_LOGIN_DIAGNOSTIC__?: {
+            componentHydrated: boolean;
+            loginSubmitHandlerEntered: boolean;
+            prepareSubmitOk: boolean | null;
+            loginSignInCalled: boolean;
+          };
+        };
+        return diagnosticWindow.__GERIT_E2E_LOGIN_DIAGNOSTIC__ ?? null;
+      });
+      if (componentDiagnostic) {
+        diagnostic.componentHydrated = componentDiagnostic.componentHydrated;
+        diagnostic.loginSubmitHandlerEntered = componentDiagnostic.loginSubmitHandlerEntered;
+        diagnostic.prepareSubmitOk = componentDiagnostic.prepareSubmitOk;
+        diagnostic.loginSignInCalled = componentDiagnostic.loginSignInCalled;
+      }
+    } catch {
+      // Keep diagnostics safe and deterministic if the page closed during setup.
+    }
     await mkdir(dirname(diagnosticPath), { recursive: true });
     await writeFile(diagnosticPath, JSON.stringify(diagnostic, null, 2), "utf8");
     await testInfo.attach("auth-diagnostic", {

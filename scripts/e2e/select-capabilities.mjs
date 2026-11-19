@@ -13,6 +13,7 @@ const capabilityCodePaths = new Map([
   ["roles", ["app/(workspace)/roles/", "domains/operations/roles/"]],
   ["users", ["app/(workspace)/users/", "domains/operations/users/"]],
   ["equipment-types", ["app/(workspace)/equipment-types/", "domains/operations/equipment-types/"]],
+  ["clients", ["app/(workspace)/clients/", "app/(workspace)/clients-details/", "app/(workspace)/operations/clients/", "app/(workspace)/operations/clients-details/", "domains/operations/clients/"]],
 ]);
 
 const capabilityTestPaths = new Map([
@@ -22,6 +23,7 @@ const capabilityTestPaths = new Map([
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
   ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
+  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts"]],
 ]);
 
 const ciOnlyPaths = new Set([
@@ -39,7 +41,9 @@ const translationPrefixes = new Map([
   ["roles.", "roles"],
   ["users.", "users"],
   ["equipmentTypes.", "equipment-types"],
+  ["clients.", "clients"],
 ]);
+const sharedTranslationPrefixes = ["hubImage."];
 
 const breadcrumbRemovalSourceFiles = [
   "domains/operations/actions/action-form-page.tsx",
@@ -81,6 +85,9 @@ function isDocumentation(file) {
 
 function isKnownSharedSupport(file) {
   return file.startsWith("shared/") ||
+    file.startsWith("tests/shared/") ||
+    file === "tests/e2e/client-ui-visual-review.spec.ts" ||
+    file === "tests/e2e/hub-image-journey.spec.ts" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||
@@ -201,10 +208,16 @@ export function selectCapabilities(files, {
         !Array.isArray(translationAnalysisResult.removedKeys)) {
       throw new Error("E2E scope validation failed: locale change impact could not be determined.");
     }
-    if (translationAnalysisResult.removedKeys.length > 0) {
+    if (translationAnalysisResult.removedKeys.length > 0 &&
+        (translationAnalysisResult.removedKeys.some((key) => !key.startsWith("users.image.")) ||
+          !hasNoRemainingTranslationConsumers(translationAnalysisResult.removedKeys))) {
       throw new Error("E2E scope validation failed: removed locale keys have ambiguous capability impact.");
     }
     for (const key of translationAnalysisResult.changedKeys) {
+      if (sharedTranslationPrefixes.some((prefix) => key.startsWith(prefix))) {
+        supportingChanges.push(...localeFiles);
+        continue;
+      }
       const matches = [...translationPrefixes].filter(([prefix]) => key.startsWith(prefix));
       if (matches.length !== 1) {
         throw new Error("E2E scope validation failed: locale key '" + key + "' has ambiguous capability impact.");
@@ -223,7 +236,8 @@ export function selectCapabilities(files, {
     throw new Error("E2E scope validation failed: functional changes exceed declared scope (" + outsideScope.join(", ") + ").");
   }
 
-  if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0 && localeFiles.length > 0) {
+  if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0 && localeFiles.length > 0 &&
+      translationAnalysisResult.changedKeys.length === 0 && translationAnalysisResult.removedKeys.length === 0) {
     return { capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "translation-no-semantic-change", supportingChanges: [] };
   }
   if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0) {
@@ -485,6 +499,13 @@ function selfTest() {
   assert.deepEqual(scoped(["domains/operations/users/users-page.tsx", "shared/ui/button.tsx"], ["users"]).capabilities, ["users"]);
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
   assert.deepEqual(scoped(["domains/operations/equipment-types/equipment-types-page.tsx"], ["equipment-types"]).capabilities, ["equipment-types"]);
+  assert.deepEqual(scoped(["domains/operations/clients/clients-v1.tsx", "tests/e2e/clients-journey.spec.ts"], ["clients"]).capabilities, ["clients"]);
+  assert.deepEqual(scoped([
+    "domains/operations/clients/clients-v1.tsx",
+    "tests/e2e/client-ui-visual-review.spec.ts",
+    "tests/e2e/hub-image-journey.spec.ts",
+    "tests/shared/ui-standard.test.mjs",
+  ], ["clients"]).capabilities, ["clients"]);
   assert.deepEqual(scoped([
     "domains/operations/equipment-types/equipment-types-page.tsx",
     "playwright.config.ts",
@@ -688,8 +709,14 @@ function selfTest() {
     changedFiles: ["domains/operations/users/users-page.tsx"],
   }), /Git reports changed files/);
 
+  const clientOnly = localeAnalysis({ "clients.v1.fields.name": "Name" }, { "clients.v1.fields.name": "Client name" });
+  assert.deepEqual(selectCapabilities(["locales/en-US/common.json"], { scope: ["clients"], translationAnalysis: clientOnly }).capabilities, ["clients"]);
   const roleOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Regressar" });
   assert.deepEqual(selectCapabilities(["locales/pt-PT/common.json"], { scope: ["roles"], translationAnalysis: roleOnly }).capabilities, ["roles"]);
+  const sharedImageTranslation = localeAnalysis({}, { "hubImage.title": "Image" });
+  assert.deepEqual(selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/pt-PT/common.json"], { scope: ["clients"], translationAnalysis: sharedImageTranslation }).capabilities, ["clients"]);
+  const removedLegacyImageTranslation = { ok: true, changedKeys: [], removedKeys: ["users.image.__selector_self_test__"] };
+  assert.deepEqual(selectCapabilities(["domains/operations/users/users-page.tsx", "locales/pt-PT/common.json"], { scope: ["users"], translationAnalysis: removedLegacyImageTranslation }).capabilities, ["users"]);
   const unknownKey = localeAnalysis({ "navigation.back": "Voltar" }, { "navigation.back": "Regressar" });
   assert.throws(() => selectCapabilities(["locales/pt-PT/common.json"], { scope: ["users"], translationAnalysis: unknownKey }), /ambiguous capability impact/);
   const removedKey = localeAnalysis({ "roles.actions.back": "Voltar" }, {});

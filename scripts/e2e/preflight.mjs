@@ -61,11 +61,25 @@ function hasEquipmentTypesCleanupPlan(specText) {
     specText.includes("410");
 }
 
+function hasClientsCleanupPlan(specText) {
+  return /const createdClientIds = new Set<number>\(\)/.test(specText) &&
+    /createdClientIds\.add\(clientId\)/.test(specText) &&
+    /for \(const id of createdClientIds\)/.test(specText) &&
+    /finally\s*\{[\s\S]*cleanupCreatedClients\(page, createdClientIds\)/.test(specText) &&
+    /api\(page, "DELETE", "\/api\/gerit\/v1\/clients\/" \+ id\)/.test(specText) &&
+    /expect\(\[200, 410\]\)\.toContain\(cleanupDelete\.status\)/.test(specText) &&
+    /api\(page, "GET", "\/api\/gerit\/v1\/clients\/" \+ id\)/.test(specText) &&
+    /expect\(cleanupGone\.status\)\.toBe\(410\)/.test(specText) &&
+    /expect\(deleteResponse\.status\(\)\)\.toBe\(200\)/.test(specText) &&
+    /expect\(goneResponse\.status\(\)\)\.toBe\(410\)/.test(specText);
+}
+
 export async function evaluatePreflight({
   capability,
   mode = "mutating",
   stage = "execution",
   mutatingApproved = false,
+  clientMutationApproved = false,
   platform = process.platform,
   git = inspectGit(),
   config = {},
@@ -94,6 +108,8 @@ export async function evaluatePreflight({
   checks.canonicalSpec = checks.capabilityAllowed && fileExists(spec);
   if (capability === "equipment-types" && checks.canonicalSpec) {
     checks.cleanupPlan = hasEquipmentTypesCleanupPlan(await readText(spec));
+  } else if (capability === "clients" && checks.canonicalSpec) {
+    checks.cleanupPlan = hasClientsCleanupPlan(await readText(spec));
   } else {
     checks.cleanupPlan = checks.canonicalSpec;
   }
@@ -106,7 +122,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      capability === "equipment-types"
+      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -198,6 +214,27 @@ async function selfTest() {
   assert.equal(occupiedPort.checks.portAvailable, false);
   const staleBuild = await evaluatePreflight({ ...common, buildCurrent: async () => false });
   assert.equal(staleBuild.checks.buildCurrent, false);
+  const clientSpec = await readFile(resolve(repoRoot, "tests/e2e/clients-journey.spec.ts"), "utf8");
+  const clientBase = {
+    ...common,
+    capability: "clients",
+    git: { ...validGit, branch: "feature/client-crud-v1" },
+    stage: "prepare",
+    buildCurrent: async () => true,
+    fileExists: (path) => path.endsWith("clients-journey.spec.ts"),
+    readText: async () => clientSpec,
+  };
+  const clientNoOptIn = await evaluatePreflight({ ...clientBase, mutatingApproved: true, clientMutationApproved: false });
+  assert.equal(clientNoOptIn.checks.canonicalSpec, true);
+  assert.equal(clientNoOptIn.checks.cleanupPlan, true);
+  assert.equal(clientNoOptIn.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const clientNoFlag = await evaluatePreflight({ ...clientBase, mutatingApproved: false, clientMutationApproved: true });
+  assert.equal(clientNoFlag.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const clientApproved = await evaluatePreflight({ ...clientBase, mutatingApproved: true, clientMutationApproved: true });
+  assert.equal(clientApproved.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(clientApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  const clientWithoutCleanup = await evaluatePreflight({ ...clientBase, readText: async () => "randomUUID DELETE finally" });
+  assert.equal(clientWithoutCleanup.checks.cleanupPlan, false);
   const readOnly = await evaluatePreflight({ ...common, mode: "read-only", mutatingApproved: false });
   assert.equal(readOnly.authorization, "READ_ONLY_AUTHORIZED");
   const missingCleanup = await evaluatePreflight({ ...common, readText: async () => "randomUUID" });
@@ -212,7 +249,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     try {
       const args = parseArgs(process.argv.slice(2));
       const config = await loadConfig();
-      const result = await evaluatePreflight({ ...args, config });
+      const result = await evaluatePreflight({
+        ...args,
+        clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
+        config,
+      });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
       if (result.status !== "PRECHECK_CONFIG_PASS" || result.authorization.endsWith("_PENDING")) process.exitCode = 2;
     } catch (error) {

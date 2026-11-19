@@ -83,6 +83,9 @@ function selfTest() {
   assert.deepEqual(getRunPlan("equipment-types", { CI: "true" }), {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
+  assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
+    spec: "tests/e2e/clients-journey.spec.ts", project: "journey", mode: "canonical-journey",
+  });
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
     specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],
   });
@@ -224,6 +227,7 @@ if (localExecution) {
         mode,
         stage,
         mutatingApproved,
+        clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
         config,
       });
       console.log("[E2E preflight] " + JSON.stringify(report));

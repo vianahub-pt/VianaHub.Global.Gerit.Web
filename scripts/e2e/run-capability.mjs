@@ -18,6 +18,9 @@ function fail(message) {
 }
 
 function getRunPlan(capability, env = process.env) {
+  if (capability === "clients" && env.CI === "true") {
+    return { spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression" };
+  }
   if (capability === "users" && (env.CI === "true" || !env.E2E_USERS_QA_MUTATION_APPROVAL)) {
     return { spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression" };
   }
@@ -84,7 +87,7 @@ function selfTest() {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    spec: "tests/e2e/clients-journey.spec.ts", project: "journey", mode: "canonical-journey",
+    spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression",
   });
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
     specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],

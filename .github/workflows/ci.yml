@@ -113,6 +113,10 @@ jobs:
           scope=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).scope.join(","))' "$plan")
           scope_approved=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).scopeApproved))' "$plan")
           run_e2e=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).runE2E))' "$plan")
+          functional_capabilities=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).functionalCapabilities ?? JSON.parse(process.argv[1]).capabilities))' "$plan")
+          presentation_consumers=$(node -e 'process.stdout.write(JSON.stringify(JSON.parse(process.argv[1]).presentationConsumers ?? []))' "$plan")
+          presentation_consumers_csv=$(node -e 'process.stdout.write((JSON.parse(process.argv[1]).presentationConsumers ?? []).join(","))' "$plan")
+          shared_regression_required=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).sharedUiRegressionRequired === true))' "$plan")
           structural_sync_verified=$(node -e 'process.stdout.write(String(JSON.parse(process.argv[1]).structuralSyncVerified === true))' "$plan")
           reason=$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).reason)' "$plan")
           echo "Declared E2E scope: $scope (approved=$scope_approved)"
@@ -123,6 +127,10 @@ jobs:
           echo "scope_json=$scope_json" >> "$GITHUB_OUTPUT"
           echo "scope_approved=$scope_approved" >> "$GITHUB_OUTPUT"
           echo "run_e2e=$run_e2e" >> "$GITHUB_OUTPUT"
+          echo "functional_capabilities=$functional_capabilities" >> "$GITHUB_OUTPUT"
+          echo "presentation_consumers=$presentation_consumers" >> "$GITHUB_OUTPUT"
+          echo "presentation_consumers_csv=$presentation_consumers_csv" >> "$GITHUB_OUTPUT"
+          echo "shared_regression_required=$shared_regression_required" >> "$GITHUB_OUTPUT"
           echo "structural_sync_verified=$structural_sync_verified" >> "$GITHUB_OUTPUT"
           echo "reason=$reason" >> "$GITHUB_OUTPUT"
 
@@ -141,6 +149,11 @@ jobs:
       - name: Install dependencies
         if: ${{ steps.select.outputs.run_e2e == 'true' }}
         run: npm ci
+
+      - name: Run required static and focused regression tests
+        id: run-regression-tests
+        if: ${{ steps.select.outputs.run_e2e == 'true' }}
+        run: npm test
 
       - name: Install Playwright Chromium
         if: ${{ steps.select.outputs.run_e2e == 'true' }}
@@ -174,6 +187,7 @@ jobs:
           GERIT_API_BASE_URL: ${{ vars.GERIT_API_BASE_URL }}
           SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
           SELECTED_SCOPE: ${{ steps.select.outputs.scope }}
+          SHARED_REGRESSION_REQUIRED: ${{ steps.select.outputs.shared_regression_required }}
           SCOPE_APPROVED: ${{ steps.select.outputs.scope_approved }}
         run: |
           mapfile -t capabilities < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
@@ -181,7 +195,11 @@ jobs:
             echo "E2E selection requested execution but returned no capabilities."
             exit 1
           fi
-          printf 'Running selected capabilities in one Playwright process: %s\n' "${capabilities[*]}"
+          printf 'Running functional capabilities in one Playwright process: %s\n' "${capabilities[*]}"
+          if [ "$SHARED_REGRESSION_REQUIRED" = "true" ] && [ "${capabilities[*]}" != "clients" ]; then
+            echo "Shared UI regression requires the selected mocked Client integration suite; unexpected capability plan."
+            exit 1
+          fi
           scope_args=(--scope "$SELECTED_SCOPE")
           if [ "$SCOPE_APPROVED" = "true" ]; then scope_args+=(--scope-approved); fi
           npm run test:e2e:capability -- "${scope_args[@]}" "${capabilities[@]}"
@@ -207,7 +225,13 @@ jobs:
           STRUCTURAL_SYNC_VERIFIED: ${{ steps.select.outputs.structural_sync_verified }}
           SELECTION_REASON: ${{ steps.select.outputs.reason }}
           E2E_STATUS: ${{ steps.run-selected.outcome }}
+          FUNCTIONAL_CAPABILITIES: ${{ steps.select.outputs.functional_capabilities }}
+          PRESENTATION_CONSUMERS: ${{ steps.select.outputs.presentation_consumers }}
+          SHARED_REGRESSION_REQUIRED: ${{ steps.select.outputs.shared_regression_required }}
+          SHARED_REGRESSION_STATUS: ${{ steps.run-selected.outcome }}
+          SHARED_REGRESSION_CONSUMERS: ${{ steps.select.outputs.presentation_consumers }}
+          REGRESSION_TESTS_STATUS: ${{ steps.run-regression-tests.outcome }}
         run: |
           node scripts/e2e/select-capabilities.mjs --validate-outcome <<EOF
-          {"selectionStatus":"$SELECTION_STATUS","capabilities":$SELECTED_CAPABILITIES,"scope":$SELECTED_SCOPE_JSON,"scopeApproved":$SCOPE_APPROVED,"runE2E":$RUN_E2E,"reason":"$SELECTION_REASON","structuralSyncVerified":$STRUCTURAL_SYNC_VERIFIED,"e2eStatus":"$E2E_STATUS"}
+          {"selectionStatus":"$SELECTION_STATUS","capabilities":$SELECTED_CAPABILITIES,"functionalCapabilities":$FUNCTIONAL_CAPABILITIES,"scope":$SELECTED_SCOPE_JSON,"scopeApproved":$SCOPE_APPROVED,"runE2E":$RUN_E2E,"reason":"$SELECTION_REASON","structuralSyncVerified":$STRUCTURAL_SYNC_VERIFIED,"e2eStatus":"$E2E_STATUS","sharedUiRegressionRequired":$SHARED_REGRESSION_REQUIRED,"presentationConsumers":$PRESENTATION_CONSUMERS,"sharedRegressionConsumers":$SHARED_REGRESSION_CONSUMERS,"sharedRegressionStatus":"$SHARED_REGRESSION_STATUS","regressionTestsStatus":"$REGRESSION_TESTS_STATUS"}
           EOF

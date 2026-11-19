@@ -11,6 +11,12 @@ const ACCESS_TOKEN_CLAIMS = {
   permissions: {
     Users: ["GetBy", "Create", "Update"],
     Clients: ["GetPaged", "GetBy", "Create", "Update"],
+    Actions: ["GetPaged", "GetBy", "Create", "Update"],
+    Roles: ["GetPaged", "GetBy", "Create", "Update"],
+    Teams: ["GetPaged", "GetBy", "Create", "Update"],
+    EquipmentTypes: ["GetPaged", "GetBy", "Create", "Update"],
+    Vehicles: ["GetPaged", "GetBy", "Create", "Update"],
+    Equipments: ["GetPaged", "GetBy", "Create", "Update"],
   },
   exp: Math.floor(Date.now() / 1000) + 3600,
 };
@@ -289,6 +295,36 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await page.goto("/users/9003/");
   await expect(hubImage.locator("img")).toHaveAttribute("src", /broken\.svg/);
   await expect(hubImage.getByRole("status")).not.toHaveText("");
+
+
+  // Shared Textarea regression for presentation-only consumers; all API traffic is intercepted above.
+  await page.goto("/actions/new/");
+  await expect(page.getByTestId("action-fields-section")).toBeVisible();
+  await page.getByTestId("action-description-field").locator("textarea").fill("mocked Actions description");
+  await expect(page.getByTestId("action-description-field").locator("textarea")).toHaveValue("mocked Actions description");
+  await page.goto("/roles/new/");
+  await expect(page.getByTestId("role-fields-section")).toBeVisible();
+  await page.locator("#role-description").fill("mocked Roles description");
+  await expect(page.locator("#role-description")).toHaveValue("mocked Roles description");
+  await page.goto("/teams/new/");
+  await expect(page.getByTestId("team-fields-section")).toBeVisible();
+  await page.locator("#team-description").fill("mocked Teams description");
+  await expect(page.locator("#team-description")).toHaveValue("mocked Teams description");
+  await page.goto("/equipment-types/new/");
+  await expect(page.getByTestId("equipment-type-fields-section")).toBeVisible();
+  await page.locator("#equipment-type-description").fill("mocked EquipmentTypes description");
+  await expect(page.locator("#equipment-type-description")).toHaveValue("mocked EquipmentTypes description");
+  await page.goto("/vehicles/");
+  const vehiclePlate = page.getByPlaceholder("Plate");
+  await expect(vehiclePlate).toBeVisible();
+  await vehiclePlate.fill("MOCK-PLATE");
+  await expect(vehiclePlate).toHaveValue("MOCK-PLATE");
+  await page.goto("/equipments/");
+  const equipmentName = page.getByPlaceholder("Name");
+  await expect(equipmentName).toBeVisible();
+  await equipmentName.fill("Mock equipment");
+  await expect(equipmentName).toHaveValue("Mock equipment");
+  expect(mutations.some((item) => ["/actions", "/roles", "/teams", "/equipment-types", "/vehicles", "/equipments"].some((path) => item.path.endsWith(path)))).toBe(false);
 
   // Preferences tab navigation and shared switch use only mocked API requests.
   await page.goto("/preferences/");

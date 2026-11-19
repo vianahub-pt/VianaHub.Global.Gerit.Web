@@ -1,5 +1,5 @@
-import { ClientsCreatePage } from "@/domains/operations/clients";
+import { ClientFormPage } from "@/domains/operations/clients/clients-v1";
 
 export default function ClientsCreatePageWrapper() {
-  return <ClientsCreatePage />;
+  return <ClientFormPage />;
 }

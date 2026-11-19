@@ -77,6 +77,28 @@ test("preflight separates read-only authorization from pending mutating authoriz
   assert.equal(readOnly.authorization, "READ_ONLY_AUTHORIZED");
   assert.equal(pending.authorization, "MUTATING_AUTHORIZATION_PENDING");
   assert.equal(otherCapability.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const clientWithoutOptIn = await evaluatePreflight({
+    ...valid,
+    capability: "clients",
+    git: { ...git, branch: "feature/client-crud-v1" },
+    clientMutationApproved: false,
+  });
+  const clientWithoutFlag = await evaluatePreflight({
+    ...valid,
+    capability: "clients",
+    git: { ...git, branch: "feature/client-crud-v1" },
+    mutatingApproved: false,
+    clientMutationApproved: true,
+  });
+  const clientApproved = await evaluatePreflight({
+    ...valid,
+    capability: "clients",
+    git: { ...git, branch: "feature/client-crud-v1" },
+    clientMutationApproved: true,
+  });
+  assert.equal(clientWithoutOptIn.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal(clientWithoutFlag.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal(clientApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
 });
 
 test("runner blocks before build when preflight fails and still invokes cleanup", async () => {

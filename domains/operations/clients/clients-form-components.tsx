@@ -1,6 +1,8 @@
 "use client";
 
 import clsx from "clsx";
+import { useId } from "react";
+import { HubSwitch } from "@/shared/ui/hub-switch";
 import { Input } from "@/shared/ui/input";
 import {
   Select,
@@ -176,24 +178,25 @@ export function ToggleField({
   offLabel,
   name,
 }: ToggleFieldProps) {
+  const generatedId = useId();
+  const switchId = `client-toggle-${generatedId}`;
+  const labelId = `${switchId}-label`;
+  const valueId = `${switchId}-value`;
   return (
     <div data-testid={name ? `clients-form-toggle-${name}` : undefined} className={clsx("flex flex-col gap-2", className)}>
-      <span className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
+      <span id={labelId} className="mb-1.5 block text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
         {label}
       </span>
       <div className="flex w-full">
-        <label className="relative inline-flex">
-          <input
-            type="checkbox"
+        <label htmlFor={switchId} className="relative inline-flex cursor-pointer items-center">
+          <HubSwitch
+            id={switchId}
             checked={checked}
             disabled={disabled}
-            onChange={(event) => onChange(event.target.checked)}
-            className="peer sr-only"
+            onCheckedChange={onChange}
+            aria-labelledby={labelId + " " + valueId}
           />
-          <span className="flex h-7 w-12 items-center rounded-full bg-input px-1 transition-colors peer-checked:bg-primary dark:bg-input dark:peer-checked:bg-primary">
-            <span className="h-5 w-5 rounded-full bg-card transition-transform peer-checked:translate-x-5" />
-          </span>
-          <span className="ml-2 flex items-center text-sm text-foreground dark:text-foreground">
+          <span id={valueId} className="ml-2 flex items-center text-sm text-foreground dark:text-foreground">
             {checked ? onLabel : offLabel}
           </span>
         </label>

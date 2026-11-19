@@ -22,7 +22,9 @@ export {
   ToastAction,
 } from "@/shared/ui/toast";
 export {
+  NativeSelect,
   Select,
+  type NativeSelectProps,
   SelectGroup,
   SelectValue,
   SelectTrigger,
@@ -44,3 +46,7 @@ export {
   AlertDialogAction,
   AlertDialogCancel,
 } from "@/shared/ui/alert-dialog";
+export { HubImage } from "@/shared/ui/hub-image";
+export { HubSwitch } from "@/shared/ui/hub-switch";
+export type { HubSwitchProps } from "@/shared/ui/hub-switch";
+export type { HubImageProps } from "@/shared/ui/hub-image";

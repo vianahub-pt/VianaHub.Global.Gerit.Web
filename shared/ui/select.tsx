@@ -5,6 +5,19 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/shared/ui/utils";
 
+const nativeSelectClasses = "flex h-12 w-full rounded-[12px] border border-border bg-card px-4 py-2 text-sm font-normal text-foreground shadow-none outline-none transition-colors hover:border-ring/60 focus-visible:ring-2 focus-visible:ring-ring/55 aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive/30 disabled:cursor-not-allowed disabled:opacity-50";
+
+export interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {}
+
+const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
+  ({ className, children, ...props }, ref) => (
+    <select ref={ref} className={cn(nativeSelectClasses, className)} {...props}>
+      {children}
+    </select>
+  ),
+);
+NativeSelect.displayName = "NativeSelect";
+
 const Select = SelectPrimitive.Root;
 
 const SelectGroup = SelectPrimitive.Group;
@@ -18,7 +31,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-12 w-full items-center justify-between rounded-[12px] border border-border bg-card px-4 py-2 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/55 disabled:cursor-not-allowed disabled:opacity-50",
+      "flex h-12 w-full items-center justify-between rounded-[12px] border border-border bg-card px-4 py-2 text-sm font-normal text-foreground outline-none transition-colors placeholder:text-muted-foreground hover:border-ring/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/55 aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive/30 disabled:cursor-not-allowed disabled:opacity-50",
       "data-[placeholder]:text-muted-foreground",
       className,
     )}
@@ -93,6 +106,7 @@ const SelectItem = React.forwardRef<
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 export {
+  NativeSelect,
   Select,
   SelectGroup,
   SelectValue,

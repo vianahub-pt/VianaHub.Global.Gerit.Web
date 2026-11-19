@@ -9,7 +9,7 @@ import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Input } from "@/shared/ui/input";
-import { ImagePicker } from "@/shared/ui/image-picker";
+import { HubImage } from "@/shared/ui";
 import {
   AlertDialog,
   AlertDialogCancel,
@@ -158,7 +158,7 @@ export function UserFormPage({ userId }: UserFormPageProps) {
       return;
     }
     if (pendingImageFile) {
-      toast({ title: t("users.toasts.validationTitle"), description: t("users.image.uploadUnavailable"), variant: "destructive" });
+      toast({ title: t("users.toasts.validationTitle"), description: t("hubImage.uploadUnavailable"), variant: "destructive" });
       return;
     }
     if (!editing) {
@@ -324,7 +324,7 @@ export function UserFormPage({ userId }: UserFormPageProps) {
                     </div>
                   ) : null}
                 </div>
-                <ImagePicker value={urlImage} onChange={setUrlImage} pendingFile={pendingImageFile} onPendingFileChange={setPendingImageFile} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} />
+                <HubImage urlImage={urlImage} onUrlImageChange={setUrlImage} pendingFile={pendingImageFile} onPendingFileChange={setPendingImageFile} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} />
               </div>
             </section>
             <div className="flex justify-start gap-3">

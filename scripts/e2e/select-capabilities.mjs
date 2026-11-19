@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { CAPABILITIES } from "./capabilities.mjs";
 import { verifyStructuralSync } from "./structural-sync.mjs";
+import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresentationAdapter } from "./impact-classifier.mjs";
 
 export { CAPABILITIES };
 
@@ -13,6 +14,7 @@ const capabilityCodePaths = new Map([
   ["roles", ["app/(workspace)/roles/", "domains/operations/roles/"]],
   ["users", ["app/(workspace)/users/", "domains/operations/users/"]],
   ["equipment-types", ["app/(workspace)/equipment-types/", "domains/operations/equipment-types/"]],
+  ["clients", ["app/(workspace)/clients/", "app/(workspace)/clients-details/", "app/(workspace)/operations/clients/", "app/(workspace)/operations/clients-details/", "domains/operations/clients/"]],
 ]);
 
 const capabilityTestPaths = new Map([
@@ -22,6 +24,7 @@ const capabilityTestPaths = new Map([
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
   ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
+  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts"]],
 ]);
 
 const ciOnlyPaths = new Set([
@@ -39,7 +42,9 @@ const translationPrefixes = new Map([
   ["roles.", "roles"],
   ["users.", "users"],
   ["equipmentTypes.", "equipment-types"],
+  ["clients.", "clients"],
 ]);
+const sharedTranslationPrefixes = ["hubImage."];
 
 const breadcrumbRemovalSourceFiles = [
   "domains/operations/actions/action-form-page.tsx",
@@ -81,6 +86,10 @@ function isDocumentation(file) {
 
 function isKnownSharedSupport(file) {
   return file.startsWith("shared/") ||
+    file.startsWith("tests/shared/") ||
+    file === "tests/e2e/client-ui-visual-review.spec.ts" ||
+    file === "tests/e2e/hub-image-journey.spec.ts" ||
+    file === "tests/e2e/impact-classifier.test.mjs" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||
@@ -120,6 +129,7 @@ export function selectCapabilities(files, {
   translationAnalysis,
   baseContents,
   headContents,
+  testContents = {},
   scope: declaredScope = [],
   scopeTitle = "",
   scopeApproved = false,
@@ -167,6 +177,7 @@ export function selectCapabilities(files, {
   const changedCodeCapabilities = new Set();
   const changedTestCapabilities = new Set();
   const supportingChanges = [];
+  const presentationConsumers = new Set();
   const localeFiles = nonCiChanges.filter((file) => localeCommonPath.test(file));
   let translationAnalysisResult = translationAnalysis;
 
@@ -176,7 +187,15 @@ export function selectCapabilities(files, {
     let matched = false;
     for (const [capability, paths] of capabilityCodePaths) {
       if (paths.some((path) => matchesPath(file, path))) {
-        changedCodeCapabilities.add(capability);
+        const proof = PRESENTATION_ADAPTER_FILES.includes(file)
+          ? provePresentationAdapter(file, baseContents?.[file], headContents?.[file], testContents)
+          : null;
+        if (proof) {
+          presentationConsumers.add(proof.capability);
+          supportingChanges.push(file);
+        } else {
+          changedCodeCapabilities.add(capability);
+        }
         matched = true;
       }
     }
@@ -201,10 +220,21 @@ export function selectCapabilities(files, {
         !Array.isArray(translationAnalysisResult.removedKeys)) {
       throw new Error("E2E scope validation failed: locale change impact could not be determined.");
     }
-    if (translationAnalysisResult.removedKeys.length > 0) {
+    if (translationAnalysisResult.removedKeys.length > 0 &&
+        (translationAnalysisResult.removedKeys.some((key) => !key.startsWith("users.image.")) ||
+          !hasNoRemainingTranslationConsumers(translationAnalysisResult.removedKeys))) {
       throw new Error("E2E scope validation failed: removed locale keys have ambiguous capability impact.");
     }
     for (const key of translationAnalysisResult.changedKeys) {
+      if (key.startsWith("preferences.tabs.")) {
+        presentationConsumers.add("user-preferences");
+        supportingChanges.push(...localeFiles);
+        continue;
+      }
+      if (sharedTranslationPrefixes.some((prefix) => key.startsWith(prefix))) {
+        supportingChanges.push(...localeFiles);
+        continue;
+      }
       const matches = [...translationPrefixes].filter(([prefix]) => key.startsWith(prefix));
       if (matches.length !== 1) {
         throw new Error("E2E scope validation failed: locale key '" + key + "' has ambiguous capability impact.");
@@ -223,7 +253,8 @@ export function selectCapabilities(files, {
     throw new Error("E2E scope validation failed: functional changes exceed declared scope (" + outsideScope.join(", ") + ").");
   }
 
-  if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0 && localeFiles.length > 0) {
+  if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0 && localeFiles.length > 0 &&
+      translationAnalysisResult.changedKeys.length === 0 && translationAnalysisResult.removedKeys.length === 0) {
     return { capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "translation-no-semantic-change", supportingChanges: [] };
   }
   if (changedCodeCapabilities.size === 0 && changedTestCapabilities.size === 0) {
@@ -235,12 +266,17 @@ export function selectCapabilities(files, {
   }
 
   return {
-    capabilities: [...scope],
+    capabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     scope: [...scope],
     scopeApproved: scope.length > 1 && scopeApproved === true,
     runE2E: true,
-    reason: "declared-capability-scope",
+    reason: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/")) ? "functional-and-shared-ui-regression" : "declared-capability-scope",
     supportingChanges: [...new Set(supportingChanges)].sort(),
+    functionalCapabilities: scope.filter((capability) => changedCapabilities.has(capability)),
+    presentationConsumers: [...presentationConsumers].sort(),
+    sharedUiRegressionRequired: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/")) || localeFiles.length > 0,
+    sharedComponents: [...new Set(nonCiChanges.filter((file) => file.startsWith("shared/ui/")).map((file) => file.slice("shared/ui/".length).replace(/\.(?:tsx?|jsx?)$/, "")))].sort(),
+    requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
 }
 
@@ -295,7 +331,8 @@ function hasNoRemainingTranslationConsumers(keys) {
         "--",
         key,
         ":(exclude)locales/**",
-        ":(exclude)scripts/e2e/select-capabilities.mjs",
+        ":(exclude)tests/**",
+        ":(exclude)scripts/e2e/**",
       ], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
       return false;
     } catch (error) {
@@ -374,7 +411,7 @@ function isVerifiedBreadcrumbRemoval(files, { baseContents, headContents, transl
   return expectedTest === headTest;
 }
 
-export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, structuralSyncVerified, e2eStatus }) {
+export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, structuralSyncVerified, e2eStatus, functionalCapabilities, sharedUiRegressionRequired = false, presentationConsumers = [], sharedRegressionConsumers = [], sharedRegressionStatus, regressionTestsStatus }) {
   if (selectionStatus !== "success") return { pass: false, reason: "selection-did-not-succeed" };
   if (!Array.isArray(capabilities) || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     return { pass: false, reason: "invalid-capability-selection" };
@@ -392,6 +429,18 @@ export function validateE2EOutcome({ selectionStatus, capabilities, scope, scope
     if (capabilities.some((item) => !scope.includes(item)) ||
         scope.some((item) => !capabilities.includes(item))) {
       return { pass: false, reason: "selected-capabilities-do-not-match-scope" };
+    }
+    if (Array.isArray(functionalCapabilities) && (functionalCapabilities.length !== capabilities.length ||
+        functionalCapabilities.some((item) => !capabilities.includes(item)))) {
+      return { pass: false, reason: "functional-capabilities-were-omitted" };
+    }
+    if (sharedUiRegressionRequired) {
+      if (!Array.isArray(presentationConsumers) || presentationConsumers.length === 0 ||
+          new Set(presentationConsumers).size !== presentationConsumers.length) return { pass: false, reason: "invalid-presentation-consumer-plan" };
+      if (!Array.isArray(sharedRegressionConsumers) || presentationConsumers.some((item) => !sharedRegressionConsumers.includes(item)) ||
+          sharedRegressionConsumers.length !== presentationConsumers.length) return { pass: false, reason: "shared-regression-consumers-do-not-match-plan" };
+      if (sharedRegressionStatus !== "success") return { pass: false, reason: "shared-regression-did-not-succeed" };
+      if (regressionTestsStatus !== "success") return { pass: false, reason: "required-regression-tests-did-not-succeed" };
     }
     return e2eStatus === "success"
       ? { pass: true, reason: "selected-e2e-succeeded" }
@@ -485,6 +534,13 @@ function selfTest() {
   assert.deepEqual(scoped(["domains/operations/users/users-page.tsx", "shared/ui/button.tsx"], ["users"]).capabilities, ["users"]);
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
   assert.deepEqual(scoped(["domains/operations/equipment-types/equipment-types-page.tsx"], ["equipment-types"]).capabilities, ["equipment-types"]);
+  assert.deepEqual(scoped(["domains/operations/clients/clients-v1.tsx", "tests/e2e/clients-journey.spec.ts"], ["clients"]).capabilities, ["clients"]);
+  assert.deepEqual(scoped([
+    "domains/operations/clients/clients-v1.tsx",
+    "tests/e2e/client-ui-visual-review.spec.ts",
+    "tests/e2e/hub-image-journey.spec.ts",
+    "tests/shared/ui-standard.test.mjs",
+  ], ["clients"]).capabilities, ["clients"]);
   assert.deepEqual(scoped([
     "domains/operations/equipment-types/equipment-types-page.tsx",
     "playwright.config.ts",
@@ -688,8 +744,14 @@ function selfTest() {
     changedFiles: ["domains/operations/users/users-page.tsx"],
   }), /Git reports changed files/);
 
+  const clientOnly = localeAnalysis({ "clients.v1.fields.name": "Name" }, { "clients.v1.fields.name": "Client name" });
+  assert.deepEqual(selectCapabilities(["locales/en-US/common.json"], { scope: ["clients"], translationAnalysis: clientOnly }).capabilities, ["clients"]);
   const roleOnly = localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Regressar" });
   assert.deepEqual(selectCapabilities(["locales/pt-PT/common.json"], { scope: ["roles"], translationAnalysis: roleOnly }).capabilities, ["roles"]);
+  const sharedImageTranslation = localeAnalysis({}, { "hubImage.title": "Image" });
+  assert.deepEqual(selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/pt-PT/common.json"], { scope: ["clients"], translationAnalysis: sharedImageTranslation }).capabilities, ["clients"]);
+  const removedLegacyImageTranslation = { ok: true, changedKeys: [], removedKeys: ["users.image.__selector_self_test__"] };
+  assert.deepEqual(selectCapabilities(["domains/operations/users/users-page.tsx", "locales/pt-PT/common.json"], { scope: ["users"], translationAnalysis: removedLegacyImageTranslation }).capabilities, ["users"]);
   const unknownKey = localeAnalysis({ "navigation.back": "Voltar" }, { "navigation.back": "Regressar" });
   assert.throws(() => selectCapabilities(["locales/pt-PT/common.json"], { scope: ["users"], translationAnalysis: unknownKey }), /ambiguous capability impact/);
   const removedKey = localeAnalysis({ "roles.actions.back": "Voltar" }, {});
@@ -756,11 +818,27 @@ function compareRefsPlan(files, baseRef, headRef, options, readStructuralSyncEvi
       throw new Error("E2E scope validation failed: Breadcrumb removal diff could not be compared between base and head.");
     }
   }
+  const presentationBase = {};
+  const presentationHead = {};
+  const testContents = {};
+  const changedPresentationAdapters = normalizedFiles.filter((file) => PRESENTATION_ADAPTER_FILES.includes(file));
+  try {
+    for (const file of changedPresentationAdapters) {
+      presentationBase[file] = readGitFile(baseRef, file);
+      presentationHead[file] = readComparedFile(headRef, file);
+    }
+    if (changedPresentationAdapters.length > 0) {
+      for (const file of PRESENTATION_REGRESSION_TESTS) testContents[file] = readComparedFile(headRef, file);
+    }
+  } catch {
+    throw new Error("E2E scope validation failed: presentation evidence or required regression tests could not be read.");
+  }
   return selectCapabilities(files, {
     ...options,
     translationAnalysis,
-    baseContents: comparisonBase,
-    headContents: comparisonHead,
+    baseContents: { ...comparisonBase, ...presentationBase },
+    headContents: { ...comparisonHead, ...presentationHead },
+    testContents,
   });
 }
 
@@ -771,6 +849,7 @@ function readOption(args, name) {
   return args[index + 1];
 }
 
+if (import.meta.main) {
 try {
   if (process.argv.includes("--self-test")) {
     selfTest();
@@ -821,4 +900,5 @@ try {
 } catch (error) {
   console.error("[E2E selection] " + (error instanceof Error ? error.message : "selection failed."));
   process.exitCode = 2;
+}
 }

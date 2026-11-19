@@ -5,4 +5,5 @@ export const CAPABILITIES = Object.freeze([
   "roles",
   "users",
   "equipment-types",
+  "clients",
 ]);

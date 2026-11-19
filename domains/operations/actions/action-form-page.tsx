@@ -8,6 +8,7 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { Input } from "@/shared/ui/input";
+import { Textarea } from "@/shared/ui/textarea";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import {
   emptyActionCreateFormState,
@@ -212,7 +213,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
                 ) : (
                   <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.name")}</span><Input required maxLength={50} value={createFormState.name} onChange={(event) => setCreateFormState((current) => ({ ...current, name: event.target.value }))} disabled={submitting} /></label>
                 )}
-                <label data-testid="action-description-field" className="block w-full"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.description")}</span><textarea required maxLength={255} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring disabled:opacity-50" disabled={submitting || deleteSubmitting} /></label>
+                <label data-testid="action-description-field" className="block w-full"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.description")}</span><Textarea required maxLength={255} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting || deleteSubmitting} /></label>
               </div>
             </section>
             <div className="flex justify-start gap-3">

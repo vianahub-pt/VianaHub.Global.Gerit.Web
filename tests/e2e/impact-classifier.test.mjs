@@ -72,6 +72,10 @@ test("package test gate and CI runner execute every required shared regression a
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   const testCommand = packageJson.scripts.test;
   const runner = readFileSync("scripts/e2e/run-capability.mjs", "utf8");
+  const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
+  const e2eJob = workflow.slice(workflow.indexOf("  e2e-validation:"));
+  assert.ok(e2eJob.indexOf("name: Install dependencies") < e2eJob.indexOf("name: Test capability selection and E2E outcomes"), "CI must install the TypeScript parser dependency before selector self-tests");
+  assert.ok(e2eJob.indexOf("name: Install dependencies") < e2eJob.indexOf("name: Select affected E2E journeys"), "CI must install the TypeScript parser dependency before capability selection");
   for (const file of PRESENTATION_REGRESSION_TESTS) {
     if (file.endsWith(".spec.ts")) {
       assert.ok(runner.includes(file), "CI runner must select " + file);

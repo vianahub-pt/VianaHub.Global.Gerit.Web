@@ -428,7 +428,7 @@ function userPreferencesReducer(
 export function useUserPreferences() {
   const { session, fetchWithAuth } = useAuth();
   const { resolvedTheme, setTheme } = useTheme();
-  const { state: translationState, setLocale, t } = useTranslation();
+  const { state: translationState, setLocale: setTranslationLocale, t } = useTranslation();
   const [state, dispatch] = useReducer(userPreferencesReducer, INITIAL_STATE);
   const hydratedUserKeyRef = useRef<string | null>(null);
   const recordIdRef = useRef<number | null>(null);
@@ -514,7 +514,7 @@ export function useUserPreferences() {
       }
 
       if (nextState.locale !== normalizedLocale) {
-        setLocale(nextState.locale);
+        setTranslationLocale(nextState.locale);
       }
     };
 
@@ -593,7 +593,7 @@ export function useUserPreferences() {
     normalizedLocale,
     session,
     sessionKey,
-    setLocale,
+    setTranslationLocale,
     setTheme,
     t,
     themeAppearance,
@@ -741,18 +741,22 @@ export function useUserPreferences() {
     }
 
     if (state.locale !== normalizedLocale) {
-      setLocale(state.locale);
+      setTranslationLocale(state.locale);
     }
-  }, [normalizedLocale, setLocale, state.hydrated, state.locale]);
+  }, [normalizedLocale, setTranslationLocale, state.hydrated, state.locale]);
 
   const actions = useMemo(
     () => ({
       setActiveTab: (tab: PreferencesTab) =>
         dispatch({ type: "SET_ACTIVE_TAB", payload: tab }),
-      setAppearance: (appearance: AppearancePreference) =>
-        dispatch({ type: "SET_APPEARANCE", payload: appearance }),
-      setLocale: (locale: PreferenceLocale) =>
-        dispatch({ type: "SET_LOCALE", payload: locale }),
+      setAppearance: (appearance: AppearancePreference) => {
+        setTheme(appearance);
+        dispatch({ type: "SET_APPEARANCE", payload: appearance });
+      },
+      setLocale: (locale: PreferenceLocale) => {
+        setTranslationLocale(locale);
+        dispatch({ type: "SET_LOCALE", payload: locale });
+      },
       setCurrencyCode: (currencyCode: CurrencyCodePreference) =>
         dispatch({ type: "SET_CURRENCY_CODE", payload: currencyCode }),
       setTimezone: (timezone: string) =>
@@ -768,7 +772,7 @@ export function useUserPreferences() {
       toggleEmailNotification: (key: NotificationPreferenceKey) =>
         dispatch({ type: "TOGGLE_EMAIL_NOTIFICATION", payload: key }),
     }),
-    [],
+    [setTheme, setTranslationLocale],
   );
 
   return useMemo(

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
-import { ChevronLeft, ChevronRight, Menu, MoonStar, SunMedium, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import type { ReactNode } from "react";
 import { UserProfileMenu } from "@/domains/workspace/user-profile-menu";
@@ -17,9 +17,9 @@ import { HubBody } from "@/shared/layout/hub-body";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { useWorkspaceMenuConfig } from "@/domains/workspace/workspace-menu-config";
 
-function WorkspaceShellFrame({ children }: { children: ReactNode }) {
+function WorkspaceShellFrame({ children, headerControls }: { children: ReactNode; headerControls?: ReactNode }) {
   const router = useRouter();
-  const { resolvedTheme, setTheme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const { isAuthenticated, isHydrating, session } = useAuth();
   const { state, toggleSidebar } = useDashboardShell();
   const { t } = useTranslation();
@@ -38,8 +38,6 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
     () => ({
       brand: t("workspace.brand"),
       openUserMenu: t("workspace.openUserMenu"),
-      toggleThemeToDark: t("workspace.toggleThemeToDark"),
-      toggleThemeToLight: t("workspace.toggleThemeToLight"),
       profileLabel: t("workspace.profileLabel"),
       profileDescription: t("workspace.profileDescription"),
       preferencesLabel: t("workspace.preferencesLabel"),
@@ -142,22 +140,7 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
         ) : undefined}
         right={
           <>
-            <button
-              id={`theme-toggle-${generatedId}`}
-              type="button"
-              data-testid="theme-toggle"
-              onClick={() => setTheme(isDark ? "light" : "dark")}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-muted-foreground transition-colors hover:text-foreground"
-              aria-label={
-                isDark ? copy.toggleThemeToLight : copy.toggleThemeToDark
-              }
-            >
-              {mounted && isDark ? (
-                <SunMedium className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <MoonStar className="h-4 w-4" aria-hidden="true" />
-              )}
-            </button>
+            {headerControls}
             <UserProfileMenu
               openMenuLabel={copy.openUserMenu}
               fallbackName={copy.fallbackName}
@@ -269,10 +252,10 @@ function WorkspaceShellFrame({ children }: { children: ReactNode }) {
   );
 }
 
-export function WorkspaceShell({ children }: { children: ReactNode }) {
+export function WorkspaceShell({ children, headerControls }: { children: ReactNode; headerControls?: ReactNode }) {
   return (
     <DashboardShellProvider>
-      <WorkspaceShellFrame>{children}</WorkspaceShellFrame>
+      <WorkspaceShellFrame headerControls={headerControls}>{children}</WorkspaceShellFrame>
     </DashboardShellProvider>
   );
 }

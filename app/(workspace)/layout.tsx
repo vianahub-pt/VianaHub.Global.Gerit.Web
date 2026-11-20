@@ -1,3 +1,5 @@
+import { IdentityPreferencesProvider } from "@/domains/identity/preferences";
+import { WorkspaceHeaderControls } from "@/domains/workspace/workspace-header-controls";
 import { WorkspaceShell } from "@/shared/layout";
 
 export default function WorkspaceLayout({
@@ -5,5 +7,11 @@ export default function WorkspaceLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return <WorkspaceShell>{children}</WorkspaceShell>;
+  return (
+    <IdentityPreferencesProvider>
+      <WorkspaceShell headerControls={<WorkspaceHeaderControls />}>
+        {children}
+      </WorkspaceShell>
+    </IdentityPreferencesProvider>
+  );
 }

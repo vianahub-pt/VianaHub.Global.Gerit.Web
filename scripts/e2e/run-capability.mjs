@@ -18,6 +18,9 @@ function fail(message) {
 }
 
 function getRunPlan(capability, env = process.env) {
+  if (capability === "user-preferences" && env.CI === "true") {
+    return { spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
+  }
   if (capability === "clients" && env.CI === "true") {
     return { spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression" };
   }
@@ -80,6 +83,10 @@ function selfTest() {
   assert.deepEqual(getRunPlan("users", { E2E_USERS_QA_MUTATION_APPROVAL: "uuid" }), {
     spec: "tests/e2e/users-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
+  assert.deepEqual(getRunPlan("user-preferences", { CI: "true" }), {
+    spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression",
+  });
+  assert.equal(getRunPlan("user-preferences", {}).spec, "tests/e2e/user-preferences-journey.spec.ts");
   assert.deepEqual(getRunPlan("teams", { CI: "true" }), {
     spec: "tests/e2e/teams-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });

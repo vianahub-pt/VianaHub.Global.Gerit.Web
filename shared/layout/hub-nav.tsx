@@ -26,14 +26,14 @@ export function HubNav({
     <header
       data-testid="hub-nav-root"
       className={cn(
-        "flex h-14 items-center justify-between border-b bg-card px-4",
+        "flex h-14 items-center justify-between gap-2 border-b bg-card px-2 sm:px-4",
         variant === "sticky" && "sticky top-0 z-50 backdrop-blur",
         className,
       )}
     >
-      <div className="flex items-center gap-3">{left}{logo}</div>
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">{left}{logo}</div>
       {center && <div className="flex items-center">{center}</div>}
-      <div className="flex items-center gap-2">{right}</div>
+      <div className="ml-auto flex shrink-0 items-center gap-2">{right}</div>
     </header>
   );
 }

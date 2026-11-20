@@ -35,13 +35,7 @@ import {
 } from "@/platform/i18n";
 import { useAuth } from "@/platform/auth";
 import { GeritLogo } from "@/shared/ui/gerit-logo";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
+import { HubSelect } from "@/shared/ui";
 import { useTheme } from "next-themes";
 
 type LoginE2EDiagnostic = {
@@ -289,24 +283,17 @@ export function LoginScreen() {
                 )}
                 <div className="relative">
                   <Globe className="absolute left-2.5 top-1/2 z-10 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-                  <Select
+                  <HubSelect
+                    ariaLabel={t("auth.login.localeLabel")}
                     value={language}
                     onValueChange={(value) => setLanguage(value as Language)}
-                  >
-                    <SelectTrigger
-                      className="h-8 w-[4.5rem] pl-7 pr-2"
-                      aria-label={t("auth.login.localeLabel")}
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUPPORTED_LANGUAGES.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {t(`language.short.${option}`)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    options={SUPPORTED_LANGUAGES.map((option) => ({
+                      value: option,
+                      label: t(`language.short.${option}`),
+                    }))}
+                    variant="compact"
+                    triggerClassName="w-[4.5rem] pl-7 pr-2"
+                  />
                 </div>
               </div>
             </div>

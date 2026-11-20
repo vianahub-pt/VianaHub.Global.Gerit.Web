@@ -89,6 +89,7 @@ function isKnownSharedSupport(file) {
     file.startsWith("tests/shared/") ||
     file === "tests/e2e/client-ui-visual-review.spec.ts" ||
     file === "tests/e2e/hub-image-journey.spec.ts" ||
+    file === "tests/e2e/hub-select-visual-journey.spec.ts" ||
     file === "tests/e2e/impact-classifier.test.mjs" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||

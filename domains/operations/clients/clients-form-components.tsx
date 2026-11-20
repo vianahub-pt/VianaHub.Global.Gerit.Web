@@ -4,13 +4,7 @@ import clsx from "clsx";
 import { useId } from "react";
 import { HubSwitch } from "@/shared/ui/hub-switch";
 import { Input } from "@/shared/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
+import { HubSelect } from "@/shared/ui";
 
 /* ---------- Individual form state ---------- */
 
@@ -294,23 +288,17 @@ export function SelectField({
   name,
 }: SelectFieldProps) {
   return (
-    <div data-testid={name ? `clients-form-select-${name}` : undefined} className={clsx("flex flex-col gap-1.5", className)}>
-      <label className="text-sm font-semibold text-muted-foreground dark:text-muted-foreground">
-        {label}
-        {required && <span className="ml-0.5 text-red-500">*</span>}
-      </label>
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger>
-          <SelectValue placeholder={placeholder} />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <HubSelect
+      label={label}
+      value={value}
+      onValueChange={onChange}
+      options={options}
+      placeholder={placeholder}
+      disabled={disabled}
+      required={required}
+      name={name}
+      testId={name ? `clients-form-select-${name}` : undefined}
+      className={className}
+    />
   );
 }

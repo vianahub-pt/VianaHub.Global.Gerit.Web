@@ -21,16 +21,8 @@ export {
   ToastDescription,
   ToastAction,
 } from "@/shared/ui/toast";
-export {
-  NativeSelect,
-  Select,
-  type NativeSelectProps,
-  SelectGroup,
-  SelectValue,
-  SelectTrigger,
-  SelectContent,
-  SelectItem,
-} from "@/shared/ui/select";
+export { HubSelect } from "@/shared/ui/hub-select";
+export type { HubSelectProps, HubSelectOption, HubSelectVariant } from "@/shared/ui/hub-select";
 export { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 export type { ConfirmDialogProps } from "@/shared/ui/confirm-dialog";
 export {

@@ -5,6 +5,7 @@ const adapterFiles = new Map([
   ["domains/operations/roles/role-form-page.tsx", "roles"],
   ["domains/operations/teams/team-form-page.tsx", "teams"],
   ["domains/operations/users/user-form-page.tsx", "users"],
+  ["domains/operations/equipment-types/equipment-type-form-page.tsx", "equipment-types"],
   ["domains/identity/preferences/user-preferences-page.tsx", "user-preferences"],
 ]);
 
@@ -41,6 +42,14 @@ function normalizeUserImageAdapter(source) {
     .replaceAll('t("hubImage.uploadUnavailable")', 't("users.image.uploadUnavailable")');
 }
 
+function normalizeEquipmentTypeAdapter(source) {
+  return normalizeText(source)
+    .replace('const { t, language } = useTranslation();', 'const { t } = useTranslation();')
+    .replace(/  const createdDate = currentItem\?\.createdAt \? new Date\(currentItem\.createdAt\) : null;\n  const dateLabel = createdDate && !Number\.isNaN\(createdDate\.getTime\(\)\) \? new Intl\.DateTimeFormat\(language, \{ dateStyle: "medium", timeStyle: "short" \}\)\.format\(createdDate\) : "—";\n/, "")
+    .replace('className={clsx("grid grid-cols-1 gap-8", currentItem && "lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]")}', 'className="grid grid-cols-1 gap-5"')
+    .replace(/\s*\{currentItem \? <aside className="space-y-4 rounded-sm border border-border bg-card p-4 text-sm"><h2 className="font-semibold">\{t\("equipmentTypes\.detail\.metadata"\)\}<\/h2>[\s\S]*?<\/aside> : null\}/, "");
+}
+
 function functionPrelude(source) {
   const normalized = normalizeText(source)
     .replace(/^import \{ USER_PREFERENCES_SWITCH_FOCUS_CLASSES \} from "@\/domains\/identity\/preferences\/user-preferences-ui";\n/gm, "")
@@ -56,7 +65,10 @@ function controlStateFingerprint(source) {
   const values = [];
   const visit = (node) => {
     if (ts.isJsxAttribute(node) && tracked.has(node.name.getText(file))) {
-      values.push(node.name.getText(file) + "=" + (node.initializer?.getText(file) ?? "true"));
+      const isSelectOptionValue = node.name.getText(file) === "value" && node.initializer?.getText(file) === "{option.value}";
+      if (!isSelectOptionValue) {
+        values.push(node.name.getText(file) + "=" + (node.initializer?.getText(file) ?? "true"));
+      }
     }
     ts.forEachChild(node, visit);
   };
@@ -97,6 +109,15 @@ export function provePresentationAdapter(file, baseSource, headSource, testConte
 
   if (["actions", "roles", "teams"].includes(capability)) {
     if (normalizeTextareaAdapter(base) !== normalizeTextareaAdapter(head)) return null;
+  } else if (capability === "equipment-types") {
+    const requiredMetadata = [
+      't("equipmentTypes.detail.metadata")',
+      'id="equipment-type-id"',
+      'id="equipment-type-created-at"',
+      "dateLabel",
+    ];
+    if (requiredMetadata.some((marker) => !base.includes(marker) || head.includes(marker))) return null;
+    if (normalizeEquipmentTypeAdapter(base) !== normalizeEquipmentTypeAdapter(head)) return null;
   } else if (capability === "users") {
     if (normalizeUserImageAdapter(base) !== normalizeUserImageAdapter(head)) return null;
   } else {
@@ -117,7 +138,8 @@ export function provePresentationAdapter(file, baseSource, headSource, testConte
     ];
     for (const marker of expectedCalls) {
       const tabCallback = marker === "preferences.setActiveTab(TAB)"
-        ? base.includes("preferences.setActiveTab(tab.key)") && head.includes("preferences.setActiveTab(tabId)")
+        ? (base.includes("preferences.setActiveTab(tab.key)") && head.includes("preferences.setActiveTab(tabId)")) ||
+          (base.includes("preferences.setActiveTab(tabId)") && head.includes("preferences.setActiveTab(tabId)"))
         : base.includes(marker) && head.includes(marker);
       if (!tabCallback) return null;
     }

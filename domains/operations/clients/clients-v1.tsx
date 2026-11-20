@@ -8,6 +8,7 @@ import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { ClientContactPersonsPanel } from "./clients-v1-contacts";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { HubImage, HubSelect, HubSwitch, HubTabs } from "@/shared/ui";
@@ -403,6 +404,8 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
   const selectedStatusIsValid = Number.isInteger(selectedStatusDefinitionId) && selectedStatusDefinitionId > 0 &&
     activeStatusOptions.some((option) => option.id === selectedStatusDefinitionId);
   const fieldsDisabled = submitting || catalogsLoading;
+  const clientTabsEnabled = isEditingRoute && validId && !loading && client !== null && client.id === parsedId;
+  const selectedTab: ClientTab = clientTabsEnabled ? tab : "client";
 
   if (!isHydrating && isAuthenticated && (isEditingRoute ? (!canRead || !canUpdate) : !canCreate)) return (
     <div data-testid={isEditingRoute ? "client-detail-page" : "client-create-page"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -450,8 +453,8 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
         <HubTabs<ClientTab>
           id="client-v1-tabs"
           ariaLabel={t("clients.v1.tabs.label")}
-          tabs={relatedTabs.map((item) => ({ ...item, panel: null, panelId: "client-v1-tab-panel" }))}
-          activeTab={tab}
+          tabs={relatedTabs.map((item) => ({ ...item, panel: null, panelId: "client-v1-tab-panel", disabled: item.id !== "client" && !clientTabsEnabled }))}
+          activeTab={selectedTab}
           onTabChange={setTab}
           renderPanel={false}
           className="mb-6"
@@ -459,12 +462,16 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
 
         {formError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{formError}</p>}
         {catalogError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{catalogError}</p>}
-        <div id="client-v1-tab-panel" role="tabpanel" aria-labelledby={`client-v1-tabs-tab-${tab}`} tabIndex={0}>
-        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : tab !== "client" ? (
-          <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === tab)?.label}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[tab as Exclude<ClientTab, "client">]}</p>
-          </section>
+        <div id="client-v1-tab-panel" role="tabpanel" aria-labelledby={`client-v1-tabs-tab-${selectedTab}`} tabIndex={0}>
+        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : selectedTab !== "client" ? (
+          selectedTab === "contacts" ? (
+            <ClientContactPersonsPanel clientId={clientTabsEnabled ? client.id : null} />
+          ) : (
+            <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+              <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === selectedTab)?.label}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[selectedTab]}</p>
+            </section>
+          )
         ) : (
           <form onSubmit={(event) => void submit(event)} className="space-y-6" data-testid="client-form">
             <section data-testid="client-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">

@@ -17,10 +17,12 @@ type ClientFetcher = ReturnType<typeof useAuth>["fetchWithAuth"];
 
 export class ClientApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  readonly code: string | null;
+  constructor(status: number, message: string, code: string | null = null) {
     super(message);
     this.name = "ClientApiError";
     this.status = status;
+    this.code = code;
   }
 }
 

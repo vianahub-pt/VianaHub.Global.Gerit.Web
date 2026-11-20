@@ -12,6 +12,7 @@ const tests = {
   "tests/users/permission-claims.test.mjs": "Users permissions",
   "tests/clients/client-ui-contract.test.mjs": "Client UI contract",
   "tests/e2e/hub-image-journey.spec.ts": 'page.route("**/api/**"); const mutations:',
+  "tests/e2e/client-contact-person-journey.spec.ts": 'ClientContactPerson inline form and HubGrid journey',
 };
 
 const textareaBase = (id, field) => `import { useState } from "react";\nfunction Page() { const [description, setDescription] = useState(""); return <label data-testid="${id}"><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring disabled:opacity-50" disabled={submitting} /></label>; }`;
@@ -107,6 +108,35 @@ test("package test gate and CI runner execute every required shared regression a
   assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 
+test("HubGrid changes require the mocked ClientContactPerson journey and pass shared validation", () => {
+  const plan = selectCapabilities([
+    "domains/operations/clients/clients-v1-contacts.tsx",
+    "shared/hub-grid/hub-grid.tsx",
+    "tests/e2e/client-contact-person-journey.spec.ts",
+  ], { scope: ["clients"] });
+  assert.deepEqual(plan.functionalCapabilities, ["clients"]);
+  assert.deepEqual(plan.sharedComponents, ["hub-grid"]);
+  assert.equal(plan.sharedUiRegressionRequired, true);
+  assert.ok(plan.requiredRegressionTests.includes("tests/e2e/client-contact-person-journey.spec.ts"));
+
+  const outcome = validateE2EOutcome({
+    selectionStatus: "success",
+    capabilities: ["clients"],
+    functionalCapabilities: ["clients"],
+    scope: ["clients"],
+    scopeApproved: false,
+    runE2E: true,
+    reason: plan.reason,
+    e2eStatus: "success",
+    sharedUiRegressionRequired: plan.sharedUiRegressionRequired,
+    sharedComponents: plan.sharedComponents,
+    presentationConsumers: plan.presentationConsumers,
+    sharedRegressionConsumers: plan.presentationConsumers,
+    sharedRegressionStatus: "success",
+    regressionTestsStatus: "success",
+  });
+  assert.equal(outcome.pass, true, "the mocked ClientContactPerson journey is the registered HubGrid regression");
+});
 test("shared regression outcome accepts explicit HubTabs proof and otherwise fails closed", () => {
   const base = {
     selectionStatus: "success", capabilities: ["clients"], functionalCapabilities: ["clients"], scope: ["clients"],

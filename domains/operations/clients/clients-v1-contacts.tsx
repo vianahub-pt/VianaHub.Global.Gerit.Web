@@ -36,7 +36,7 @@ import {
 } from "./client-contact-person-api";
 
 type ContactFetcher = ReturnType<typeof useAuth>["fetchWithAuth"];
-type ContactMode = "list" | "create" | "edit";
+type ContactMode = "idle" | "create" | "edit";
 
 const emptyPage = {
   items: [] as ClientContactPersonSummary[],
@@ -98,7 +98,7 @@ function Field({
   );
 }
 
-export function ClientContactPersonsPanel({ clientId }: { clientId: number | null }) {
+export function ClientContactPersonsPanel({ clientId, active = true }: { clientId: number | null; active?: boolean }) {
   const { fetchWithAuth, hasPermission, isAuthenticated, isHydrating } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -110,7 +110,7 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
   const canDeactivate = hasPermission("ClientContactPersons", "Deactivate");
   const canDelete = hasPermission("ClientContactPersons", "Delete");
 
-  const [mode, setMode] = useState<ContactMode>("list");
+  const [mode, setMode] = useState<ContactMode>("idle");
   const [pageData, setPageData] = useState(emptyPage);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
@@ -129,33 +129,48 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
   const [submitting, setSubmitting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const deleteTarget = useRef<ClientContactPersonSummary | null>(null);
-  const formSectionRef = useRef<HTMLElement>(null);
   const firstFieldRef = useRef<HTMLInputElement>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const detailRequestId = useRef(0);
+  const pageRequestSequence = useRef(0);
 
   const loadPage = useCallback(async () => {
-    if (clientId === null || !canRead) return;
+    if (!activeRef.current || clientId === null || !canRead) return;
+    const requestSequence = ++pageRequestSequence.current;
     setLoading(true);
     setError(null);
     const query = buildClientContactPersonQuery({ search, status, page, pageSize, sortDirection });
     try {
       const result = await getClientContactPersonPage(fetchWithAuth, clientId, query);
+      if (requestSequence !== pageRequestSequence.current) return;
       setPageData(result);
       if (result.pageNumber !== page) setPage(result.pageNumber);
     } catch (cause) {
+      if (requestSequence !== pageRequestSequence.current) return;
       setPageData(emptyPage);
       setError(errorText(cause, t("clients.contacts.errors.load"), t));
     } finally {
-      setLoading(false);
+      if (requestSequence === pageRequestSequence.current) setLoading(false);
     }
   }, [canRead, clientId, fetchWithAuth, page, pageSize, search, sortDirection, status, t]);
 
   useEffect(() => {
-    if (isHydrating || !isAuthenticated || clientId === null || !canRead) return;
+    if (!active || isHydrating || !isAuthenticated || clientId === null || !canRead) {
+      pageRequestSequence.current += 1;
+      return;
+    }
     void loadPage();
-  }, [canRead, clientId, isAuthenticated, isHydrating, loadPage]);
+    return () => { pageRequestSequence.current += 1; };
+  }, [active, canRead, clientId, isAuthenticated, isHydrating, loadPage]);
+
+  useEffect(() => {
+    if (active && canCreate && mode === "idle" && editingContactId === null) setMode("create");
+  }, [active, canCreate, editingContactId, mode]);
 
   const beginEdit = useCallback(async (contactId: number) => {
-    if (clientId === null || !canGetBy || !canUpdate || detailLoading) return;
+    if (!activeRef.current || clientId === null || !canGetBy || !canUpdate || detailLoading) return;
+    const requestId = ++detailRequestId.current;
     setMode("edit");
     setDetail(null);
     setEditingContactId(contactId);
@@ -163,37 +178,55 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
     setFormError(null);
     try {
       const result = await getClientContactPersonDetail(fetchWithAuth, clientId, contactId);
+      if (requestId !== detailRequestId.current) return;
       setDetail(result);
       setForm(clientContactPersonFormFromDetail(result));
     } catch (cause) {
-      setMode("list");
+      if (requestId !== detailRequestId.current) return;
+      setForm(initialClientContactPersonFormValues());
+      setMode(canCreate ? "create" : "idle");
       setEditingContactId(null);
       setError(errorText(cause, t("clients.contacts.errors.unavailable"), t));
     } finally {
-      setDetailLoading(false);
+      if (requestId === detailRequestId.current) setDetailLoading(false);
     }
-  }, [canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
+  }, [canCreate, canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
 
   const beginCreate = useCallback(() => {
+    detailRequestId.current += 1;
     setDetail(null);
     setEditingContactId(null);
+    setDetailLoading(false);
     setForm(initialClientContactPersonFormValues());
     setFormError(null);
+    if (!canCreate) return;
     setMode("create");
-  }, []);
+    requestAnimationFrame(() => firstFieldRef.current?.focus({ preventScroll: true }));
+  }, [canCreate]);
 
   const cancelForm = useCallback(() => {
+    detailRequestId.current += 1;
     setFormError(null);
     setDetail(null);
     setEditingContactId(null);
-    setMode("list");
-  }, []);
+    setDetailLoading(false);
+    setForm(initialClientContactPersonFormValues());
+    setMode(canCreate ? "create" : "idle");
+  }, [canCreate]);
 
   useEffect(() => {
-    if (mode === "list") return;
-    formSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (!detailLoading) firstFieldRef.current?.focus({ preventScroll: true });
-  }, [detailLoading, mode]);
+    if (mode !== "edit" || detailLoading || !active) return;
+    firstFieldRef.current?.focus({ preventScroll: true });
+  }, [active, detailLoading, mode]);
+
+  const revealFormIfOutsideViewport = useCallback(() => {
+    const firstField = firstFieldRef.current;
+    if (!firstField) return;
+    const bounds = firstField.getBoundingClientRect();
+    if (bounds.top < 0 || bounds.bottom > window.innerHeight) {
+      firstField.scrollIntoView({ behavior: "instant", block: "nearest" });
+    }
+  }, []);
 
   const updateField = useCallback((field: keyof ClientContactPersonFormValues, value: string | boolean) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -202,7 +235,7 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
 
   const submitForm = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (clientId === null || submitting || (mode === "create" ? !canCreate : !canUpdate)) return;
+    if (clientId === null || submitting || mode === "idle" || (mode === "create" ? !canCreate : !canUpdate)) return;
     const validationKey = validateClientContactPersonForm(form);
     if (validationKey) {
       setFormError(t("clients.contacts.validation." + validationKey));
@@ -224,7 +257,8 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
       await loadPage();
       setDetail(null);
       setEditingContactId(null);
-      setMode("list");
+      setForm(initialClientContactPersonFormValues());
+      setMode(canCreate ? "create" : "idle");
     } catch (cause) {
       setFormError(errorText(cause, t("clients.contacts.errors.save"), t));
     } finally {
@@ -266,7 +300,9 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
       if (editingContactId === target.id) {
         setDetail(null);
         setEditingContactId(null);
-        setMode("list");
+      setForm(initialClientContactPersonFormValues());
+      setFormError(null);
+      setMode(canCreate ? "create" : "idle");
       }
     } catch (cause) {
       setError(errorText(cause, t("clients.contacts.errors.delete"), t));
@@ -294,12 +330,12 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
     if (!canUpdate && !canToggle && !canDelete) return null;
     return (
       <div className="flex items-center justify-end gap-2">
-        {canUpdate && canGetBy ? <button type="button" data-testid={`client-contact-edit-${contact.id}`} disabled={busyId === contact.id || detailLoading} onClick={(event) => { event.stopPropagation(); void beginEdit(contact.id); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("clients.contacts.actions.edit")} aria-label={t("clients.contacts.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button> : null}
+        {canUpdate && canGetBy ? <button type="button" data-testid={`client-contact-edit-${contact.id}`} disabled={busyId === contact.id || detailLoading} onClick={(event) => { event.stopPropagation(); revealFormIfOutsideViewport(); void beginEdit(contact.id); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("clients.contacts.actions.edit")} aria-label={t("clients.contacts.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button> : null}
         {canToggle ? <button type="button" disabled={busyId === contact.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(contact); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t(contact.isActive ? "clients.actions.deactivate" : "clients.actions.activate")} aria-label={t(contact.isActive ? "clients.actions.deactivate" : "clients.actions.activate")}>{busyId === contact.id ? <Loader2 className="h-4 w-4 animate-spin" /> : contact.isActive ? <PowerOff className="h-4 w-4 text-red-500" aria-hidden="true" /> : <Power className="h-4 w-4 text-green-500" aria-hidden="true" />}</button> : null}
         {canDelete ? <button type="button" disabled={busyId === contact.id} onClick={(event) => { event.stopPropagation(); deleteTarget.current = contact; setDeleteOpen(true); }} className="inline-flex h-8 w-8 items-center justify-center text-destructive hover:text-destructive disabled:opacity-50" title={t("clients.actions.delete")} aria-label={t("clients.actions.delete")}><Trash2 className="h-4 w-4" aria-hidden="true" /></button> : null}
       </div>
     );
-  }, [beginEdit, busyId, canActivate, canDeactivate, canDelete, canGetBy, canUpdate, detailLoading, t, toggleStatus]);
+  }, [beginEdit, busyId, canActivate, canDeactivate, canDelete, canGetBy, canUpdate, detailLoading, revealFormIfOutsideViewport, t, toggleStatus]);
 
   const pageButtons = useMemo(() => {
     const count = Math.max(1, pageData.totalPages);
@@ -315,17 +351,21 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
     return <section data-testid="client-contact-persons-forbidden" role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("clients.contacts.errors.forbidden")}</section>;
   }
 
-    const isForm = mode === "create" || mode === "edit";
-    const fieldsDisabled = submitting || detailLoading;
+    const canSubmit = mode === "create" ? canCreate : mode === "edit" && canUpdate;
+    const fieldsDisabled = submitting || detailLoading || mode === "idle";
     const field = (key: keyof ClientContactPersonFormValues, labelKey: string, maxLength: number, required = false, type = "text") => (
       <Field key={key} inputRef={key === "name" ? firstFieldRef : undefined} label={t(labelKey)} value={form[key] as string} onChange={(value) => updateField(key, value)} disabled={fieldsDisabled} required={required} maxLength={maxLength} type={type} testId={"client-contact-" + key} />
     );
     return (
       <section data-testid="client-contact-person-panel" className="space-y-4">
         {error ? <p role="alert" data-testid="client-contact-error" className="rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{error}<button type="button" onClick={() => void loadPage()} className="ml-3 underline">{t("clients.contacts.actions.retry")}</button></p> : null}
-        {isForm ? <section ref={formSectionRef} data-testid="client-contact-inline-form-panel" className="scroll-mt-4 rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-          <div className="mb-5"><h2 className="text-lg font-semibold text-foreground">{t(mode === "create" ? "clients.contacts.actions.new" : "clients.contacts.actions.edit")}</h2>{detailLoading ? <p role="status" className="mt-2 text-sm text-muted-foreground">{t("clients.contacts.loading")}</p> : null}</div>
-          {!detailLoading ? <form onSubmit={(event) => void submitForm(event)} className="space-y-5" data-testid="client-contact-form" noValidate>
+        {canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-foreground">{t(mode === "edit" ? "clients.contacts.actions.edit" : mode === "create" ? "clients.contacts.actions.new" : "clients.contacts.form.selectToEdit")}</h2>
+            {canCreate ? <button type="button" data-testid="client-contact-new" disabled={detailLoading || submitting} onClick={beginCreate} className="inline-flex h-9 items-center gap-2 rounded-sm border border-primary/50 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.actions.new")}</button> : null}
+            {detailLoading ? <p role="status" className="w-full text-sm text-muted-foreground">{t("clients.contacts.loading")}</p> : null}
+          </div>
+          <form onSubmit={(event) => void submitForm(event)} className="space-y-5" data-testid="client-contact-form" noValidate>
             <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
               {field("name", "clients.contacts.form.name", CLIENT_CONTACT_NAME_MAX_LENGTH, true)}
               {field("email", "clients.contacts.form.email", CLIENT_CONTACT_EMAIL_MAX_LENGTH, true, "email")}
@@ -346,12 +386,11 @@ export function ClientContactPersonsPanel({ clientId }: { clientId: number | nul
             </div>
             {formError ? <p role="alert" data-testid="client-contact-form-error" className="rounded-sm border border-destructive/40 bg-card p-3 text-sm text-destructive">{formError}</p> : null}
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={cancelForm} disabled={submitting} className="inline-flex h-10 items-center rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50">{t("clients.actions.cancel")}</button>
-              <button type="submit" disabled={submitting} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("clients.actions.save")}</button>
+              <button type="button" onClick={cancelForm} disabled={submitting || detailLoading || mode === "idle"} className="inline-flex h-10 items-center rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground hover:bg-secondary disabled:opacity-50">{t("clients.actions.cancel")}</button>
+              <button type="submit" disabled={!canSubmit || fieldsDisabled} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("clients.actions.save")}</button>
             </div>
-          </form> : null}
+          </form>
         </section> : null}
-        {!isForm && canCreate ? <div className="flex justify-end"><button type="button" data-testid="client-contact-new" onClick={beginCreate} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.actions.new")}</button></div> : null}
         {canRead ? <HubGrid
             title={t("clients.contacts.title")}
             subtitle={t("clients.contacts.subtitle")}

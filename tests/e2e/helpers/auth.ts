@@ -116,6 +116,9 @@ export async function authenticateFromLogin(page: Page) {
 
   const loginPageStartedAt = performance.now();
   const navigationPaths: string[] = [];
+  await page.addInitScript(() => {
+    (window as Window & { __GERIT_E2E_DIAGNOSTICS__?: boolean }).__GERIT_E2E_DIAGNOSTICS__ = true;
+  });
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) navigationPaths.push(new URL(frame.url()).pathname);
   });
@@ -123,6 +126,7 @@ export async function authenticateFromLogin(page: Page) {
     await page.goto("/login/", { waitUntil: "domcontentloaded" });
   }
   await expect(page.getByTestId("login-screen-root"), "Login screen must be rendered before authentication").toBeVisible();
+  await expect(page.getByTestId("login-screen-root"), "Login screen must finish React hydration before authentication").toHaveAttribute("data-hydrated", "true");
   logDuration("login page", loginPageStartedAt);
 
   const emailInput = page.getByLabel(/email|e-mail|correo electrónico/i).or(

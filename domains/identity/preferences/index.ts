@@ -2,8 +2,9 @@ export const identityPreferencesModule = {
   route: "/preferences",
 } as const;
 
+export { IdentityPreferencesProvider, useIdentityPreferences } from "@/domains/identity/preferences/preferences-provider";
+
 export {
-  useUserPreferences as useIdentityPreferences,
   type AppearancePreference,
   type CurrencyCodePreference,
   type DateFormatPreference,

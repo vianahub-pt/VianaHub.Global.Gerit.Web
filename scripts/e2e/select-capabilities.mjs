@@ -90,12 +90,14 @@ function isKnownSharedSupport(file) {
     file === "tests/e2e/client-ui-visual-review.spec.ts" ||
     file === "tests/e2e/hub-image-journey.spec.ts" ||
     file === "tests/e2e/hub-select-visual-journey.spec.ts" ||
+    file === "tests/e2e/workspace-header-theme-journey.spec.ts" ||
     file === "tests/e2e/impact-classifier.test.mjs" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||
     file === "tests/e2e/preflight.test.mjs" ||
     file.startsWith("scripts/e2e/") ||
+    file === "domains/workspace/workspace-header-controls.tsx" ||
     file.startsWith("locales/") ||
     file === "package.json" ||
     file === "package-lock.json" ||
@@ -550,6 +552,7 @@ function selfTest() {
   ], ["equipment-types"]).capabilities, ["equipment-types"]);
   assert.deepEqual(scoped(["domains/operations/roles/roles-page.tsx"], ["roles"]).capabilities, ["roles"]);
   assert.deepEqual(scoped(["domains/operations/actions/actions-page.tsx"], ["actions"]).capabilities, ["actions"]);
+  assert.deepEqual(scoped(["domains/identity/preferences/use-user-preferences.ts", "domains/workspace/workspace-header-controls.tsx", "tests/e2e/workspace-header-theme-journey.spec.ts"], ["user-preferences"]).capabilities, ["user-preferences"]);
   assert.deepEqual(scoped([
     "domains/operations/users/users-page.tsx",
     "tests/e2e/teams-journey.spec.ts",

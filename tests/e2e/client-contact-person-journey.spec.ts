@@ -513,26 +513,26 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByTestId("client-contact-name")).toHaveValue("Synthetic Contact Two");
   await saveScreenshot(page, "04-edit-form");
-  await page.getByTestId("client-contact-name").fill("Synthetic Contact Two Updated");
+  await page.getByTestId("client-contact-name").fill("Synthetic Contact TwoX");
   await page.getByRole("button", { name: /Save|Guardar|Salvar/i }).click();
-  await expect(page.getByRole("table")).toContainText("Synthetic Contact Two Updated");
+  await expect(page.getByRole("table")).toContainText("Synthetic Contact TwoX");
   const gridAfterEdit = await measureHubGrid(page);
   expect(gridAfterEdit.panelRelativeTop).toBe(gridAfterSave.panelRelativeTop);
   expect(gridAfterEdit.height).toBe(gridAfterSave.height);
   await dismissSuccessToast(page);
   await saveScreenshot(page, "05-list-after-edit");
-  expect(mocks.snapshot().some((record) => record.name === "Synthetic Contact Two Updated")).toBe(true);
+  expect(mocks.snapshot().some((record) => record.name === "Synthetic Contact TwoX")).toBe(true);
 
   mocks.delayNextList(700);
   const filteredContactsResponse = page.waitForResponse((response) => response.request().method() === "GET" && new URL(response.url()).pathname.replace(/\/$/, "") === `/api/gerit/v1/clients/${clientId}/contacts/paged`);
-  await contactSearch.fill("Synthetic Contact Two Updated");
+  await contactSearch.fill("Synthetic Contact TwoX");
   await expect(page.getByRole("table")).toHaveAttribute("aria-busy", "true");
   const gridDuringFilterRefetch = await measureHubGrid(page);
   expect(gridDuringFilterRefetch.rows).toBe(gridAfterEdit.rows);
   expect(gridDuringFilterRefetch.rowsInert).toBe(true);
   expect(gridDuringFilterRefetch.height).toBe(gridAfterEdit.height);
   expect((await filteredContactsResponse).status()).toBe(200);
-  await expect(page.getByRole("table")).toContainText("Synthetic Contact Two Updated");
+  await expect(page.getByRole("table")).toContainText("Synthetic Contact TwoX");
 
   mocks.delayListSearch("Synthetic Contact", 700);
   const slowSearchRequest = page.waitForRequest((request) => {
@@ -548,15 +548,15 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
 
   const latestSearchResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
-    return response.request().method() === "GET" && url.pathname.endsWith("/contacts/paged") && url.searchParams.get("Search") === "Synthetic Contact Two Updated";
+    return response.request().method() === "GET" && url.pathname.endsWith("/contacts/paged") && url.searchParams.get("Search") === "Synthetic Contact TwoX";
   });
-  await contactSearch.fill("Synthetic Contact Two Updated");
+  await contactSearch.fill("Synthetic Contact TwoX");
   expect((await latestSearchResponse).status()).toBe(200);
   await expect(page.getByRole("row")).toHaveCount(2);
 
   expect((await slowSearchResponse).status()).toBe(200);
   await expect(page.getByRole("row")).toHaveCount(2);
-  await expect(page.getByRole("table")).toContainText("Synthetic Contact Two Updated");
+  await expect(page.getByRole("table")).toContainText("Synthetic Contact TwoX");
 
   const broadSearchResponse = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -606,11 +606,11 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
 
   await statusFilter.click();
   await page.getByRole("option", { name: /All|Mostrar todas|Todos|Todas/i }).click();
-  await contactSearch.fill("Synthetic Contact Two Updated");
-  await expect(page.getByRole("table")).toContainText("Synthetic Contact Two Updated");
+  await contactSearch.fill("Synthetic Contact TwoX");
+  await expect(page.getByRole("table")).toContainText("Synthetic Contact TwoX");
   await expect(page.getByRole("row")).toHaveCount(2);
 
-  const updatedRow = page.getByRole("row").filter({ hasText: "Synthetic Contact Two Updated" });
+  const updatedRow = page.getByRole("row").filter({ hasText: "Synthetic Contact TwoX" });
   const mutationCount = () => mocks.observed.filter((entry) => /^(POST|PUT|PATCH|DELETE) \/api\/gerit\/v1\/clients\/4242\/contacts/.test(entry)).length;
   const beforeCancel = mutationCount();
   await updatedRow.getByRole("button", { name: /Edit|Editar/i }).click();
@@ -620,7 +620,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   await contactsTab.click();
   await expect(page.getByTestId("client-contact-name")).toHaveValue("Unsaved synthetic change");
   await page.getByRole("button", { name: /Cancel|Cancelar/i }).click();
-  await expect(page.getByRole("table")).toContainText("Synthetic Contact Two Updated");
+  await expect(page.getByRole("table")).toContainText("Synthetic Contact TwoX");
   const gridAfterCancel = await measureHubGrid(page);
   expect(gridAfterCancel.height).toBe(gridBeforeCancel.height);
   await dismissSuccessToast(page);
@@ -637,7 +637,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   await expect(dialog).toBeVisible();
   await saveScreenshot(page, "06-delete-confirmation");
   await dialog.getByRole("button", { name: /Delete|Eliminar|Excluir/i }).click();
-  await expect(page.getByRole("table")).not.toContainText("Synthetic Contact Two Updated");
+  await expect(page.getByRole("table")).not.toContainText("Synthetic Contact TwoX");
   expect(mocks.snapshot().some((record) => record.email === "synthetic.two@example.invalid")).toBe(false);
 
   mocks.setEmpty();

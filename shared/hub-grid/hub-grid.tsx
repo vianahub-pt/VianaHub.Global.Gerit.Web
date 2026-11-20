@@ -4,13 +4,7 @@ import clsx from "clsx";
 import { ChevronDown, ChevronUp, Inbox, Loader2, Search } from "lucide-react";
 import type { ReactNode } from "react";
 import { Input } from "@/shared/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
+import { HubSelect } from "@/shared/ui";
 
 export type RowDensity = "compact" | "medium" | "expanded";
 
@@ -134,19 +128,13 @@ export function HubGrid<Item>({
       <div className="border-b border-border/80 bg-muted px-6 py-4 dark:border-border dark:bg-muted">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-1 flex-wrap items-center gap-3 min-w-[20rem]">
-            <span className="sr-only">{statusFilterLabel}</span>
-            <Select value={statusFilter} onValueChange={onStatusFilterChange}>
-              <SelectTrigger className="max-w-[12rem] flex-1" aria-label={statusFilterLabel}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {statusFilterOptions.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <HubSelect
+              ariaLabel={statusFilterLabel}
+              value={statusFilter}
+              onValueChange={onStatusFilterChange}
+              options={statusFilterOptions}
+              triggerClassName="max-w-[12rem] flex-1"
+            />
             <label className="relative flex-1 min-w-[12rem] max-w-[24rem]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -424,21 +412,16 @@ export function HubGrid<Item>({
           <span className="text-sm text-foreground dark:text-primary">
             {paginationPageLabel} {page} / {totalPages}
           </span>
-          <label className="flex items-center gap-2 text-sm text-foreground dark:text-primary">
+          <div className="flex items-center gap-2 text-sm text-foreground dark:text-primary">
             <span>{paginationPerPageLabel}</span>
-            <Select value={String(pageSize)} onValueChange={(v) => onPageSizeChange(Number(v))}>
-              <SelectTrigger className="w-auto min-w-[4rem]" aria-label={paginationPerPageLabel}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {pageSizeOptions.map((option) => (
-                  <SelectItem key={option} value={String(option)}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </label>
+            <HubSelect
+              ariaLabel={paginationPerPageLabel}
+              value={String(pageSize)}
+              onValueChange={(value) => onPageSizeChange(Number(value))}
+              options={pageSizeOptions.map((option) => ({ value: String(option), label: option }))}
+              triggerClassName="w-auto min-w-[4rem]"
+            />
+          </div>
         </div>
       </footer>
     </section>

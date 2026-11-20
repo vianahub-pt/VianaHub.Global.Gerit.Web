@@ -5,19 +5,6 @@ import * as SelectPrimitive from "@radix-ui/react-select";
 import { Check, ChevronDown } from "lucide-react";
 import { cn } from "@/shared/ui/utils";
 
-const nativeSelectClasses = "flex h-12 w-full rounded-[12px] border border-border bg-card px-4 py-2 text-sm font-normal text-foreground shadow-none outline-none transition-colors hover:border-ring/60 focus-visible:ring-2 focus-visible:ring-ring/55 aria-[invalid=true]:border-destructive aria-[invalid=true]:focus-visible:ring-destructive/30 disabled:cursor-not-allowed disabled:opacity-50";
-
-export interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {}
-
-const NativeSelect = React.forwardRef<HTMLSelectElement, NativeSelectProps>(
-  ({ className, children, ...props }, ref) => (
-    <select ref={ref} className={cn(nativeSelectClasses, className)} {...props}>
-      {children}
-    </select>
-  ),
-);
-NativeSelect.displayName = "NativeSelect";
-
 const Select = SelectPrimitive.Root;
 
 const SelectGroup = SelectPrimitive.Group;
@@ -91,6 +78,7 @@ const SelectItem = React.forwardRef<
       "text-muted-foreground hover:text-foreground",
       "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       "data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground",
+      "data-[state=checked]:bg-primary/10 data-[state=checked]:text-primary",
       className,
     )}
     {...props}
@@ -106,7 +94,6 @@ const SelectItem = React.forwardRef<
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
 export {
-  NativeSelect,
   Select,
   SelectGroup,
   SelectValue,

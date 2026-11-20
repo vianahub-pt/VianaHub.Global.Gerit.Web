@@ -10,7 +10,7 @@ import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid"
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
-import { HubImage, HubSwitch, HubTabs, NativeSelect } from "@/shared/ui";
+import { HubImage, HubSelect, HubSwitch, HubTabs } from "@/shared/ui";
 import {
   buildClientsQuery, CLIENT_INITIAL_STATUS_DEFINITION_ID,
   CLIENT_NAME_MAX_LENGTH, CLIENT_NOTE_MAX_LENGTH, CLIENT_STATUS_DOMAIN_ID, initialClientFormValues,
@@ -52,13 +52,18 @@ function SelectField({ label, value, onChange, options, disabled, required, plac
   options: Array<{ value: string; label: string; disabled?: boolean }>; disabled?: boolean;
   required?: boolean; placeholder: string; testId?: string; className?: string;
 }) {
-  return <label className={"flex flex-col gap-1.5 text-sm font-medium text-foreground " + (className ?? "")}>
-    <span>{label}{required ? " *" : ""}</span>
-    <NativeSelect data-testid={testId} value={value} required={required} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
-      <option value="">{placeholder}</option>
-      {options.map((option) => <option key={option.value} value={option.value} disabled={option.disabled}>{option.label}</option>)}
-    </NativeSelect>
-  </label>;
+  return <HubSelect
+    label={label}
+    value={value}
+    onValueChange={onChange}
+    options={options}
+    placeholder={placeholder}
+    required={required}
+    disabled={disabled}
+    variant="default"
+    testId={testId}
+    className={className}
+  />;
 }
 
 function LifecycleBadge({ active, label }: { active: boolean; label: string }) {

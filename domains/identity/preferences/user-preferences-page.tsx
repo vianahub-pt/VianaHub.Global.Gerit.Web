@@ -15,13 +15,7 @@ import { useEffect, useMemo } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/shared/ui/select";
+import { HubSelect, HubSwitch, HubTabs } from "@/shared/ui";
 import {
   type AppearancePreference,
   type CurrencyCodePreference,
@@ -31,7 +25,6 @@ import {
   type TimeFormatPreference,
   useIdentityPreferences,
 } from "@/domains/identity/preferences";
-import { HubSwitch, HubTabs } from "@/shared/ui";
 
 export const TIMEZONE_OPTIONS = [
   { value: "America/New_York", label: "(UTC -05:00) America/Washington" },
@@ -121,23 +114,12 @@ function PreferenceSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="flex flex-col gap-2">
-      <span className="text-sm font-medium text-muted-foreground dark:text-muted-foreground">
-        {label}
-      </span>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
-              {option.label}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </label>
+    <HubSelect
+      label={label}
+      value={value}
+      onValueChange={onChange}
+      options={options}
+    />
   );
 }
 

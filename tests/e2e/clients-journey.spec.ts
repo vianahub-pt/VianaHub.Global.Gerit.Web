@@ -178,15 +178,15 @@ test("Client V1 create, search, update, lifecycle, soft delete and deterministic
     await page.goto("/clients/new/");
     await expect(page.getByTestId("client-create-page")).toBeVisible();
     const partyType = page.getByTestId("client-party-type");
-    const partyTypeIds = await partyType.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value).filter(Boolean));
-    expect(partyTypeIds.sort()).toEqual(["1", "2"]);
-    await partyType.selectOption("1");
+    await partyType.click();
+    const partyTypeOptions = page.getByRole("listbox").getByRole("option");
+    await expect(partyTypeOptions).toHaveText(["Individual", "Organization"]);
+    await page.getByRole("option", { name: "Individual", exact: true }).click();
     const source = page.getByTestId("client-acquisition-source");
-    const sourceIds = await source.locator("option").evaluateAll((options) => options.map((option) => (option as HTMLOptionElement).value).filter(Boolean));
-    expect(sourceIds.length).toBeGreaterThan(0);
-    const sourceId = sourceIds[0];
-
-    await source.selectOption(sourceId);
+    await source.click();
+    const sourceOptions = page.getByRole("listbox").getByRole("option");
+    await expect(sourceOptions.first()).toBeVisible();
+    await sourceOptions.first().click();
     await page.getByTestId("client-name").fill(uniqueName);
 
     const createResponsePromise = page.waitForResponse((response) =>

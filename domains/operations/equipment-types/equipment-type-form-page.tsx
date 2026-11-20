@@ -32,7 +32,7 @@ export function EquipmentTypeFormPage({ equipmentTypeId }: EquipmentTypeFormPage
   const parsedId = editing ? Number(equipmentTypeId) : null;
   const validId = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0;
   const { fetchWithAuth, hasPermission, isAuthenticated, isHydrating, roles } = useAuth();
-  const { t, language } = useTranslation();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const canManage = roles.some((role) => MANAGER_ROLES.includes(role.trim().toLowerCase()));
@@ -143,8 +143,6 @@ export function EquipmentTypeFormPage({ equipmentTypeId }: EquipmentTypeFormPage
   };
 
   const title = editing ? currentItem?.name ?? t("equipmentTypes.form.editTitle") : t("equipmentTypes.form.newTitle");
-  const createdDate = currentItem?.createdAt ? new Date(currentItem.createdAt) : null;
-  const dateLabel = createdDate && !Number.isNaN(createdDate.getTime()) ? new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(createdDate) : "—";
   return <div data-testid={editing ? "equipment-type-details-page-root" : "equipment-types-create-page-root"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
     <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
       <header className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
@@ -161,12 +159,11 @@ export function EquipmentTypeFormPage({ equipmentTypeId }: EquipmentTypeFormPage
       {!detailLoading && loadError ? <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{loadError}</section> : null}
       {!detailLoading && (!editing || currentItem) ? <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
         <section data-testid="equipment-type-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
-          <div className={clsx("grid grid-cols-1 gap-8", currentItem && "lg:grid-cols-[minmax(0,1.45fr)_minmax(18rem,0.85fr)]")}>
+          <div className="grid grid-cols-1 gap-5">
             <div className="space-y-5">
               <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.form.name")}</span><Input id="equipment-type-name" required maxLength={200} autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} /></label>
               <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.form.description")}</span><Textarea id="equipment-type-description" maxLength={500} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || (editing ? !canUpdate : !canCreate)} className="h-20 min-h-[80px] resize-y px-4" /></label>
             </div>
-            {currentItem ? <aside className="space-y-4 rounded-sm border border-border bg-card p-4 text-sm"><h2 className="font-semibold">{t("equipmentTypes.detail.metadata")}</h2><label htmlFor="equipment-type-id" className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.detail.idLabel")}</span><Input id="equipment-type-id" value={currentItem.id} readOnly className="bg-muted text-muted-foreground" /></label><label htmlFor="equipment-type-created-at" className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("equipmentTypes.detail.createdAtLabel")}</span><Input id="equipment-type-created-at" value={dateLabel} readOnly className="bg-muted text-muted-foreground" /></label></aside> : null}
           </div>
         </section>
         <div className="flex justify-start gap-3">

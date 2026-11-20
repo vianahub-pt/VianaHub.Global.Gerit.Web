@@ -22,7 +22,7 @@ function getRunPlan(capability, env = process.env) {
     return { spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
   if (capability === "clients" && env.CI === "true") {
-    return { spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression" };
+    return { specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression" };
   }
   if (capability === "users" && (env.CI === "true" || !env.E2E_USERS_QA_MUTATION_APPROVAL)) {
     return { spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression" };
@@ -33,9 +33,9 @@ function getRunPlan(capability, env = process.env) {
 function getBatchPlan(capabilities, env = process.env) {
   const plans = capabilities.map((capability) => getRunPlan(capability, env));
   return {
-    specs: [...new Set(plans.map((plan) => plan.spec))],
+    specs: [...new Set(plans.flatMap((plan) => plan.specs ?? [plan.spec]))],
     projects: [...new Set(plans.map((plan) => plan.project))],
-    nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode === "nonmutating-regression"),
+    nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode !== "canonical-journey"),
   };
 }
 
@@ -94,7 +94,11 @@ function selfTest() {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression",
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
+  });
+  assert.deepEqual(getBatchPlan(["clients"], { CI: "true" }), {
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
     specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],

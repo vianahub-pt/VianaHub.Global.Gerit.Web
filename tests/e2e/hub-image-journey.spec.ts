@@ -220,7 +220,9 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
     const tabs = page.getByRole("tablist").getByRole("tab");
     await tabs.first().focus();
     await tabs.first().press("ArrowRight");
-    await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.nth(1)).toBeDisabled();
+    await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.nth(1)).not.toBeFocused();
     await tabs.nth(1).press("Home");
     await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
   };

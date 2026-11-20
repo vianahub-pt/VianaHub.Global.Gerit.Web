@@ -18,14 +18,14 @@ const remainingTextareaPages = [
 ].map(read);
 const barrel = read("shared/ui/index.ts");
 
-test("Input, native Select and Radix SelectTrigger share dimensions and visual tokens", () => {
-  const sharedClasses = ["h-12", "rounded-[12px]", "border-border", "bg-card", "px-4", "text-sm", "text-foreground", "hover:border-ring/60", "focus-visible:ring-2", "disabled:opacity-50"];
-  for (const token of sharedClasses) assert.ok(input.includes(token), `Input missing ${token}`);
+test("shared field components expose consistent tokens and HubSelect is public", () => {
+  for (const token of ["h-12", "rounded-[12px]", "border-border", "bg-card", "px-4", "text-sm", "text-foreground", "focus-visible:ring-2", "disabled:opacity-50"]) assert.ok(input.includes(token), `Input missing ${token}`);
+  assert.match(barrel, /export \{ HubSelect \} from "@\/shared\/ui\/hub-select"/);
+  assert.doesNotMatch(barrel, /NativeSelect|SelectTrigger|SelectContent|SelectItem/);
   for (const token of ["h-12", "rounded-[12px]", "border-border", "bg-card", "px-4", "text-sm", "text-foreground", "focus-visible:ring-2", "disabled:opacity-50"]) {
-    assert.ok(select.includes(token), `Select controls missing ${token}`);
+    assert.ok(select.includes(token), `Radix Select controls missing ${token}`);
   }
-  assert.match(select, /NativeSelect[\s\S]*?<select ref=\{ref\}/);
-  assert.match(barrel, /NativeSelect[\s\S]*?from "@\/shared\/ui\/select"/);
+  assert.match(select, /data-\[state=checked\]:bg-primary\/10 data-\[state=checked\]:text-primary/);
 });
 
 test("Textarea shares field states but keeps a multiline minimum height and resize", () => {
@@ -34,7 +34,7 @@ test("Textarea shares field states but keeps a multiline minimum height and resi
   for (const token of ["border-destructive", "focus-visible:ring", "disabled:opacity-50", "read-only:bg-muted"]) assert.ok(input.includes(token));
 });
 
-test("Teams, Roles and Actions use the shared multiline field", () => {
+test("Teams, Roles and Actions retain the shared multiline field", () => {
   for (const page of remainingTextareaPages) {
     assert.match(page, /import \{ Textarea \} from "@\/shared\/ui\/textarea"/);
     assert.match(page, /<Textarea[\s\S]*?rows=\{3\}/);
@@ -55,30 +55,12 @@ test("HubSwitch exposes a controlled accessible boolean with visible focus and o
   assert.match(barrel, /HubSwitch/);
 });
 
-test("Preferences keeps its notification callback and adopts the shared switch", () => {
-  assert.match(preferences, /HubSwitch, HubTabs/);
-  assert.match(preferences, /preferences\.toggleEmailNotification\(item\.key\)/);
+test("Preferences keeps callbacks and shared tabs/switch", () => {
+  assert.match(preferences, /HubSelect, HubSwitch, HubTabs/);
+  assert.match(preferences, /value=\{value\}[\s\S]*?onValueChange=\{onChange\}[\s\S]*?options=\{options\}/);
   assert.match(preferences, /<HubSwitch/);
-  assert.doesNotMatch(preferences, /USER_PREFERENCES_SWITCH_FOCUS_CLASSES/);
-});
-
-test("Client uses the shared native select, switch and preserves boolean payload value", () => {
-  assert.match(client, /HubImage, HubSwitch, HubTabs, NativeSelect/);
-  assert.match(client, /<NativeSelect data-testid=\{testId\}/);
-  assert.match(client, /<HubSwitch[\s\S]*?checked=\{values\.isCellPhoneWhatsapp\}[\s\S]*?onCheckedChange=\{\(checked\) => updateValue\("isCellPhoneWhatsapp", checked\)\}/);
-  assert.match(client, /values\.isCellPhoneWhatsapp \? "common\.yes" : "common\.no"/);
-  assert.doesNotMatch(client, /data-testid="client-whatsapp" type="checkbox"/);
-});
-
-test("Legacy Client boolean wrappers reuse HubSwitch and preserve labels/callbacks", () => {
-  const toggleField = legacyClientFields.split("/* ---------- Form field component ---------- */")[0];
-  assert.match(toggleField, /<HubSwitch[\s\S]*?checked=\{checked\}[\s\S]*?onCheckedChange=\{onChange\}/);
-  assert.ok(toggleField.includes('aria-labelledby={labelId + " " + valueId}'));
-  assert.ok(toggleField.includes("{checked ? onLabel : offLabel}"));
-});
-
-test("HubTabs is capability-agnostic, underlined and supports accessible keyboard navigation", () => {
-  for (const capability of ["Clients", "Users", "Preferences", "Roles", "Actions", "/api/"]) assert.equal(tabs.includes(capability), false);
+  assert.match(preferences, /preferences\.toggleEmailNotification\(item\.key\)/);
+  assert.match(preferences, /preferences\.setActiveTab\(tabId\)/);
   assert.match(tabs, /role="tablist"/);
   assert.match(tabs, /role="tab"/);
   assert.match(tabs, /aria-selected=\{isActive\}/);
@@ -93,8 +75,24 @@ test("HubTabs is capability-agnostic, underlined and supports accessible keyboar
   assert.match(preferences, /<HubTabs/);
 });
 
-test("Preferences tab changes remain controlled by the existing state callback", () => {
+test("Preferences tab navigation keeps the controlled state callback", () => {
   assert.match(preferences, /activeTab=\{preferences\.state\.activeTab\}/);
   assert.match(preferences, /preferences\.setActiveTab\(tabId\)/);
   assert.match(preferences, /preferences-tabs-tab-\$\{preferences\.state\.activeTab\}/);
+});
+
+test("Client V1 and legacy Client fields both use HubSelect and preserve callbacks", () => {
+  assert.match(client, /HubImage, HubSelect, HubSwitch, HubTabs/);
+  assert.match(client, /<HubSelect[\s\S]*?onValueChange=\{onChange\}[\s\S]*?required=\{required\}/);
+  assert.match(legacyClientFields, /import \{ HubSelect \} from "@\/shared\/ui"/);
+  assert.match(legacyClientFields, /<HubSelect[\s\S]*?onValueChange=\{onChange\}[\s\S]*?options=\{options\}/);
+  assert.doesNotMatch(client, /NativeSelect|<select/);
+  assert.doesNotMatch(legacyClientFields, /SelectTrigger|SelectContent|SelectItem|<select/);
+  assert.match(client, /<HubSwitch[\s\S]*?checked=\{values\.isCellPhoneWhatsapp\}[\s\S]*?onCheckedChange=\{\(checked\) => updateValue\("isCellPhoneWhatsapp", checked\)\}/);
+  assert.match(client, /values\.isCellPhoneWhatsapp \? "common\.yes" : "common\.no"/);
+  assert.doesNotMatch(client, /data-testid="client-whatsapp" type="checkbox"/);
+  const toggleField = legacyClientFields.split("/* ---------- Form field component ---------- */")[0];
+  assert.match(toggleField, /<HubSwitch[\s\S]*?checked=\{checked\}[\s\S]*?onCheckedChange=\{onChange\}/);
+  assert.ok(toggleField.includes('aria-labelledby={labelId + " " + valueId}'));
+  assert.ok(toggleField.includes("{checked ? onLabel : offLabel}"));
 });

@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 import { deflateSync } from "node:zlib";
@@ -50,6 +50,15 @@ const previewPng = Buffer.concat([
   pngChunk("IEND", Buffer.alloc(0)),
 ]);
 const screenshotDir = resolve(process.cwd(), "test-results", "client-form-visual-review");
+
+async function chooseHubOption(page: Page, testId: string, optionName: string) {
+  const trigger = page.getByTestId(testId);
+  await trigger.click();
+  const option = page.getByRole("option", { name: optionName, exact: true }).last();
+  await expect(option).toBeVisible();
+  await option.click();
+  await expect(trigger).toHaveAttribute("data-state", "closed");
+}
 
 function userDetail(id: number, image = urlImage) {
   return {
@@ -361,8 +370,8 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   // Individual creation layout, label, invalid files and drag/drop preview.
   await page.goto("/clients/new/");
   await expect(page.getByTestId("client-create-page")).toBeVisible();
-  await page.getByTestId("client-party-type").selectOption("1");
-  await page.getByTestId("client-acquisition-source").selectOption("3");
+  await chooseHubOption(page, "client-party-type", "Individual");
+  await chooseHubOption(page, "client-acquisition-source", "Web");
   await expect(page.getByTestId("client-birth-date")).toBeVisible();
   await expect(page.getByTestId("client-gender")).toBeVisible();
   await expect(page.getByTestId("client-nationality")).toBeVisible();
@@ -372,7 +381,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await assertBusinessStatusField();
   await assertCommonClientShell();
   await assertTabKeyboardNavigation();
-  await expect(page.getByTestId("client-business-status")).toHaveValue("4");
+  await expect(page.getByTestId("client-business-status")).toContainText("Potential");
   await assertWhatsAppBehavior();
   await assertTopAlignment("client-party-type", "client-acquisition-source");
   await assertTopAlignment("client-name", "client-business-status");
@@ -391,8 +400,8 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await page.getByTestId("client-name").fill("Discarded visual draft");
   await page.getByTestId("client-cancel").click();
   await expect(page.getByTestId("client-name")).toHaveValue("");
-  await page.getByTestId("client-party-type").selectOption("1");
-  await page.getByTestId("client-acquisition-source").selectOption("3");
+  await chooseHubOption(page, "client-party-type", "Individual");
+  await chooseHubOption(page, "client-acquisition-source", "Web");
 
   const pngInvalid = { name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("not image") };
   await hubImage.getByTestId("hub-image-file").setInputFiles(pngInvalid);
@@ -423,7 +432,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await hubImage.getByTestId("hub-image-remove").click();
 
   await page.getByTestId("client-name").fill("Visual Individual Created");
-  await page.getByTestId("client-business-status").selectOption("1");
+  await chooseHubOption(page, "client-business-status", "Active");
   await page.getByTestId("client-save").click();
   await expect(page).toHaveURL(/\/clients\/9005\/$/);
   const individualCreate = mutations.filter((item) => item.method === "POST" && item.path.endsWith("/clients"))[0];
@@ -434,8 +443,8 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
 
   // Organization create uses the same component and exactly one economic activity field.
   await page.goto("/clients/new/");
-  await page.getByTestId("client-party-type").selectOption("2");
-  await page.getByTestId("client-acquisition-source").selectOption("3");
+  await chooseHubOption(page, "client-party-type", "Organization");
+  await chooseHubOption(page, "client-acquisition-source", "Web");
   await expect(page.getByTestId("client-company-registration")).toBeVisible();
   await expect(page.getByTestId("client-economic-activity")).toBeVisible();
   await expect(page.getByTestId("client-economic-activity")).toHaveCount(1);
@@ -445,7 +454,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByTestId("client-number-employees")).toBeVisible();
   await assertBusinessStatusField();
   await assertCommonClientShell();
-  await expect(page.getByTestId("client-business-status")).toHaveValue("4");
+  await expect(page.getByTestId("client-business-status")).toContainText("Potential");
   await assertWhatsAppBehavior();
   await assertTopAlignment("client-party-type", "client-acquisition-source");
   await assertTopAlignment("client-name", "client-business-status");
@@ -481,8 +490,12 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByTestId("client-company-registration")).toHaveCount(0);
   await assertBusinessStatusField();
   await assertCommonClientShell();
-  await expect(page.getByTestId("client-business-status")).toHaveValue("6");
-  await expect(page.getByTestId("client-business-status").locator('option[value="6"]')).toHaveAttribute("disabled", "");
+  await expect(page.getByTestId("client-business-status")).toContainText("Archived");
+  await page.getByTestId("client-business-status").click();
+  const disabledStoredStatus = page.locator('[role="option"][aria-disabled="true"]');
+  await expect(disabledStoredStatus).toHaveCount(1);
+  await expect(disabledStoredStatus).toContainText("Archived");
+  await page.keyboard.press("Escape");
   await assertWhatsAppBehavior();
   await assertTopAlignment("client-name", "client-business-status");
   await assertTopAlignment("client-phone", "client-cell-phone");
@@ -493,7 +506,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await assertFullWidthNotes();
   await capture("client-edit-individual.png");
   await page.getByTestId("client-name").fill("Visual Individual Updated");
-  await page.getByTestId("client-business-status").selectOption("2");
+  await chooseHubOption(page, "client-business-status", "Archived");
   await page.getByTestId("client-save").click();
   const individualUpdate = mutations.find((item) => item.method === "PUT" && item.path.endsWith("/clients/9002"));
   expect(individualUpdate?.body).toMatchObject({ statusDomainId: 1, statusDefinitionId: 2, name: "Visual Individual Updated", isCellPhoneWhatsapp: false });
@@ -508,7 +521,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByTestId("client-nationality")).toHaveCount(0);
   await assertBusinessStatusField();
   await assertCommonClientShell();
-  await expect(page.getByTestId("client-business-status")).toHaveValue("3");
+  await expect(page.getByTestId("client-business-status")).toContainText("Inactive");
   await assertWhatsAppBehavior();
   await assertTopAlignment("client-name", "client-business-status");
   await assertTopAlignment("client-company-registration", "client-economic-activity");
@@ -520,7 +533,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await assertFullWidthNotes();
   await capture("client-edit-organization.png");
   await page.getByTestId("client-name").fill("Visual Organization Updated");
-  await page.getByTestId("client-business-status").selectOption("5");
+  await chooseHubOption(page, "client-business-status", "Suspended");
   await page.getByTestId("client-save").click();
   const organizationUpdate = mutations.find((item) => item.method === "PUT" && item.path.endsWith("/clients/9006"));
   expect(organizationUpdate?.body).toMatchObject({ statusDomainId: 1, statusDefinitionId: 5, name: "Visual Organization Updated", isCellPhoneWhatsapp: false });

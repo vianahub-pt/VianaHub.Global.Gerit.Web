@@ -68,6 +68,15 @@ test("selects Client functionally and reports verified presentation consumers", 
   assert.ok(plan.sharedComponents.includes("hub-switch"));
 });
 
+test("direct HubTabs changes keep the functional Client plan and require mapped regressions", () => {
+  const plan = selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-tabs.tsx"], { scope: ["clients"] });
+  assert.deepEqual(plan.functionalCapabilities, ["clients"]);
+  assert.deepEqual(plan.capabilities, ["clients"]);
+  assert.deepEqual(plan.presentationConsumers, []);
+  assert.deepEqual(plan.sharedComponents, ["hub-tabs"]);
+  assert.equal(plan.sharedUiRegressionRequired, true);
+  assert.ok(plan.requiredRegressionTests.includes("tests/shared/ui-standard.test.mjs"));
+});
 test("package test gate and CI runner execute every required shared regression artifact", () => {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   const testCommand = packageJson.scripts.test;
@@ -87,18 +96,36 @@ test("package test gate and CI runner execute every required shared regression a
   const journey = readFileSync("tests/e2e/hub-image-journey.spec.ts", "utf8");
   assert.ok(journey.includes('page.route("**/api/**"'), "shared journey must intercept all application API calls");
   assert.equal(journey.includes("route.continue()"), false, "shared journey must not forward API traffic to QA");
+
+  assert.match(testCommand, /tests\/shared\/\*\.test\.mjs/);
+  assert.match(e2eJob, /shared_components=\$\(node -e .*sharedComponents/);
+  assert.match(e2eJob, /shared_components=\$shared_components/);
+  assert.match(e2eJob, /SHARED_COMPONENTS:.*shared_components/);
+  assert.match(e2eJob, /"sharedComponents":\$SHARED_COMPONENTS/);
+  assert.match(e2eJob, /SHARED_REGRESSION_CONSUMERS:.*presentation_consumers/);
+  assert.match(workflow, /name: Run required static and focused regression tests[\s\S]*?run: npm test/);
+  assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 
-test("shared regression outcome fails closed for omitted consumers, tests, or Client", () => {
+test("shared regression outcome accepts explicit HubTabs proof and otherwise fails closed", () => {
   const base = {
     selectionStatus: "success", capabilities: ["clients"], functionalCapabilities: ["clients"], scope: ["clients"],
-    scopeApproved: false, runE2E: true, reason: "functional-and-shared-ui-regression", e2eStatus: "success",
-    sharedUiRegressionRequired: true, presentationConsumers: ["users", "roles"],
-    sharedRegressionConsumers: ["users", "roles"], sharedRegressionStatus: "success", regressionTestsStatus: "success",
+    scopeApproved: false, runE2E: true, reason: "any-reason-value-is-non-authoritative", e2eStatus: "success",
+    sharedUiRegressionRequired: true, sharedComponents: ["hub-tabs"], presentationConsumers: [],
+    sharedRegressionConsumers: [], sharedRegressionStatus: "success", regressionTestsStatus: "success",
   };
-  assert.equal(validateE2EOutcome(base).pass, true);
-  assert.equal(validateE2EOutcome({ ...base, sharedRegressionConsumers: ["users"] }).pass, false);
-  assert.equal(validateE2EOutcome({ ...base, sharedRegressionStatus: "skipped" }).pass, false);
-  assert.equal(validateE2EOutcome({ ...base, regressionTestsStatus: "failure" }).pass, false);
+  assert.equal(validateE2EOutcome(base).pass, true, "HubTabs direct test is in npm test and both CI stages succeeded");
+
+  const consumerRegression = { ...base, sharedComponents: [], presentationConsumers: ["users", "roles"], sharedRegressionConsumers: ["users", "roles"] };
+  assert.equal(validateE2EOutcome(consumerRegression).pass, true);
+  assert.equal(validateE2EOutcome({ ...base, sharedComponents: [], presentationConsumers: [] }).reason, "shared-regression-evidence-missing");
+  assert.equal(validateE2EOutcome({ ...base, sharedComponents: undefined }).reason, "invalid-shared-component-plan");
+  assert.equal(validateE2EOutcome({ ...base, regressionTestsStatus: "skipped" }).reason, "required-regression-tests-did-not-succeed");
+  assert.equal(validateE2EOutcome({ ...base, sharedRegressionStatus: "failure" }).reason, "shared-regression-did-not-succeed");
+  assert.equal(validateE2EOutcome({ ...base, e2eStatus: "cancelled" }).pass, false);
+  assert.equal(validateE2EOutcome({ ...base, sharedComponents: ["future-widget"] }).reason, "shared-component-regression-tests-undefined");
+  assert.equal(validateE2EOutcome({ ...base, sharedComponents: ["hub-tabs", "hub-tabs"] }).reason, "invalid-shared-component-plan");
+  assert.equal(validateE2EOutcome({ ...consumerRegression, sharedRegressionConsumers: ["users"] }).reason, "shared-regression-consumers-do-not-match-plan");
+  assert.equal(validateE2EOutcome({ ...consumerRegression, regressionTestsStatus: "unknown" }).reason, "required-regression-tests-did-not-succeed");
   assert.equal(validateE2EOutcome({ ...base, capabilities: [], scope: [], functionalCapabilities: [] }).pass, false);
 });

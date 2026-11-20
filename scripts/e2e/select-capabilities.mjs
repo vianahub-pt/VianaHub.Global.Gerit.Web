@@ -5,6 +5,10 @@ import { CAPABILITIES } from "./capabilities.mjs";
 import { verifyStructuralSync } from "./structural-sync.mjs";
 import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresentationAdapter } from "./impact-classifier.mjs";
 
+const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
+  "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
+});
+
 export { CAPABILITIES };
 
 const capabilityCodePaths = new Map([
@@ -414,7 +418,7 @@ function isVerifiedBreadcrumbRemoval(files, { baseContents, headContents, transl
   return expectedTest === headTest;
 }
 
-export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, structuralSyncVerified, e2eStatus, functionalCapabilities, sharedUiRegressionRequired = false, presentationConsumers = [], sharedRegressionConsumers = [], sharedRegressionStatus, regressionTestsStatus }) {
+export function validateE2EOutcome({ selectionStatus, capabilities, scope, scopeApproved, runE2E, reason, structuralSyncVerified, e2eStatus, functionalCapabilities, sharedUiRegressionRequired = false, sharedComponents, presentationConsumers = [], sharedRegressionConsumers = [], sharedRegressionStatus, regressionTestsStatus }) {
   if (selectionStatus !== "success") return { pass: false, reason: "selection-did-not-succeed" };
   if (!Array.isArray(capabilities) || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     return { pass: false, reason: "invalid-capability-selection" };
@@ -438,12 +442,23 @@ export function validateE2EOutcome({ selectionStatus, capabilities, scope, scope
       return { pass: false, reason: "functional-capabilities-were-omitted" };
     }
     if (sharedUiRegressionRequired) {
-      if (!Array.isArray(presentationConsumers) || presentationConsumers.length === 0 ||
+      if (!Array.isArray(sharedComponents) || sharedComponents.some((item) => typeof item !== "string" || item.length === 0) ||
+          new Set(sharedComponents).size !== sharedComponents.length) return { pass: false, reason: "invalid-shared-component-plan" };
+      if (!Array.isArray(presentationConsumers) || presentationConsumers.some((item) => typeof item !== "string" || item.length === 0) ||
           new Set(presentationConsumers).size !== presentationConsumers.length) return { pass: false, reason: "invalid-presentation-consumer-plan" };
+      if (sharedComponents.length === 0 && presentationConsumers.length === 0) return { pass: false, reason: "shared-regression-evidence-missing" };
+      const componentRegressionTests = sharedComponents.flatMap((component) => SHARED_COMPONENT_REGRESSION_TESTS[component] ?? []);
+      if (sharedComponents.some((component) => !Object.hasOwn(SHARED_COMPONENT_REGRESSION_TESTS, component)) ||
+          componentRegressionTests.some((file) => !PRESENTATION_REGRESSION_TESTS.includes(file))) {
+        return { pass: false, reason: "shared-component-regression-tests-undefined" };
+      }
       if (!Array.isArray(sharedRegressionConsumers) || presentationConsumers.some((item) => !sharedRegressionConsumers.includes(item)) ||
           sharedRegressionConsumers.length !== presentationConsumers.length) return { pass: false, reason: "shared-regression-consumers-do-not-match-plan" };
       if (sharedRegressionStatus !== "success") return { pass: false, reason: "shared-regression-did-not-succeed" };
       if (regressionTestsStatus !== "success") return { pass: false, reason: "required-regression-tests-did-not-succeed" };
+    } else if ((Array.isArray(sharedComponents) && sharedComponents.length > 0) ||
+        (Array.isArray(presentationConsumers) && presentationConsumers.length > 0)) {
+      return { pass: false, reason: "shared-regression-evidence-without-requirement" };
     }
     return e2eStatus === "success"
       ? { pass: true, reason: "selected-e2e-succeeded" }

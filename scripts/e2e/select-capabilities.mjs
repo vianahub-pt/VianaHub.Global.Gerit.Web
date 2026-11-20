@@ -19,7 +19,7 @@ const capabilityCodePaths = new Map([
 
 const capabilityTestPaths = new Map([
   ["actions", ["tests/actions/", "tests/e2e/actions-journey.spec.ts"]],
-  ["user-preferences", ["tests/preferences/", "tests/e2e/user-preferences-journey.spec.ts"]],
+  ["user-preferences", ["tests/preferences/", "tests/e2e/user-preferences-journey.spec.ts", "tests/e2e/workspace-header-theme-journey.spec.ts"]],
   ["teams", ["tests/teams/", "tests/e2e/teams-journey.spec.ts"]],
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],

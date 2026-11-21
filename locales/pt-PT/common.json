@@ -303,6 +303,7 @@
   "clients.contacts.title": "Contactos",
   "clients.contacts.subtitle": "Gerir os contactos do cliente.",
   "clients.contacts.loading": "A carregar contactos...",
+  "clients.contacts.form.selectToEdit": "Selecione um contacto abaixo para editar.",
   "clients.contacts.actions.new": "Novo contacto",
   "clients.contacts.actions.view": "Ver contacto",
   "clients.contacts.actions.edit": "Editar contacto",

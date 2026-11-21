@@ -7,6 +7,7 @@ import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresent
 
 const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
   "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
+  "hub-grid": Object.freeze(["tests/e2e/client-contact-person-journey.spec.ts"]),
 });
 
 export { CAPABILITIES };
@@ -277,12 +278,12 @@ export function selectCapabilities(files, {
     scope: [...scope],
     scopeApproved: scope.length > 1 && scopeApproved === true,
     runE2E: true,
-    reason: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/")) ? "functional-and-shared-ui-regression" : "declared-capability-scope",
+    reason: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx") ? "functional-and-shared-ui-regression" : "declared-capability-scope",
     supportingChanges: [...new Set(supportingChanges)].sort(),
     functionalCapabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     presentationConsumers: [...presentationConsumers].sort(),
-    sharedUiRegressionRequired: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/")) || localeFiles.length > 0,
-    sharedComponents: [...new Set(nonCiChanges.filter((file) => file.startsWith("shared/ui/")).map((file) => file.slice("shared/ui/".length).replace(/\.(?:tsx?|jsx?)$/, "")))].sort(),
+    sharedUiRegressionRequired: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx") || localeFiles.length > 0,
+      sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") ? [file.slice("shared/ui/".length).replace(/\.(?:tsx?|jsx?)$/, "")] : []))].sort(),
     requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
 }

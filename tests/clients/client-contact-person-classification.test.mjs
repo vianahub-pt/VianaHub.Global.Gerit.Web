@@ -47,7 +47,9 @@ test("Client child tabs require a persisted parent that matches the validated ro
   const journey = readFileSync(resolve("tests/e2e/client-contact-person-journey.spec.ts"), "utf8");
   assert.match(source, /clientTabsEnabled = isEditingRoute && validId && !loading && client !== null && client\.id === parsedId/);
   assert.match(source, /disabled: item\.id !== "client" && !clientTabsEnabled/);
-  assert.match(source, /ClientContactPersonsPanel clientId=\{clientTabsEnabled \? client\.id : null\}/);
+  assert.match(source, /<div hidden=\{selectedTab !== "contacts"\}>/);
+  assert.match(source, /ClientContactPersonsPanel[\s\S]*clientId=\{clientTabsEnabled \? client\.id : null\}[\s\S]*active=\{selectedTab === "contacts" && clientTabsEnabled && !loading\}/);
+  assert.match(source, /key=\{String\(clientTabsEnabled \? client\.id : parsedId \?\? "unavailable"\)\}/);
   assert.match(tabs, /if \(tabs\.find\(\(tab\) => tab\.id === tabId\)\?\.disabled\) return/);
   assert.match(tabs, /disabled=\{tab\.disabled\}/);
   assert.match(tabs, /tabs\.filter\(\(tab\) => !tab\.disabled\)/);
@@ -56,9 +58,16 @@ test("Client child tabs require a persisted parent that matches the validated ro
   assert.match(journey, /setClientCreateStatus\(500\)/);
   assert.match(journey, /setClientCreateStatus\(201\)/);
   assert.match(journey, /not-a-valid-id/);
+  assert.match(journey, /contactReadsBeforeHide/);
+  assert.match(journey, /filterPreservedAcrossTabSwitch/);
   assert.match(journey, /pendingContacts|address|fiscal/i);
 });
 
+test("mocked visual harness rejects unexpected preference writes immediately", () => {
+  const journey = readFileSync(resolve("tests/e2e/client-contact-person-journey.spec.ts"), "utf8");
+  assert.match(journey, /if \(preferencesMatch && method !== "GET"\) \{[\s\S]*unexpectedWrites\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,/);
+  assert.match(journey, /if \(method === "GET" \|\| method === "HEAD"\) return route\.continue\(\);[\s\S]*unexpectedWrites\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,/);
+});
 test("ClientContactPerson read and mutation grants remain independently scoped", () => {
   const source = readFileSync(resolve("domains/operations/clients/clients-v1-contacts.tsx"), "utf8");
   for (const action of ["GetPaged", "GetBy", "Create", "Update", "Activate", "Deactivate", "Delete"]) {

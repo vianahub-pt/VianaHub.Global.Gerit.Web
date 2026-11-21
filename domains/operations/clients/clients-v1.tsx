@@ -463,16 +463,8 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
         {formError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{formError}</p>}
         {catalogError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{catalogError}</p>}
         <div id="client-v1-tab-panel" role="tabpanel" aria-labelledby={`client-v1-tabs-tab-${selectedTab}`} tabIndex={0}>
-        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : selectedTab !== "client" ? (
-          selectedTab === "contacts" ? (
-            <ClientContactPersonsPanel clientId={clientTabsEnabled ? client.id : null} />
-          ) : (
-            <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-              <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === selectedTab)?.label}</h2>
-              <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[selectedTab]}</p>
-            </section>
-          )
-        ) : (
+        <div hidden={selectedTab !== "client"}>
+        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : (
           <form onSubmit={(event) => void submit(event)} className="space-y-6" data-testid="client-form">
             <section data-testid="client-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <fieldset disabled={fieldsDisabled} data-testid="client-fields-grid" className="grid grid-cols-1 gap-x-5 gap-y-5 lg:grid-cols-3">
@@ -517,6 +509,22 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
             </div>}
           </form>
         )}
+        </div>
+        <div hidden={selectedTab !== "contacts"}>
+          <ClientContactPersonsPanel
+            key={String(clientTabsEnabled ? client.id : parsedId ?? "unavailable")}
+            clientId={clientTabsEnabled ? client.id : null}
+            active={selectedTab === "contacts" && clientTabsEnabled && !loading}
+          />
+        </div>
+        {(["addresses", "documents", "fiscalData"] as const).map((tabId) => (
+          <div key={tabId} hidden={selectedTab !== tabId}>
+            <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+              <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === tabId)?.label}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[tabId]}</p>
+            </section>
+          </div>
+        ))}
         </div>
 
         {isEditingRoute && client && <ConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!open && !deleteSubmitting) setDeleteOpen(false); }}

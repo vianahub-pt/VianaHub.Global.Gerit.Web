@@ -298,6 +298,7 @@
   "clients.contacts.title": "Contactos",
   "clients.contacts.subtitle": "Gestiona los contactos del cliente.",
   "clients.contacts.loading": "Cargando contactos...",
+  "clients.contacts.form.selectToEdit": "Seleccione un contacto abajo para editar.",
   "clients.contacts.actions.new": "Nuevo contacto",
   "clients.contacts.actions.view": "Ver contacto",
   "clients.contacts.actions.edit": "Editar contacto",

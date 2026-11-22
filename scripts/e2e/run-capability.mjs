@@ -20,7 +20,7 @@ function fail(message) {
 function getRunPlan(capability, env = process.env, { mockedVisual = false } = {}) {
   if (mockedVisual && capability === "clients") {
     return {
-      specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+      spec: "tests/e2e/client-contact-person-journey.spec.ts",
       project: "journey",
       mode: "mocked-visual-read-only",
     };
@@ -123,12 +123,16 @@ function selfTest() {
     nonmutatingCapabilities: ["users"],
   });
   assert.deepEqual(getRunPlan("clients", {}, { mockedVisual: true }), {
-    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    spec: "tests/e2e/client-contact-person-journey.spec.ts",
     project: "journey", mode: "mocked-visual-read-only",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
-    project: "journey", mode: "mocked-functional-and-shared-regression",
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
+  });
+  assert.deepEqual(getBatchPlan(["clients"], {}, { mockedVisual: true }), {
+    specs: ["tests/e2e/client-contact-person-journey.spec.ts"],
+    projects: ["journey"],
+    nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
     capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false,

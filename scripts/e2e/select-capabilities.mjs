@@ -684,9 +684,16 @@ function selfTest() {
     functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
     structuralSyncVerified: false, requiredRegressionTests: [],
   });
-  assert.equal(selectCapabilities(["tests/e2e/impact-classifier.test.mjs"], {
+  const ciOnlyStructuralFixPlan = selectCapabilities([
+    "scripts/e2e/select-capabilities.mjs",
+    "scripts/e2e/structural-sync.mjs",
+    "tests/e2e/impact-classifier.test.mjs",
+  ], {
     scopeTitle: "fix(ci): normalize E2E plan contract",
-  }).reason, "ci-validation-only");
+  });
+  assert.equal(ciOnlyStructuralFixPlan.reason, "ci-validation-only");
+  assert.equal(ciOnlyStructuralFixPlan.runE2E, false);
+  assert.equal(ciOnlyStructuralFixPlan.structuralSyncVerified, false);
   assert.throws(() => selectCapabilities([]), /changed-file set is empty/);
   const selectorOnlySyncPlan = selectCapabilities(["scripts/e2e/select-capabilities.mjs"]);
   assert.deepEqual(selectorOnlySyncPlan, {
@@ -754,6 +761,7 @@ function selfTest() {
     headSha = "b".repeat(40),
     pullRequestBaseSha = baseSha,
     pullRequestHeadSha = headSha,
+    changedFiles = [],
   } = {}) => ({
     eventName,
     repositoryName,
@@ -764,13 +772,15 @@ function selfTest() {
     },
     baseSha,
     headSha,
-    changedFiles: [],
+    changedFiles,
   });
   const identicalTreeEvidence = {
     isAncestor: true,
+    mergeBase: "a".repeat(40),
     baseTree: "tree-identical",
     headTree: "tree-identical",
     changedFiles: [],
+    mergeBaseChangedFiles: [],
   };
   const structuralPlan = (context = structuralSyncContext(), evidence = identicalTreeEvidence, files = []) =>
     compareRefsPlan(files, context.baseSha, context.headSha, {
@@ -811,6 +821,7 @@ function selfTest() {
     assert.equal(typeof plan.structuralSyncVerified, "boolean");
     assert.deepEqual(JSON.parse(JSON.stringify(plan)), plan, "all CI fields round-trip as JSON");
   };
+  assertWorkflowPlanSchema(ciOnlyStructuralFixPlan);
   for (const plan of [
     verifiedStructuralPlan,
     breadcrumbPlan,
@@ -824,6 +835,27 @@ function selfTest() {
     selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-select.tsx"], { scope: ["clients"] }),
     selectCapabilities([], { fullRegression: true }),
   ]) assertWorkflowPlanSchema(plan);
+  const structuralSyncCiOnlyFiles = [
+    "scripts/e2e/select-capabilities.mjs",
+    "tests/e2e/impact-classifier.test.mjs",
+  ];
+  const structuralSyncCiOnlyPlan = structuralPlan(
+    structuralSyncContext({ changedFiles: structuralSyncCiOnlyFiles }),
+    {
+      ...identicalTreeEvidence,
+      baseTree: "tree-before-ci-sync",
+      headTree: "tree-after-ci-sync",
+      changedFiles: structuralSyncCiOnlyFiles,
+      mergeBaseChangedFiles: structuralSyncCiOnlyFiles,
+    },
+    structuralSyncCiOnlyFiles,
+  );
+  assert.equal(structuralSyncCiOnlyPlan.reason, "verified-structural-sync");
+  assert.equal(structuralSyncCiOnlyPlan.structuralSyncVerified, true);
+  assert.equal(structuralSyncCiOnlyPlan.runE2E, false);
+  assert.deepEqual(structuralSyncCiOnlyPlan.sharedComponents, []);
+  assert.deepEqual(structuralSyncCiOnlyPlan.capabilities, []);
+  assertWorkflowPlanSchema(structuralSyncCiOnlyPlan);
   assert.equal(validateE2EOutcome({
     selectionStatus: "success",
     ...verifiedStructuralPlan,
@@ -878,13 +910,15 @@ function selfTest() {
   assert.throws(() => structuralPlan(structuralSyncContext({
     pullRequestHeadSha: "c".repeat(40),
   })), /event SHAs/);
-  assert.throws(() => structuralPlan(structuralSyncContext(), identicalTreeEvidence, ["README.md"]), /changed-file list/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), identicalTreeEvidence, ["README.md"]), /both Git diff ranges/);
   assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, isAncestor: false }), /not an ancestor/);
-  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, headTree: "different-tree" }), /trees are not identical/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, headTree: "different-tree" }), /tree hashes do not match/);
   assert.throws(() => structuralPlan(structuralSyncContext(), {
     ...identicalTreeEvidence,
+    headTree: "tree-with-functional-change",
     changedFiles: ["domains/operations/users/users-page.tsx"],
-  }), /Git reports changed files/);
+    mergeBaseChangedFiles: ["domains/operations/users/users-page.tsx"],
+  }, ["domains/operations/users/users-page.tsx"]), /non-CI-only changes/);
 
   const clientOnly = localeAnalysis({ "clients.v1.fields.name": "Name" }, { "clients.v1.fields.name": "Client name" });
   assert.deepEqual(selectCapabilities(["locales/en-US/common.json"], { scope: ["clients"], translationAnalysis: clientOnly }).capabilities, ["clients"]);

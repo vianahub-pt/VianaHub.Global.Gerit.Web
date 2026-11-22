@@ -69,6 +69,46 @@ test("selects Client functionally and reports verified presentation consumers", 
   assert.ok(plan.sharedComponents.includes("hub-switch"));
 });
 
+test("all valid classifier plans expose serializable workflow fields with semantic defaults", () => {
+  const workflowFields = [
+    "capabilities", "scope", "scopeApproved", "runE2E", "reason", "functionalCapabilities",
+    "sharedComponents", "presentationConsumers", "sharedUiRegressionRequired", "structuralSyncVerified",
+  ];
+  const plans = [
+    selectCapabilities(["README.md", "docs/ci.md"]),
+    selectCapabilities([".github/workflows/ci.yml"]),
+    selectCapabilities(["locales/pt-PT/common.json"], {
+      scope: ["roles"],
+      translationAnalysis: { ok: true, changedKeys: [], removedKeys: [] },
+    }),
+    selectCapabilities(["domains/operations/clients/clients-v1.tsx"], { scope: ["clients"] }),
+    selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-tabs.tsx"], { scope: ["clients"] }),
+    selectCapabilities([], { fullRegression: true }),
+  ];
+
+  for (const plan of plans) {
+    for (const field of workflowFields) assert.ok(Object.hasOwn(plan, field), field + " is required by CI");
+    assert.ok(Array.isArray(plan.capabilities));
+    assert.ok(Array.isArray(plan.scope));
+    assert.equal(typeof plan.scopeApproved, "boolean");
+    assert.equal(typeof plan.runE2E, "boolean");
+    assert.equal(typeof plan.reason, "string");
+    assert.ok(Array.isArray(plan.functionalCapabilities));
+    assert.ok(Array.isArray(plan.sharedComponents));
+    assert.ok(Array.isArray(plan.presentationConsumers));
+    assert.equal(typeof plan.sharedUiRegressionRequired, "boolean");
+    assert.equal(typeof plan.structuralSyncVerified, "boolean");
+    assert.deepEqual(JSON.parse(JSON.stringify(plan)), plan, "workflow fields must round-trip through JSON");
+  }
+
+  const noSemanticTranslation = plans[2];
+  assert.deepEqual(noSemanticTranslation.capabilities, []);
+  assert.equal(noSemanticTranslation.runE2E, false);
+  const sharedUi = plans[4];
+  assert.deepEqual(sharedUi.sharedComponents, ["hub-tabs"]);
+  assert.equal(sharedUi.sharedUiRegressionRequired, true);
+});
+
 test("direct HubTabs changes keep the functional Client plan and require mapped regressions", () => {
   const plan = selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-tabs.tsx"], { scope: ["clients"] });
   assert.deepEqual(plan.functionalCapabilities, ["clients"]);

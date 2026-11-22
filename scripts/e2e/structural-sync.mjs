@@ -2,6 +2,19 @@ import { execFileSync } from "node:child_process";
 
 const expectedRepository = "vianahub-pt/VianaHub.Global.Gerit.Web";
 const shaPattern = /^[a-f0-9]{40}$/i;
+const structuralSyncCiOnlyFiles = new Set([
+  "scripts/e2e/select-capabilities.mjs",
+  "scripts/e2e/structural-sync.mjs",
+  "tests/e2e/impact-classifier.test.mjs",
+]);
+
+function normalizeFileList(files) {
+  return files.map((file) => String(file).replaceAll("\\", "/").trim()).filter(Boolean).sort();
+}
+
+function sameFileList(left, right) {
+  return left.length === right.length && left.every((file, index) => file === right[index]);
+}
 
 function readGitEvidence(baseSha, headSha) {
   const run = (args) => execFileSync("git", args, { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
@@ -18,9 +31,11 @@ function readGitEvidence(baseSha, headSha) {
 
   return {
     isAncestor,
+    mergeBase: run(["merge-base", baseSha, headSha]),
     baseTree: run(["rev-parse", "--verify", `${baseSha}^{tree}`]),
     headTree: run(["rev-parse", "--verify", `${headSha}^{tree}`]),
-    changedFiles: run(["diff", "--name-only", `${baseSha}...${headSha}`]).split(/\r?\n/).filter(Boolean),
+    changedFiles: run(["diff", "--name-only", baseSha, headSha]).split(/\r?\n/).filter(Boolean),
+    mergeBaseChangedFiles: run(["diff", "--name-only", `${baseSha}...${headSha}`]).split(/\r?\n/).filter(Boolean),
   };
 }
 
@@ -66,21 +81,42 @@ export function verifyStructuralSync(context, getGitEvidence = readGitEvidence) 
     throw new Error("Structural sync validation failed: event SHAs are missing, invalid, or inconsistent.");
   }
 
-  const eventFiles = (context.changedFiles ?? []).map((file) => String(file).trim()).filter(Boolean);
-  if (eventFiles.length !== 0) {
-    throw new Error("Structural sync validation failed: changed-file list is not empty.");
+  if (!Array.isArray(context.changedFiles)) {
+    throw new Error("Structural sync validation failed: changed-file list is missing.");
+  }
+  const eventFiles = normalizeFileList(context.changedFiles);
+  if (new Set(eventFiles).size !== eventFiles.length) {
+    throw new Error("Structural sync validation failed: changed-file list contains duplicates.");
   }
 
   const gitEvidence = getGitEvidence(baseSha, headSha);
   if (gitEvidence.isAncestor !== true) {
     throw new Error("Structural sync validation failed: develop is not an ancestor of main.");
   }
-  if (!gitEvidence.baseTree || gitEvidence.baseTree !== gitEvidence.headTree) {
-    throw new Error("Structural sync validation failed: base and head trees are not identical.");
+  if (gitEvidence.mergeBase !== baseSha) {
+    throw new Error("Structural sync validation failed: merge-base does not match the PR base SHA.");
   }
-  if (!Array.isArray(gitEvidence.changedFiles) || gitEvidence.changedFiles.length !== 0) {
-    throw new Error("Structural sync validation failed: Git reports changed files.");
+  if (!gitEvidence.baseTree || !gitEvidence.headTree) {
+    throw new Error("Structural sync validation failed: Git tree evidence is missing.");
+  }
+  if (!Array.isArray(gitEvidence.changedFiles) || !Array.isArray(gitEvidence.mergeBaseChangedFiles)) {
+    throw new Error("Structural sync validation failed: Git changed-file evidence is missing.");
   }
 
-  return { candidate: true, verified: true };
+  const treeDiffFiles = normalizeFileList(gitEvidence.changedFiles);
+  const mergeBaseDiffFiles = normalizeFileList(gitEvidence.mergeBaseChangedFiles);
+  if ((treeDiffFiles.length === 0) !== (gitEvidence.baseTree === gitEvidence.headTree)) {
+    throw new Error("Structural sync validation failed: tree hashes do not match the Git file diff.");
+  }
+  if (new Set(treeDiffFiles).size !== treeDiffFiles.length || new Set(mergeBaseDiffFiles).size !== mergeBaseDiffFiles.length ||
+      !sameFileList(eventFiles, mergeBaseDiffFiles) || !sameFileList(treeDiffFiles, mergeBaseDiffFiles)) {
+    throw new Error("Structural sync validation failed: PR file list does not match both Git diff ranges.");
+  }
+
+  const disallowedFiles = treeDiffFiles.filter((file) => !structuralSyncCiOnlyFiles.has(file));
+  if (disallowedFiles.length > 0) {
+    throw new Error("Structural sync validation failed: non-CI-only changes are present (" + disallowedFiles.join(", ") + ").");
+  }
+
+  return { candidate: true, verified: true, changedFiles: treeDiffFiles };
 }

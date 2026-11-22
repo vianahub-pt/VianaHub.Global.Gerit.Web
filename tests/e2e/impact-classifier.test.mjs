@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 import { PRESENTATION_REGRESSION_TESTS, provePresentationAdapter } from "../../scripts/e2e/impact-classifier.mjs";
 import { selectCapabilities, validateE2EOutcome } from "../../scripts/e2e/select-capabilities.mjs";
+import { verifyStructuralSync } from "../../scripts/e2e/structural-sync.mjs";
 
 const tests = {
   "tests/shared/ui-standard.test.mjs": "shared UI contracts",
@@ -14,6 +15,81 @@ const tests = {
   "tests/e2e/hub-image-journey.spec.ts": 'page.route("**/api/**"); const mutations:',
   "tests/e2e/client-contact-person-journey.spec.ts": 'ClientContactPerson inline form and HubGrid journey',
 };
+
+const structuralSyncBaseSha = "a".repeat(40);
+const structuralSyncHeadSha = "b".repeat(40);
+const structuralSyncRepository = "vianahub-pt/VianaHub.Global.Gerit.Web";
+const structuralSyncContext = (changedFiles = [], overrides = {}) => ({
+  eventName: "pull_request",
+  repositoryName: structuralSyncRepository,
+  repository: { id: 731, full_name: structuralSyncRepository },
+  pullRequest: {
+    base: { ref: "develop", sha: structuralSyncBaseSha, repo: { id: 731, full_name: structuralSyncRepository } },
+    head: { ref: "main", sha: structuralSyncHeadSha, repo: { id: 731, full_name: structuralSyncRepository } },
+  },
+  baseSha: structuralSyncBaseSha,
+  headSha: structuralSyncHeadSha,
+  changedFiles,
+  ...overrides,
+});
+const structuralSyncEvidence = (changedFiles = [], overrides = {}) => ({
+  isAncestor: true,
+  mergeBase: structuralSyncBaseSha,
+  baseTree: "tree-before",
+  headTree: changedFiles.length === 0 ? "tree-before" : "tree-after-ci-only",
+  changedFiles,
+  mergeBaseChangedFiles: changedFiles,
+  ...overrides,
+});
+
+test("verifies empty and explicitly allowlisted CI-only structural syncs from Git evidence", () => {
+  const emptySync = verifyStructuralSync(structuralSyncContext(), () => structuralSyncEvidence());
+  assert.deepEqual(emptySync, { candidate: true, verified: true, changedFiles: [] });
+
+  const ciOnlyFiles = [
+    "scripts/e2e/select-capabilities.mjs",
+    "scripts/e2e/structural-sync.mjs",
+    "tests/e2e/impact-classifier.test.mjs",
+  ];
+  const ciOnlySync = verifyStructuralSync(structuralSyncContext(ciOnlyFiles), () => structuralSyncEvidence(ciOnlyFiles));
+  assert.deepEqual(ciOnlySync, { candidate: true, verified: true, changedFiles: ciOnlyFiles });
+});
+
+test("rejects structural sync claims with functional, shared, translation, dependency, HubSelect or unknown changes", () => {
+  for (const file of [
+    "domains/operations/clients/clients-v1.tsx",
+    "shared/ui/hub-select.tsx",
+    "locales/pt-PT/common.json",
+    "package.json",
+    "unclassified/anything.txt",
+  ]) {
+    assert.throws(
+      () => verifyStructuralSync(structuralSyncContext([file]), () => structuralSyncEvidence([file])),
+      /non-CI-only changes/,
+      file,
+    );
+  }
+});
+
+test("rejects wrong refs, unrelated history, nonmatching merge-base and mismatched PR/Git file lists", () => {
+  const ciOnlyFiles = ["scripts/e2e/select-capabilities.mjs"];
+  assert.deepEqual(verifyStructuralSync(structuralSyncContext(ciOnlyFiles, {
+    pullRequest: { ...structuralSyncContext().pullRequest, head: { ...structuralSyncContext().pullRequest.head, ref: "feature/other" } },
+  }), () => structuralSyncEvidence(ciOnlyFiles)), { candidate: false, verified: false });
+  assert.deepEqual(verifyStructuralSync(structuralSyncContext(ciOnlyFiles, {
+    pullRequest: { ...structuralSyncContext().pullRequest, base: { ...structuralSyncContext().pullRequest.base, ref: "main" } },
+  }), () => structuralSyncEvidence(ciOnlyFiles)), { candidate: false, verified: false });
+  assert.throws(() => verifyStructuralSync(structuralSyncContext(ciOnlyFiles), () => structuralSyncEvidence(ciOnlyFiles, {
+    isAncestor: false,
+  })), /not an ancestor/);
+  assert.throws(() => verifyStructuralSync(structuralSyncContext(ciOnlyFiles), () => structuralSyncEvidence(ciOnlyFiles, {
+    mergeBase: "c".repeat(40),
+  })), /merge-base/);
+  assert.throws(() => verifyStructuralSync(structuralSyncContext(ciOnlyFiles), () => structuralSyncEvidence([])), /both Git diff ranges/);
+  assert.throws(() => verifyStructuralSync(structuralSyncContext(ciOnlyFiles), () => structuralSyncEvidence(ciOnlyFiles, {
+    mergeBaseChangedFiles: ["scripts/e2e/structural-sync.mjs"],
+  })), /both Git diff ranges/);
+});
 
 const textareaBase = (id, field) => `import { useState } from "react";\nfunction Page() { const [description, setDescription] = useState(""); return <label data-testid="${id}"><textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="h-24 w-full rounded-sm border border-border bg-card px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-ring disabled:opacity-50" disabled={submitting} /></label>; }`;
 const textareaHead = (id, field) => `import { useState } from "react";\nimport { Textarea } from "@/shared/ui/textarea";\nfunction Page() { const [description, setDescription] = useState(""); return <label data-testid="${id}"><Textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting} /></label>; }`;
@@ -67,6 +143,46 @@ test("selects Client functionally and reports verified presentation consumers", 
   assert.deepEqual(plan.presentationConsumers, ["users"]);
   assert.equal(plan.sharedUiRegressionRequired, true);
   assert.ok(plan.sharedComponents.includes("hub-switch"));
+});
+
+test("all valid classifier plans expose serializable workflow fields with semantic defaults", () => {
+  const workflowFields = [
+    "capabilities", "scope", "scopeApproved", "runE2E", "reason", "functionalCapabilities",
+    "sharedComponents", "presentationConsumers", "sharedUiRegressionRequired", "structuralSyncVerified",
+  ];
+  const plans = [
+    selectCapabilities(["README.md", "docs/ci.md"]),
+    selectCapabilities([".github/workflows/ci.yml"]),
+    selectCapabilities(["locales/pt-PT/common.json"], {
+      scope: ["roles"],
+      translationAnalysis: { ok: true, changedKeys: [], removedKeys: [] },
+    }),
+    selectCapabilities(["domains/operations/clients/clients-v1.tsx"], { scope: ["clients"] }),
+    selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-tabs.tsx"], { scope: ["clients"] }),
+    selectCapabilities([], { fullRegression: true }),
+  ];
+
+  for (const plan of plans) {
+    for (const field of workflowFields) assert.ok(Object.hasOwn(plan, field), field + " is required by CI");
+    assert.ok(Array.isArray(plan.capabilities));
+    assert.ok(Array.isArray(plan.scope));
+    assert.equal(typeof plan.scopeApproved, "boolean");
+    assert.equal(typeof plan.runE2E, "boolean");
+    assert.equal(typeof plan.reason, "string");
+    assert.ok(Array.isArray(plan.functionalCapabilities));
+    assert.ok(Array.isArray(plan.sharedComponents));
+    assert.ok(Array.isArray(plan.presentationConsumers));
+    assert.equal(typeof plan.sharedUiRegressionRequired, "boolean");
+    assert.equal(typeof plan.structuralSyncVerified, "boolean");
+    assert.deepEqual(JSON.parse(JSON.stringify(plan)), plan, "workflow fields must round-trip through JSON");
+  }
+
+  const noSemanticTranslation = plans[2];
+  assert.deepEqual(noSemanticTranslation.capabilities, []);
+  assert.equal(noSemanticTranslation.runE2E, false);
+  const sharedUi = plans[4];
+  assert.deepEqual(sharedUi.sharedComponents, ["hub-tabs"]);
+  assert.equal(sharedUi.sharedUiRegressionRequired, true);
 });
 
 test("direct HubTabs changes keep the functional Client plan and require mapped regressions", () => {

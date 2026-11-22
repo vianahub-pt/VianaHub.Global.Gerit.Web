@@ -38,6 +38,7 @@ const ciOnlyPaths = new Set([
   "scripts/e2e/select-capabilities.mjs",
   "scripts/e2e/run-capability.mjs",
   "scripts/e2e/structural-sync.mjs",
+  "tests/e2e/impact-classifier.test.mjs",
   "tests/e2e/auth.setup.ts",
 ]);
 const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
@@ -134,7 +135,49 @@ export function parseScopeFromPullRequestTitle(title) {
   return normalizeScope(scope);
 }
 
-export function selectCapabilities(files, {
+function normalizePlan(plan) {
+  const requiredFields = ["capabilities", "scope", "scopeApproved", "runE2E", "reason"];
+  if (!plan || typeof plan !== "object" || requiredFields.some((field) => !Object.hasOwn(plan, field))) {
+    throw new Error("E2E plan schema validation failed: required fields are missing.");
+  }
+  if (!Array.isArray(plan.capabilities) || !Array.isArray(plan.scope) ||
+      typeof plan.scopeApproved !== "boolean" || typeof plan.runE2E !== "boolean" ||
+      typeof plan.reason !== "string" || plan.reason.trim() === "") {
+    throw new Error("E2E plan schema validation failed: required field types are invalid.");
+  }
+
+  const normalized = {
+    ...plan,
+    functionalCapabilities: plan.functionalCapabilities ?? [...plan.capabilities],
+    sharedComponents: plan.sharedComponents ?? [],
+    presentationConsumers: plan.presentationConsumers ?? [],
+    sharedUiRegressionRequired: plan.sharedUiRegressionRequired ?? false,
+    structuralSyncVerified: plan.structuralSyncVerified ?? false,
+    supportingChanges: plan.supportingChanges ?? [],
+    requiredRegressionTests: plan.requiredRegressionTests ?? [],
+  };
+  if (!Array.isArray(normalized.functionalCapabilities) ||
+      !Array.isArray(normalized.sharedComponents) ||
+      !Array.isArray(normalized.presentationConsumers) ||
+      typeof normalized.sharedUiRegressionRequired !== "boolean" ||
+      typeof normalized.structuralSyncVerified !== "boolean" ||
+      !Array.isArray(normalized.supportingChanges) ||
+      !Array.isArray(normalized.requiredRegressionTests)) {
+    throw new Error("E2E plan schema validation failed: optional field types are invalid.");
+  }
+  if (normalized.structuralSyncVerified &&
+      (normalized.reason !== "verified-structural-sync" || normalized.runE2E ||
+        normalized.capabilities.length !== 0 || normalized.scope.length !== 0 || normalized.scopeApproved)) {
+    throw new Error("E2E plan schema validation failed: structural sync evidence is inconsistent.");
+  }
+  if (normalized.reason === "verified-structural-sync" && !normalized.structuralSyncVerified) {
+    throw new Error("E2E plan schema validation failed: structural sync was not verified.");
+  }
+
+  return normalized;
+}
+
+function selectCapabilitiesPlan(files, {
   fullRegression = false,
   translationAnalysis,
   baseContents,
@@ -291,6 +334,10 @@ export function selectCapabilities(files, {
       sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") && /\.(?:tsx|jsx)$/.test(file) ? [file.slice("shared/ui/".length).replace(/\.(?:tsx|jsx)$/, "")] : []))].sort(),
     requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
+}
+
+export function selectCapabilities(files, options) {
+  return normalizePlan(selectCapabilitiesPlan(files, options));
 }
 
 function parseLocale(content) {
@@ -537,6 +584,12 @@ function selfTest() {
     runE2E: false,
     reason: "verified-breadcrumb-removal",
     supportingChanges: [],
+    functionalCapabilities: [],
+    sharedComponents: [],
+    presentationConsumers: [],
+    sharedUiRegressionRequired: false,
+    structuralSyncVerified: false,
+    requiredRegressionTests: [],
   });
   const breadcrumbWithFunctionalChange = {
     ...breadcrumbFixture,
@@ -618,17 +671,35 @@ function selfTest() {
 
   assert.deepEqual(selectCapabilities(["README.md", "docs/ci.md"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "documentation-only", supportingChanges: [],
+    functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
+    structuralSyncVerified: false, requiredRegressionTests: [],
   });
   assert.deepEqual(selectCapabilities([".github/workflows/ci.yml", "scripts/e2e/select-capabilities.mjs"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
+    functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
+    structuralSyncVerified: false, requiredRegressionTests: [],
   });
   assert.deepEqual(selectCapabilities(["tests/e2e/auth.setup.ts"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
+    functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
+    structuralSyncVerified: false, requiredRegressionTests: [],
   });
+  const ciOnlyStructuralFixPlan = selectCapabilities([
+    "scripts/e2e/select-capabilities.mjs",
+    "scripts/e2e/structural-sync.mjs",
+    "tests/e2e/impact-classifier.test.mjs",
+  ], {
+    scopeTitle: "fix(ci): normalize E2E plan contract",
+  });
+  assert.equal(ciOnlyStructuralFixPlan.reason, "ci-validation-only");
+  assert.equal(ciOnlyStructuralFixPlan.runE2E, false);
+  assert.equal(ciOnlyStructuralFixPlan.structuralSyncVerified, false);
   assert.throws(() => selectCapabilities([]), /changed-file set is empty/);
   const selectorOnlySyncPlan = selectCapabilities(["scripts/e2e/select-capabilities.mjs"]);
   assert.deepEqual(selectorOnlySyncPlan, {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "ci-validation-only", supportingChanges: [],
+    functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
+    structuralSyncVerified: false, requiredRegressionTests: [],
   });
   assert.equal(validateE2EOutcome({
     selectionStatus: "success",
@@ -690,6 +761,7 @@ function selfTest() {
     headSha = "b".repeat(40),
     pullRequestBaseSha = baseSha,
     pullRequestHeadSha = headSha,
+    changedFiles = [],
   } = {}) => ({
     eventName,
     repositoryName,
@@ -700,13 +772,15 @@ function selfTest() {
     },
     baseSha,
     headSha,
-    changedFiles: [],
+    changedFiles,
   });
   const identicalTreeEvidence = {
     isAncestor: true,
+    mergeBase: "a".repeat(40),
     baseTree: "tree-identical",
     headTree: "tree-identical",
     changedFiles: [],
+    mergeBaseChangedFiles: [],
   };
   const structuralPlan = (context = structuralSyncContext(), evidence = identicalTreeEvidence, files = []) =>
     compareRefsPlan(files, context.baseSha, context.headSha, {
@@ -723,7 +797,65 @@ function selfTest() {
     reason: "verified-structural-sync",
     structuralSyncVerified: true,
     supportingChanges: [],
+    functionalCapabilities: [],
+    sharedComponents: [],
+    presentationConsumers: [],
+    sharedUiRegressionRequired: false,
+    requiredRegressionTests: [],
   });
+  const workflowPlanFields = [
+    "capabilities", "scope", "scopeApproved", "runE2E", "reason", "functionalCapabilities",
+    "sharedComponents", "presentationConsumers", "sharedUiRegressionRequired", "structuralSyncVerified",
+  ];
+  const assertWorkflowPlanSchema = (plan) => {
+    for (const field of workflowPlanFields) assert.equal(Object.hasOwn(plan, field), true, field + " is required by CI");
+    assert.ok(Array.isArray(plan.capabilities));
+    assert.ok(Array.isArray(plan.scope));
+    assert.equal(typeof plan.scopeApproved, "boolean");
+    assert.equal(typeof plan.runE2E, "boolean");
+    assert.equal(typeof plan.reason, "string");
+    assert.ok(Array.isArray(plan.functionalCapabilities));
+    assert.ok(Array.isArray(plan.sharedComponents));
+    assert.ok(Array.isArray(plan.presentationConsumers));
+    assert.equal(typeof plan.sharedUiRegressionRequired, "boolean");
+    assert.equal(typeof plan.structuralSyncVerified, "boolean");
+    assert.deepEqual(JSON.parse(JSON.stringify(plan)), plan, "all CI fields round-trip as JSON");
+  };
+  assertWorkflowPlanSchema(ciOnlyStructuralFixPlan);
+  for (const plan of [
+    verifiedStructuralPlan,
+    breadcrumbPlan,
+    selectCapabilities(["README.md", "docs/ci.md"]),
+    selectCapabilities([".github/workflows/ci.yml"]),
+    selectCapabilities(["locales/pt-PT/common.json"], {
+      scope: ["roles"],
+      translationAnalysis: localeAnalysis({ "roles.actions.back": "Voltar" }, { "roles.actions.back": "Voltar" }),
+    }),
+    scoped(["domains/operations/clients/clients-v1.tsx", "tests/e2e/clients-journey.spec.ts"], ["clients"]),
+    selectCapabilities(["domains/operations/clients/clients-v1.tsx", "shared/ui/hub-select.tsx"], { scope: ["clients"] }),
+    selectCapabilities([], { fullRegression: true }),
+  ]) assertWorkflowPlanSchema(plan);
+  const structuralSyncCiOnlyFiles = [
+    "scripts/e2e/select-capabilities.mjs",
+    "tests/e2e/impact-classifier.test.mjs",
+  ];
+  const structuralSyncCiOnlyPlan = structuralPlan(
+    structuralSyncContext({ changedFiles: structuralSyncCiOnlyFiles }),
+    {
+      ...identicalTreeEvidence,
+      baseTree: "tree-before-ci-sync",
+      headTree: "tree-after-ci-sync",
+      changedFiles: structuralSyncCiOnlyFiles,
+      mergeBaseChangedFiles: structuralSyncCiOnlyFiles,
+    },
+    structuralSyncCiOnlyFiles,
+  );
+  assert.equal(structuralSyncCiOnlyPlan.reason, "verified-structural-sync");
+  assert.equal(structuralSyncCiOnlyPlan.structuralSyncVerified, true);
+  assert.equal(structuralSyncCiOnlyPlan.runE2E, false);
+  assert.deepEqual(structuralSyncCiOnlyPlan.sharedComponents, []);
+  assert.deepEqual(structuralSyncCiOnlyPlan.capabilities, []);
+  assertWorkflowPlanSchema(structuralSyncCiOnlyPlan);
   assert.equal(validateE2EOutcome({
     selectionStatus: "success",
     ...verifiedStructuralPlan,
@@ -778,13 +910,15 @@ function selfTest() {
   assert.throws(() => structuralPlan(structuralSyncContext({
     pullRequestHeadSha: "c".repeat(40),
   })), /event SHAs/);
-  assert.throws(() => structuralPlan(structuralSyncContext(), identicalTreeEvidence, ["README.md"]), /changed-file list/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), identicalTreeEvidence, ["README.md"]), /both Git diff ranges/);
   assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, isAncestor: false }), /not an ancestor/);
-  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, headTree: "different-tree" }), /trees are not identical/);
+  assert.throws(() => structuralPlan(structuralSyncContext(), { ...identicalTreeEvidence, headTree: "different-tree" }), /tree hashes do not match/);
   assert.throws(() => structuralPlan(structuralSyncContext(), {
     ...identicalTreeEvidence,
+    headTree: "tree-with-functional-change",
     changedFiles: ["domains/operations/users/users-page.tsx"],
-  }), /Git reports changed files/);
+    mergeBaseChangedFiles: ["domains/operations/users/users-page.tsx"],
+  }, ["domains/operations/users/users-page.tsx"]), /non-CI-only changes/);
 
   const clientOnly = localeAnalysis({ "clients.v1.fields.name": "Name" }, { "clients.v1.fields.name": "Client name" });
   assert.deepEqual(selectCapabilities(["locales/en-US/common.json"], { scope: ["clients"], translationAnalysis: clientOnly }).capabilities, ["clients"]);
@@ -849,7 +983,7 @@ function compareRefsPlan(files, baseRef, headRef, options, readStructuralSyncEvi
       changedFiles: normalizedFiles,
     }, readStructuralSyncEvidence);
     if (structuralSync.verified) {
-      return {
+      return normalizePlan({
         capabilities: [],
         scope: [],
         scopeApproved: false,
@@ -857,7 +991,7 @@ function compareRefsPlan(files, baseRef, headRef, options, readStructuralSyncEvi
         reason: "verified-structural-sync",
         structuralSyncVerified: true,
         supportingChanges: [],
-      };
+      });
     }
   }
 

@@ -38,6 +38,7 @@ const ciOnlyPaths = new Set([
   "scripts/e2e/select-capabilities.mjs",
   "scripts/e2e/run-capability.mjs",
   "scripts/e2e/structural-sync.mjs",
+  "tests/e2e/impact-classifier.test.mjs",
   "tests/e2e/auth.setup.ts",
 ]);
 const localeCommonPath = /^locales\/[^/]+\/common\.json$/;
@@ -683,6 +684,9 @@ function selfTest() {
     functionalCapabilities: [], sharedComponents: [], presentationConsumers: [], sharedUiRegressionRequired: false,
     structuralSyncVerified: false, requiredRegressionTests: [],
   });
+  assert.equal(selectCapabilities(["tests/e2e/impact-classifier.test.mjs"], {
+    scopeTitle: "fix(ci): normalize E2E plan contract",
+  }).reason, "ci-validation-only");
   assert.throws(() => selectCapabilities([]), /changed-file set is empty/);
   const selectorOnlySyncPlan = selectCapabilities(["scripts/e2e/select-capabilities.mjs"]);
   assert.deepEqual(selectorOnlySyncPlan, {

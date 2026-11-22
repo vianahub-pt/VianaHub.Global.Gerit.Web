@@ -12,9 +12,12 @@ test("HubSelect has a generic typed, controlled/uncontrolled public contract", (
     /export interface HubSelectProps/, /value\?: string/, /defaultValue\?: string/,
     /onValueChange\?: \(value: string\) => void/, /placeholder\?: string/, /required\?: boolean/,
     /name\?: string/, /id\?: string/, /ariaLabel\?: string/, /description\?: ReactNode/,
-    /error\?: ReactNode/, /variant\?: HubSelectVariant/,
+    /error\?: ReactNode/, /variant\?: HubSelectVariant/, /searchable\?: boolean/, /preserveOptionOrder\?: boolean/, /searchText\?: string/, /sortLabel\?: string/,
   ]) assert.match(component, expression);
   assert.match(component, /value !== undefined \? \{ value \} : \{\}/);
+  assert.match(component, /searchable = true/);
+  assert.match(component, /if \(searchable\)/);
+  assert.match(component, /sortHubSelectOptionsByLocalizedName/);
   assert.match(component, /defaultValue !== undefined \? \{ defaultValue \} : \{\}/);
 });
 
@@ -38,6 +41,7 @@ test("HubSelect supplies accessible labels, required/disabled/error states and d
   assert.match(component, /aria-describedby=\{describedBy \|\| undefined\}/);
   assert.match(component, /aria-invalid=\{error \? true : undefined\}/);
   assert.match(component, /aria-required=\{required \|\| undefined\}/);
+  assert.match(component, /role="combobox"/);
   assert.match(component, /role="alert"/);
   assert.match(component, /variant === "compact"/);
   assert.doesNotMatch(component, /clients|equipmentTypes|preferences|actions|users|fetchWithAuth|\/api\//i);

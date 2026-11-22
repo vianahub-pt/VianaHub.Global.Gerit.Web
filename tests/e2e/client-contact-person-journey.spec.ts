@@ -569,6 +569,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   const filteredSearchValue = await contactSearch.inputValue();
   const statusFilter = page.getByRole("combobox", { name: /Status|Estado/i });
   await statusFilter.click();
+  await expect(page.getByRole("option")).toHaveText([/All|Mostrar todas|Todos|Todas/i, /Active|Ativo|Ativa|Activos/i, /Inactive|Inativo|Inactiva|Inactivo/i]);
   await page.getByRole("option", { name: /^(Active|Ativo|Ativa|Activos)$/i }).click();
   const perPageFilter = page.getByRole("combobox").last();
   await perPageFilter.click();

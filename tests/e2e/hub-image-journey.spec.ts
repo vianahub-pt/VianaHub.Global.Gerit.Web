@@ -438,11 +438,34 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   console.log("[HubSelect overflow]", JSON.stringify(nationalityOverflowMetrics));
   expect(nationalityOverflowMetrics.scrollHeight).toBeGreaterThan(nationalityOverflowMetrics.clientHeight);
   await expect(nationalitySearch).not.toHaveAttribute("aria-activedescendant", /.+/);
-  await expect(page.locator("[role=\"note\"]")).toHaveText("Scroll to see more options");
+  const scrollHint = page.locator("[role=\"note\"]");
+  await expect(scrollHint).toHaveText("Scroll to see more options");
   await captureViewport("client-nationality-open-79-options.png");
+
+  const initialListboxHeight = nationalityOverflowMetrics.clientHeight;
+  await page.keyboard.press("Escape");
+  await expect(nationalityTrigger).toBeFocused();
+  await page.setViewportSize({ width: 1200, height: 360 });
+  await nationalityTrigger.scrollIntoViewIfNeeded();
+  await nationalityTrigger.click();
+  await expect(nationalityListbox).toBeVisible();
+  await expect.poll(() => nationalityListbox.evaluate((element) => element.clientHeight)).toBeLessThan(initialListboxHeight);
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await captureViewport("client-nationality-reduced-viewport.png");
+
+  await nationalityListbox.hover();
+  await page.mouse.wheel(0, Math.floor(nationalityOverflowMetrics.clientHeight / 2));
+  await expect.poll(() => nationalityListbox.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await captureViewport("client-nationality-middle-scroll.png");
+
   await nationalityListbox.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect(nationalityOptions.last()).toBeInViewport();
+  await expect(scrollHint).toHaveCount(0);
+  await captureViewport("client-nationality-bottom-scroll.png");
   await nationalityListbox.evaluate((element) => { element.scrollTop = 0; });
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await page.setViewportSize({ width: 1893, height: 1157 });
 
   await nationalitySearch.fill("portug");
   await expect(nationalityOptions).toHaveCount(1);

@@ -188,7 +188,7 @@ function SearchableHubSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(-1);
-  const [hasOverflow, setHasOverflow] = useState(false);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
   const [uncontrolledValue, setUncontrolledValue] = useState(defaultValue ?? "");
   const isControlled = value !== undefined;
   const selectedValue = isControlled ? value : uncontrolledValue;
@@ -205,31 +205,41 @@ function SearchableHubSelect({
 
   useEffect(() => {
     if (!open) {
-      setHasOverflow(false);
+      setHasMoreBelow(false);
       return;
     }
     let frameId = 0;
     let observer: ResizeObserver | null = null;
     let cancelled = false;
-    const updateOverflow = () => {
+    let observedListbox: HTMLDivElement | null = null;
+    const updateScrollIndicator = (listbox: HTMLDivElement) => {
+      const nextHasMoreBelow = listbox.scrollTop + listbox.clientHeight < listbox.scrollHeight - 1;
+      setHasMoreBelow((current) => current === nextHasMoreBelow ? current : nextHasMoreBelow);
+    };
+    const measureScroll = () => {
+      if (cancelled) return;
       const listbox = listboxRef.current;
       if (!listbox) {
-        frameId = requestAnimationFrame(updateOverflow);
+        frameId = requestAnimationFrame(measureScroll);
         return;
       }
-      setHasOverflow(listbox.scrollHeight > listbox.clientHeight + 1);
-      observer ??= typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
-        setHasOverflow(listbox.scrollHeight > listbox.clientHeight + 1);
-      });
+      updateScrollIndicator(listbox);
+      if (observedListbox === listbox) return;
+      observedListbox = listbox;
+      listbox.addEventListener("scroll", measureScroll, { passive: true });
+      observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => updateScrollIndicator(listbox));
       observer?.observe(listbox);
+      window.addEventListener("resize", measureScroll, { passive: true });
     };
-    frameId = requestAnimationFrame(() => { if (!cancelled) updateOverflow(); });
+    frameId = requestAnimationFrame(measureScroll);
     return () => {
       cancelled = true;
       cancelAnimationFrame(frameId);
       observer?.disconnect();
+      observedListbox?.removeEventListener("scroll", measureScroll);
+      window.removeEventListener("resize", measureScroll);
     };
-  }, [filteredOptions.length, open]);
+  }, [filteredOptions, open, query]);
 
   useEffect(() => {
     if (activeIndex < 0) return;
@@ -453,7 +463,7 @@ function SearchableHubSelect({
                 </div>
               )}
             </div>
-            {hasOverflow ? (
+            {hasMoreBelow ? (
               <div role="note" className="flex items-center justify-center gap-1 pt-2 text-xs text-muted-foreground">
                 <ChevronDown aria-hidden="true" className="h-3.5 w-3.5" />
                 {t("hubSelect.scrollHint")}

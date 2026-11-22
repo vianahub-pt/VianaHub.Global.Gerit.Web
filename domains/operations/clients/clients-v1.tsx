@@ -9,6 +9,7 @@ import { useToast } from "@/shared/feedback";
 import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ClientContactPersonsPanel } from "./clients-v1-contacts";
+import { ClientAddressesPanel } from "./clients-v1-addresses";
 import { CLIENT_NATIONALITY_OPTIONS } from "./client-nationality-catalog";
 import { sortHubSelectOptionsByLocalizedName } from "@/shared/ui/hub-select-utils";
 import { Input } from "@/shared/ui/input";
@@ -540,7 +541,14 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
             active={selectedTab === "contacts" && clientTabsEnabled && !loading}
           />
         </div>
-        {(["addresses", "documents", "fiscalData"] as const).map((tabId) => (
+        <div hidden={selectedTab !== "addresses"}>
+          <ClientAddressesPanel
+            key={String(clientTabsEnabled ? client.id : parsedId ?? "unavailable")}
+            clientId={clientTabsEnabled ? client.id : null}
+            active={selectedTab === "addresses" && clientTabsEnabled && !loading}
+          />
+        </div>
+        {(["documents", "fiscalData"] as const).map((tabId) => (
           <div key={tabId} hidden={selectedTab !== tabId}>
             <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === tabId)?.label}</h2>

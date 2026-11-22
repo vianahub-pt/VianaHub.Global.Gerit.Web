@@ -273,6 +273,9 @@ export function selectCapabilities(files, {
     throw new Error("E2E scope validation failed: declared scope is not supported by capability-specific changed files.");
   }
 
+  const sharedTranslationChanged = Array.isArray(translationAnalysisResult?.changedKeys) &&
+    translationAnalysisResult.changedKeys.some((key) => sharedTranslationPrefixes.some((prefix) => key.startsWith(prefix)));
+
   return {
     capabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     scope: [...scope],
@@ -282,7 +285,7 @@ export function selectCapabilities(files, {
     supportingChanges: [...new Set(supportingChanges)].sort(),
     functionalCapabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     presentationConsumers: [...presentationConsumers].sort(),
-    sharedUiRegressionRequired: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx") || localeFiles.length > 0,
+    sharedUiRegressionRequired: presentationConsumers.size > 0 || sharedTranslationChanged || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx"),
       sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") ? [file.slice("shared/ui/".length).replace(/\.(?:tsx?|jsx?)$/, "")] : []))].sort(),
     requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
@@ -554,6 +557,23 @@ function selfTest() {
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
   assert.deepEqual(scoped(["domains/operations/equipment-types/equipment-types-page.tsx"], ["equipment-types"]).capabilities, ["equipment-types"]);
   assert.deepEqual(scoped(["domains/operations/clients/clients-v1.tsx", "tests/e2e/clients-journey.spec.ts"], ["clients"]).capabilities, ["clients"]);
+  const clientLocalePlan = selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/en-US/common.json"], {
+    scope: ["clients"],
+    translationAnalysis: localeAnalysis(
+      { "clients.v1.gender.male": "Male" },
+      { "clients.v1.gender.male": "Masculine" },
+    ),
+  });
+  assert.equal(clientLocalePlan.sharedUiRegressionRequired, false);
+  assert.deepEqual(clientLocalePlan.presentationConsumers, []);
+  const sharedLocalePlan = selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/en-US/common.json"], {
+    scope: ["clients"],
+    translationAnalysis: localeAnalysis(
+      { "clients.v1.gender.male": "Male", "hubImage.remove": "Remove" },
+      { "clients.v1.gender.male": "Male", "hubImage.remove": "Delete" },
+    ),
+  });
+  assert.equal(sharedLocalePlan.sharedUiRegressionRequired, true);
   assert.deepEqual(scoped([
     "domains/operations/clients/clients-v1.tsx",
     "tests/e2e/client-ui-visual-review.spec.ts",

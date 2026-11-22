@@ -346,6 +346,15 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(preferenceTabs.nth(1)).toHaveText("Email notifications");
   await assertTabVisualPattern();
   await capture("preferences-general-tabs.png");
+  const preferenceLanguage = page.getByRole("combobox", { name: "Select language" });
+  await preferenceLanguage.click();
+  const languageListbox = page.getByRole("listbox", { name: "Available options" });
+  await expect(languageListbox.getByRole("option")).toHaveCount(4);
+  await page.locator("input[role='combobox']").fill("Portuguese");
+  await expect(languageListbox.getByRole("option")).toHaveCount(2);
+  await page.keyboard.press("Escape");
+  await expect(languageListbox).toBeHidden();
+  await expect(preferenceLanguage).toBeFocused();
   await preferenceTabs.first().focus();
   await preferenceTabs.first().press("ArrowRight");
   await expect(preferenceTabs.nth(1)).toHaveAttribute("aria-selected", "true");
@@ -372,6 +381,9 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   // Individual creation layout, label, invalid files and drag/drop preview.
   await page.goto("/clients/new/");
   await expect(page.getByTestId("client-create-page")).toBeVisible();
+  await page.getByTestId("client-save").click();
+  expect(await page.getByTestId("client-party-type-required").evaluate((element) => (element as HTMLInputElement).checkValidity())).toBe(false);
+  expect(mutations.filter((item) => item.method === "POST" && item.path.endsWith("/clients"))).toHaveLength(0);
   await chooseHubOption(page, "client-party-type", "Individual");
   await chooseHubOption(page, "client-acquisition-source", "Web");
   await expect(page.getByTestId("client-birth-date")).toBeVisible();
@@ -409,10 +421,80 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByRole("option")).toHaveText(["Male", "Female", "Non-binary", "Prefer not to say"]);
   await expect(page.getByRole("option", { name: "Other", exact: true })).toHaveCount(0);
   await page.getByRole("option", { name: "Non-binary", exact: true }).click();
-  await page.getByTestId("client-nationality").click();
-  await expect(page.getByRole("option")).toHaveCount(79);
-  await expect(page.getByRole("option", { name: "Europe — Portugal", exact: true })).toBeVisible();
-  await page.getByRole("option", { name: "Europe — Portugal", exact: true }).click();
+  const nationalityTrigger = page.getByTestId("client-nationality");
+  await nationalityTrigger.click();
+  const nationalityListbox = page.getByRole("listbox", { name: "Available options" });
+  const nationalityOptions = nationalityListbox.getByRole("option");
+  const nationalitySearch = page.getByTestId("client-nationality-search");
+  await expect(nationalityListbox).toBeVisible();
+  await expect(nationalityOptions).toHaveCount(79);
+  await expect(nationalityTrigger).toContainText(/select/i);
+  const nationalityOverflowMetrics = await nationalityListbox.evaluate((element) => ({
+    scrollHeight: element.scrollHeight,
+    clientHeight: element.clientHeight,
+    maxHeight: getComputedStyle(element).maxHeight,
+    optionHeight: element.firstElementChild instanceof HTMLElement ? element.firstElementChild.offsetHeight : 0,
+  }));
+  console.log("[HubSelect overflow]", JSON.stringify(nationalityOverflowMetrics));
+  expect(nationalityOverflowMetrics.scrollHeight).toBeGreaterThan(nationalityOverflowMetrics.clientHeight);
+  await expect(nationalitySearch).not.toHaveAttribute("aria-activedescendant", /.+/);
+  const scrollHint = page.locator("[role=\"note\"]");
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await captureViewport("client-nationality-open-79-options.png");
+
+  const initialListboxHeight = nationalityOverflowMetrics.clientHeight;
+  await page.keyboard.press("Escape");
+  await expect(nationalityTrigger).toBeFocused();
+  await page.setViewportSize({ width: 1200, height: 360 });
+  await nationalityTrigger.scrollIntoViewIfNeeded();
+  await nationalityTrigger.click();
+  await expect(nationalityListbox).toBeVisible();
+  await expect.poll(() => nationalityListbox.evaluate((element) => element.clientHeight)).toBeLessThan(initialListboxHeight);
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await captureViewport("client-nationality-reduced-viewport.png");
+
+  await nationalityListbox.hover();
+  await page.mouse.wheel(0, Math.floor(nationalityOverflowMetrics.clientHeight / 2));
+  await expect.poll(() => nationalityListbox.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await captureViewport("client-nationality-middle-scroll.png");
+
+  await nationalityListbox.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(nationalityOptions.last()).toBeInViewport();
+  await expect(scrollHint).toHaveCount(0);
+  await captureViewport("client-nationality-bottom-scroll.png");
+  await nationalityListbox.evaluate((element) => { element.scrollTop = 0; });
+  await expect(scrollHint).toHaveText("Scroll to see more options");
+  await page.setViewportSize({ width: 1893, height: 1157 });
+
+  await nationalitySearch.fill("portug");
+  await expect(nationalityOptions).toHaveCount(1);
+  await expect(nationalityOptions).toHaveText(["Portugal"]);
+  await expect(page.locator("[role=\"note\"]")).toHaveCount(0);
+  await captureViewport("client-nationality-search-active.png");
+  await page.getByRole("option", { name: "Portugal", exact: true }).click();
+  await expect(nationalityListbox).toBeHidden();
+  await expect(nationalityTrigger).toContainText("Portugal");
+  await page.getByTestId("client-nationality-clear").click();
+  await expect(nationalityTrigger).not.toContainText("Portugal");
+  await nationalityTrigger.click();
+  const nationalitySearchAfterClear = page.getByTestId("client-nationality-search");
+  await nationalitySearchAfterClear.fill("not-a-country");
+  await expect(nationalityListbox.getByRole("status")).toHaveText("No results found.");
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await expect(nationalityOptions).toHaveCount(79);
+  await nationalitySearchAfterClear.fill("PT");
+  await expect(nationalityOptions).toHaveCount(1);
+  await expect(nationalityOptions).toHaveText(["Portugal"]);
+  await nationalitySearchAfterClear.press("ArrowDown");
+  await expect(nationalitySearchAfterClear).toHaveAttribute("aria-activedescendant", /option-/);
+  await nationalitySearchAfterClear.press("Enter");
+  await expect(nationalityListbox).toBeHidden();
+  await expect(nationalityTrigger).toContainText("Portugal");
+  await nationalityTrigger.click();
+  await page.getByTestId("client-nationality-search").press("Escape");
+  await expect(nationalityListbox).toBeHidden();
+  await expect(nationalityTrigger).toBeFocused();
 
   const pngInvalid = { name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("not image") };
   await hubImage.getByTestId("hub-image-file").setInputFiles(pngInvalid);

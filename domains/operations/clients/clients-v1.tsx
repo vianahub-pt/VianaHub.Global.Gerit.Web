@@ -10,6 +10,7 @@ import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid"
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
 import { ClientContactPersonsPanel } from "./clients-v1-contacts";
 import { CLIENT_NATIONALITY_OPTIONS } from "./client-nationality-catalog";
+import { sortHubSelectOptionsByLocalizedName } from "@/shared/ui/hub-select-utils";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { HubImage, HubSelect, HubSwitch, HubTabs } from "@/shared/ui";
@@ -49,10 +50,10 @@ function Field({ label, value, onChange, disabled, required, maxLength, type = "
   </label>;
 }
 
-function SelectField({ label, value, onChange, options, disabled, required, placeholder, testId, className }: {
+function SelectField({ label, value, onChange, options, disabled, required, placeholder, testId, className, searchable, preserveOptionOrder }: {
   label: string; value: string; onChange: (value: string) => void;
-  options: Array<{ value: string; label: string; disabled?: boolean }>; disabled?: boolean;
-  required?: boolean; placeholder: string; testId?: string; className?: string;
+  options: Array<{ value: string; label: string; disabled?: boolean; searchText?: string }>; disabled?: boolean;
+  required?: boolean; placeholder: string; testId?: string; className?: string; searchable?: boolean; preserveOptionOrder?: boolean;
 }) {
   return <HubSelect
     label={label}
@@ -63,6 +64,8 @@ function SelectField({ label, value, onChange, options, disabled, required, plac
     required={required}
     disabled={disabled}
     variant="default"
+    searchable={searchable}
+    preserveOptionOrder={preserveOptionOrder}
     testId={testId}
     className={className}
   />;
@@ -221,7 +224,7 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
   const parsedId = isEditingRoute ? Number(clientId) : null;
   const validId = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0;
   const { fetchWithAuth, hasPermission, isAuthenticated, isHydrating } = useAuth();
-  const { t } = useTranslation();
+  const { t, state } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const [catalogs, setCatalogs] = useState<ClientCatalogs>(EMPTY_CATALOGS);
@@ -410,12 +413,15 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
   const genderOptions = values.gender && !canonicalGenderOptions.some((option) => option.value === values.gender)
     ? [{ value: values.gender, label: t("clients.v1.legacyValue", { value: values.gender }) }, ...canonicalGenderOptions]
     : canonicalGenderOptions;
-  const canonicalNationalityOptions = CLIENT_NATIONALITY_OPTIONS.map(({ code, region }) => ({
-    value: code,
-    label: t("clients.v1.nationality.region." + region.toLowerCase()) + " — " + t("clients.v1.nationality." + code),
-  }));
+  const canonicalNationalityOptions = sortHubSelectOptionsByLocalizedName(
+    CLIENT_NATIONALITY_OPTIONS.map(({ code }) => {
+      const name = t("clients.v1.nationality." + code);
+      return { value: code, sortLabel: name, label: name, searchText: name + " " + code };
+    }),
+    state.locale,
+  ).map(({ sortLabel: _sortLabel, ...option }) => option);
   const nationalityOptions = values.nationality && !canonicalNationalityOptions.some((option) => option.value === values.nationality)
-    ? [{ value: values.nationality, label: t("clients.v1.legacyValue", { value: values.nationality }) }, ...canonicalNationalityOptions]
+    ? [{ value: values.nationality, label: t("clients.v1.legacyValue", { value: values.nationality }), searchText: values.nationality }, ...canonicalNationalityOptions]
     : canonicalNationalityOptions;
   const selectedStatusDefinitionId = Number(values.statusDefinitionId);
   const selectedStatusIsValid = Number.isInteger(selectedStatusDefinitionId) && selectedStatusDefinitionId > 0 &&
@@ -485,12 +491,12 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
           <form onSubmit={(event) => void submit(event)} className="space-y-6" data-testid="client-form">
             <section data-testid="client-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <fieldset disabled={fieldsDisabled} data-testid="client-fields-grid" className="grid grid-cols-1 gap-x-5 gap-y-5 lg:grid-cols-3">
-                <SelectField label={t("clients.v1.fields.partyType")} value={values.partyTypeId} onChange={(value) => setValues((current) => ({ ...current, partyTypeId: value, ...(value === "1" ? { companyRegistrationNumber: "", economicActivityCode: "", numberOfEmployees: "" } : { birthDate: "", gender: "", nationality: "" }) }))} options={activePartyTypes.map((item: CatalogOption) => ({ value: String(item.id), label: item.name }))} disabled={fieldsDisabled || isEditingRoute} required placeholder={t("clients.v1.select")} testId="client-party-type" className="lg:col-start-1 lg:row-start-1" />
+                <SelectField label={t("clients.v1.fields.partyType")} value={values.partyTypeId} onChange={(value) => setValues((current) => ({ ...current, partyTypeId: value, ...(value === "1" ? { companyRegistrationNumber: "", economicActivityCode: "", numberOfEmployees: "" } : { birthDate: "", gender: "", nationality: "" }) }))} options={activePartyTypes.map((item: CatalogOption) => ({ value: String(item.id), label: item.name }))} disabled={fieldsDisabled || isEditingRoute} required placeholder={t("clients.v1.select")} testId="client-party-type" className="lg:col-start-1 lg:row-start-1" preserveOptionOrder />
                 <SelectField label={t("clients.v1.fields.acquisitionSource")} value={values.acquisitionSourceTypeId} onChange={(value) => updateValue("acquisitionSourceTypeId", value)} options={activeSources.map((item) => ({ value: String(item.id), label: item.name }))} disabled={fieldsDisabled} required placeholder={t("clients.v1.select")} testId="client-acquisition-source" className="lg:col-start-2 lg:row-start-1" />
                 <div className="lg:col-start-3 lg:row-start-1 lg:row-span-3"><HubImage urlImage={values.urlImage} onUrlImageChange={(urlImage) => updateValue("urlImage", urlImage)} pendingFile={pendingImageFile} onPendingFileChange={(file) => { setPendingImageFile(file); if (!file) setFormError(null); }} disabled={fieldsDisabled} /></div>
 
                 <Field label={t("clients.v1.fields.name")} value={values.name} onChange={(value) => updateValue("name", value)} disabled={fieldsDisabled} required maxLength={CLIENT_NAME_MAX_LENGTH} testId="client-name" className="lg:col-start-1 lg:row-start-2" />
-                <SelectField label={t("clients.v1.fields.businessStatus")} value={values.statusDefinitionId} onChange={(value) => { updateValue("statusDefinitionId", value); setFormError(null); setCatalogError(null); }} options={businessStatusOptions} disabled={fieldsDisabled} required placeholder={t("clients.v1.select")} testId="client-business-status" className="lg:col-start-2 lg:row-start-2" />
+                <SelectField label={t("clients.v1.fields.businessStatus")} value={values.statusDefinitionId} onChange={(value) => { updateValue("statusDefinitionId", value); setFormError(null); setCatalogError(null); }} options={businessStatusOptions} disabled={fieldsDisabled} required placeholder={t("clients.v1.select")} testId="client-business-status" className="lg:col-start-2 lg:row-start-2" preserveOptionOrder />
 
                 {isOrganization && <>
                   <Field label={t("clients.v1.fields.companyRegistrationNumber")} value={values.companyRegistrationNumber} onChange={(value) => updateValue("companyRegistrationNumber", value)} disabled={fieldsDisabled} testId="client-company-registration" className="lg:col-start-1 lg:row-start-3" />
@@ -498,7 +504,7 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
                 </>}
                 {isIndividual && <>
                   <Field label={t("clients.v1.fields.birthDate")} value={values.birthDate} onChange={(value) => updateValue("birthDate", value)} disabled={fieldsDisabled} type="date" max={new Date().toISOString().slice(0, 10)} testId="client-birth-date" className="lg:col-start-1 lg:row-start-3" />
-                  <SelectField label={t("clients.v1.fields.gender")} value={values.gender} onChange={(value) => updateValue("gender", value)} options={genderOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} testId="client-gender" className="lg:col-start-2 lg:row-start-3" />
+                  <SelectField label={t("clients.v1.fields.gender")} value={values.gender} onChange={(value) => updateValue("gender", value)} options={genderOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} testId="client-gender" className="lg:col-start-2 lg:row-start-3" preserveOptionOrder />
                 </>}
 
                 <Field label={t("clients.v1.fields.phoneNumber")} value={values.phoneNumber} onChange={(value) => updateValue("phoneNumber", value)} disabled={fieldsDisabled} testId="client-phone" className="lg:col-start-1 lg:row-start-4" />
@@ -513,7 +519,7 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
 
                 <Field label={t("clients.v1.fields.email")} value={values.email} onChange={(value) => updateValue("email", value)} disabled={fieldsDisabled} testId="client-email" className="lg:col-start-1 lg:row-start-5" />
                 <Field label={t("clients.v1.fields.websiteUrl")} value={values.websiteUrl} onChange={(value) => updateValue("websiteUrl", value)} disabled={fieldsDisabled} testId="client-website" className="lg:col-start-2 lg:row-start-5" />
-                {isIndividual && <SelectField label={t("clients.v1.fields.nationality")} value={values.nationality} onChange={(value) => updateValue("nationality", value)} options={nationalityOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} testId="client-nationality" className="lg:col-start-3 lg:row-start-5" />}
+                {isIndividual && <SelectField label={t("clients.v1.fields.nationality")} value={values.nationality} onChange={(value) => updateValue("nationality", value)} options={nationalityOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} searchable testId="client-nationality" className="lg:col-start-3 lg:row-start-5" />}
                 {isOrganization && <Field label={t("clients.v1.fields.numberOfEmployees")} value={values.numberOfEmployees} onChange={(value) => updateValue("numberOfEmployees", value)} disabled={fieldsDisabled} type="number" min="0" testId="client-number-employees" className="lg:col-start-3 lg:row-start-5" />}
 
                 <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground lg:col-span-3 lg:row-start-6"><span>{t("clients.form.observation")}</span><Textarea data-testid="client-note" className="min-h-32 resize-y" value={values.note} maxLength={!isEditingRoute ? CLIENT_NOTE_MAX_LENGTH : undefined} disabled={fieldsDisabled} onChange={(event) => updateValue("note", event.target.value)} /></label>

@@ -212,3 +212,24 @@ html.dark .gerit-calendar-scrollbar::-webkit-scrollbar-thumb {
     transition: none !important;
   }
 }
+/* Make long shared dropdowns scrollable even when the OS hides native scrollbars. */
+.hub-select-options-scrollbar {
+  scrollbar-color: hsl(var(--muted-foreground)) hsl(var(--muted));
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.hub-select-options-scrollbar::-webkit-scrollbar {
+  width: 10px;
+}
+
+.hub-select-options-scrollbar::-webkit-scrollbar-track {
+  background: hsl(var(--muted));
+  border-radius: 9999px;
+}
+
+.hub-select-options-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground));
+  border: 2px solid hsl(var(--muted));
+  border-radius: 9999px;
+}

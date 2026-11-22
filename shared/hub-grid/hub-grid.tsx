@@ -133,6 +133,7 @@ export function HubGrid<Item>({
               value={statusFilter}
               onValueChange={onStatusFilterChange}
               options={statusFilterOptions}
+              preserveOptionOrder
               triggerClassName="max-w-[12rem] flex-1"
             />
             <label className="relative flex-1 min-w-[12rem] max-w-[24rem]">
@@ -428,6 +429,7 @@ export function HubGrid<Item>({
               value={String(pageSize)}
               onValueChange={(value) => onPageSizeChange(Number(value))}
               options={pageSizeOptions.map((option) => ({ value: String(option), label: option }))}
+              preserveOptionOrder
               triggerClassName="w-auto min-w-[4rem]"
             />
           </div>

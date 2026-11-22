@@ -8,6 +8,7 @@ import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresent
 const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
   "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-grid": Object.freeze(["tests/e2e/client-contact-person-journey.spec.ts"]),
+  "hub-select": Object.freeze(["tests/e2e/hub-image-journey.spec.ts"]),
 });
 
 export { CAPABILITIES };
@@ -49,7 +50,7 @@ const translationPrefixes = new Map([
   ["equipmentTypes.", "equipment-types"],
   ["clients.", "clients"],
 ]);
-const sharedTranslationPrefixes = ["hubImage."];
+const sharedTranslationPrefixes = ["hubImage.", "hubSelect."];
 
 const breadcrumbRemovalSourceFiles = [
   "domains/operations/actions/action-form-page.tsx",
@@ -108,6 +109,7 @@ function isKnownSharedSupport(file) {
     file === "package-lock.json" ||
     file === "playwright.config.ts" ||
     file === "app/layout.tsx" ||
+    file === "app/globals.css" ||
     file === "app/(workspace)/layout.tsx";
 }
 
@@ -286,7 +288,7 @@ export function selectCapabilities(files, {
     functionalCapabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     presentationConsumers: [...presentationConsumers].sort(),
     sharedUiRegressionRequired: presentationConsumers.size > 0 || sharedTranslationChanged || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx"),
-      sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") ? [file.slice("shared/ui/".length).replace(/\.(?:tsx?|jsx?)$/, "")] : []))].sort(),
+      sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") && /\.(?:tsx|jsx)$/.test(file) ? [file.slice("shared/ui/".length).replace(/\.(?:tsx|jsx)$/, "")] : []))].sort(),
     requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
 }
@@ -790,6 +792,33 @@ function selfTest() {
   assert.deepEqual(selectCapabilities(["locales/pt-PT/common.json"], { scope: ["roles"], translationAnalysis: roleOnly }).capabilities, ["roles"]);
   const sharedImageTranslation = localeAnalysis({}, { "hubImage.title": "Image" });
   assert.deepEqual(selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/pt-PT/common.json"], { scope: ["clients"], translationAnalysis: sharedImageTranslation }).capabilities, ["clients"]);
+  const sharedSelectTranslation = localeAnalysis({}, { "hubSelect.searchPlaceholder": "Search options" });
+  const globalSelectPlan = selectCapabilities([
+    "app/globals.css",
+    "domains/operations/clients/clients-v1.tsx",
+    "locales/pt-PT/common.json",
+    "shared/ui/hub-select.tsx",
+  ], { scope: ["clients"], translationAnalysis: sharedSelectTranslation });
+  assert.deepEqual(globalSelectPlan.functionalCapabilities, ["clients"]);
+  assert.deepEqual(globalSelectPlan.sharedComponents, ["hub-select"]);
+  assert.equal(globalSelectPlan.sharedUiRegressionRequired, true);
+  const globalSelectOutcome = validateE2EOutcome({
+    selectionStatus: "success",
+    capabilities: ["clients"],
+    functionalCapabilities: ["clients"],
+    scope: ["clients"],
+    scopeApproved: false,
+    runE2E: true,
+    reason: globalSelectPlan.reason,
+    e2eStatus: "success",
+    sharedUiRegressionRequired: globalSelectPlan.sharedUiRegressionRequired,
+    sharedComponents: globalSelectPlan.sharedComponents,
+    presentationConsumers: [],
+    sharedRegressionConsumers: [],
+    sharedRegressionStatus: "success",
+    regressionTestsStatus: "success",
+  });
+  assert.equal(globalSelectOutcome.pass, true);
   const removedLegacyImageTranslation = { ok: true, changedKeys: [], removedKeys: ["users.image.__selector_self_test__"] };
   assert.deepEqual(selectCapabilities(["domains/operations/users/users-page.tsx", "locales/pt-PT/common.json"], { scope: ["users"], translationAnalysis: removedLegacyImageTranslation }).capabilities, ["users"]);
   const unknownKey = localeAnalysis({ "navigation.back": "Voltar" }, { "navigation.back": "Regressar" });

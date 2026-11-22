@@ -68,14 +68,14 @@ function userDetail(id: number, image = urlImage) {
   };
 }
 
-function clientDetail(id: number, partyTypeId: 1 | 2, image = urlImage, statusDefinitionId = 6, statusDomainId = 1) {
+function clientDetail(id: number, partyTypeId: 1 | 2, image = urlImage, statusDefinitionId = 6, statusDomainId = 1, gender: string | null = null, nationality: string | null = null) {
   return {
     id, tenantId: 1, tenant: "Visual Tenant", partyTypeId,
     partyType: partyTypeId === 1 ? "Individual" : "Organization",
     acquisitionSourceTypeId: 3, acquisitionSourceType: "Web",
     name: partyTypeId === 1 ? "Visual Individual" : "Visual Organization",
     phoneNumber: null, cellPhoneNumber: null, isCellPhoneWhatsapp: false, email: null,
-    websiteUrl: null, birthDate: null, gender: null, nationality: null,
+    websiteUrl: null, birthDate: null, gender, nationality,
     companyRegistrationNumber: partyTypeId === 2 ? "VISUAL-REG-01" : null,
     economicActivityCode: partyTypeId === 2 ? "VISUAL-EAC-01" : null,
     numberOfEmployees: partyTypeId === 2 ? 12 : null,
@@ -156,7 +156,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
         ? clientDetail(id, 2, urlImage, 3)
         : id === 9007
           ? clientDetail(id, 1, urlImage, 6, 2)
-          : clientDetail(id, 1, id === 9003 ? "https://hub-image.test/broken.svg" : urlImage, 6, 1);
+          : clientDetail(id, 1, id === 9003 ? "https://hub-image.test/broken.svg" : urlImage, 6, 1, id === 9002 ? "Masc" : null, id === 9002 ? "Português" : null);
       body = { ...detail, statusDefinitionId: clientStatusOverrides.get(id) ?? detail.statusDefinitionId };
     }
 
@@ -220,7 +220,9 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
     const tabs = page.getByRole("tablist").getByRole("tab");
     await tabs.first().focus();
     await tabs.first().press("ArrowRight");
-    await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.nth(1)).toBeDisabled();
+    await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
+    await expect(tabs.nth(1)).not.toBeFocused();
     await tabs.nth(1).press("Home");
     await expect(tabs.first()).toHaveAttribute("aria-selected", "true");
   };
@@ -402,6 +404,15 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByTestId("client-name")).toHaveValue("");
   await chooseHubOption(page, "client-party-type", "Individual");
   await chooseHubOption(page, "client-acquisition-source", "Web");
+  await page.getByTestId("client-gender").click();
+  await expect(page.getByRole("option")).toHaveCount(4);
+  await expect(page.getByRole("option")).toHaveText(["Male", "Female", "Non-binary", "Prefer not to say"]);
+  await expect(page.getByRole("option", { name: "Other", exact: true })).toHaveCount(0);
+  await page.getByRole("option", { name: "Non-binary", exact: true }).click();
+  await page.getByTestId("client-nationality").click();
+  await expect(page.getByRole("option")).toHaveCount(79);
+  await expect(page.getByRole("option", { name: "Europe — Portugal", exact: true })).toBeVisible();
+  await page.getByRole("option", { name: "Europe — Portugal", exact: true }).click();
 
   const pngInvalid = { name: "invalid.txt", mimeType: "text/plain", buffer: Buffer.from("not image") };
   await hubImage.getByTestId("hub-image-file").setInputFiles(pngInvalid);
@@ -437,7 +448,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page).toHaveURL(/\/clients\/9005\/$/);
   const individualCreate = mutations.filter((item) => item.method === "POST" && item.path.endsWith("/clients"))[0];
   expect(individualCreate?.body).toMatchObject({
-    partyTypeId: 1, statusDomainId: 1, statusDefinitionId: 1, isCellPhoneWhatsapp: false,
+    partyTypeId: 1, statusDomainId: 1, statusDefinitionId: 1, isCellPhoneWhatsapp: false, gender: "non-binary", nationality: "PT",
   });
   expect(JSON.stringify(individualCreate?.body)).not.toContain("blob:");
 
@@ -487,6 +498,8 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await expect(page.getByTestId("client-detail-page")).toBeVisible();
   await expect(page.getByTestId("client-name")).toHaveValue("Visual Individual");
   await expect(page.getByTestId("client-gender")).toBeVisible();
+  await expect(page.getByTestId("client-gender")).toContainText("Stored legacy value: Masc");
+  await expect(page.getByTestId("client-nationality")).toContainText("Stored legacy value: Português");
   await expect(page.getByTestId("client-company-registration")).toHaveCount(0);
   await assertBusinessStatusField();
   await assertCommonClientShell();
@@ -509,7 +522,7 @@ test("HubImage interactions and Client forms remain generic, accessible, and vis
   await chooseHubOption(page, "client-business-status", "Archived");
   await page.getByTestId("client-save").click();
   const individualUpdate = mutations.find((item) => item.method === "PUT" && item.path.endsWith("/clients/9002"));
-  expect(individualUpdate?.body).toMatchObject({ statusDomainId: 1, statusDefinitionId: 2, name: "Visual Individual Updated", isCellPhoneWhatsapp: false });
+  expect(individualUpdate?.body).toMatchObject({ statusDomainId: 1, statusDefinitionId: 2, name: "Visual Individual Updated", isCellPhoneWhatsapp: false, gender: "Masc", nationality: "Português" });
 
   // Organization edit uses the same layout, switch and editable status control.
   await page.goto("/clients/9006/");

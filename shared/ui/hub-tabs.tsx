@@ -39,7 +39,7 @@ export function HubTabs<T extends string>({
   const baseId = id ?? generatedId;
   const tabRefs = useRef(new Map<T, HTMLButtonElement>());
   const resolvedActiveTab = activeTab ?? internalActiveTab ?? fallbackId;
-  const currentTab = tabs.find((tab) => tab.id === resolvedActiveTab) ?? tabs.find((tab) => !tab.disabled);
+  const currentTab = tabs.find((tab) => tab.id === resolvedActiveTab && !tab.disabled) ?? tabs.find((tab) => !tab.disabled);
 
   const handleChange = (tabId: T) => {
     if (tabs.find((tab) => tab.id === tabId)?.disabled) return;

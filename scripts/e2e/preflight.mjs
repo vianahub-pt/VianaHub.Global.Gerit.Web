@@ -40,6 +40,9 @@ function inspectGit() {
 }
 
 function isExpectedBranch(branch, capability) {
+  if (capability === "clients" && branch === "refactor/global-spa-ux-foundations") {
+    return true;
+  }
   if (capability === "equipment-types") {
     return branch === "feature/equipment-types-crud" || branch === "hotfix/equipment-types-form-design";
   }
@@ -224,6 +227,16 @@ async function selfTest() {
     fileExists: (path) => path.endsWith("clients-journey.spec.ts"),
     readText: async () => clientSpec,
   };
+  const authorizedRefactorBranch = await evaluatePreflight({
+    ...clientBase,
+    mode: "read-only",
+    mutatingApproved: false,
+    clientMutationApproved: false,
+    git: { ...validGit, branch: "refactor/global-spa-ux-foundations" },
+  });
+  assert.equal(authorizedRefactorBranch.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(authorizedRefactorBranch.checks.branch, true);
+  assert.equal(authorizedRefactorBranch.authorization, "READ_ONLY_AUTHORIZED");
   const clientNoOptIn = await evaluatePreflight({ ...clientBase, mutatingApproved: true, clientMutationApproved: false });
   assert.equal(clientNoOptIn.checks.canonicalSpec, true);
   assert.equal(clientNoOptIn.checks.cleanupPlan, true);

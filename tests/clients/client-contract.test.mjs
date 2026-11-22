@@ -74,6 +74,49 @@ test("Individual payload has only official fields and no legacy or tenant values
   assert.equal("individual" in payload || "company" in payload || "tradeName" in payload || "legalRepresentative" in payload || "score" in payload, false);
 });
 
+test("Client controlled vocabularies match the API snapshot and preserve legacy values", async () => {
+  const component = await readFile("domains/operations/clients/clients-v1.tsx", "utf8");
+  const catalogModule = await import("../../domains/operations/clients/client-nationality-catalog.ts");
+  const localeIds = ["pt-PT", "pt-BR", "en-US", "es-ES"];
+  const expectedGenderLabels = {
+    "pt-PT": ["Masculino", "Feminino", "Não binário", "Prefere não indicar"],
+    "pt-BR": ["Masculino", "Feminino", "Não binário", "Prefere não informar"],
+    "en-US": ["Male", "Female", "Non-binary", "Prefer not to say"],
+    "es-ES": ["Masculino", "Femenino", "No binario", "Prefiere no indicarlo"],
+  };
+  const expectedCodes = "AD AG AL AR AT BA BB BE BG BO BR BS BY BZ CA CH CL CO CR CU CZ DE DK DM DO EC EE ES FI FR GB GD GR GT GY HN HR HT HU IE IS IT JM KN LC LI LT LU LV MC MD ME MK MT MX NI NL NO PA PE PL PT PY RO RS RU SE SI SK SM SR SV TT UA US UY VA VC VE".split(" ");
+  assert.equal(catalogModule.CLIENT_NATIONALITY_CATALOG_VERSION, "2026-11-21");
+  assert.equal(catalogModule.CLIENT_NATIONALITY_OPTIONS.length, 79);
+  assert.deepEqual(catalogModule.CLIENT_NATIONALITY_OPTIONS.map(({ code }) => code), expectedCodes);
+  assert.equal(new Set(expectedCodes).size, 79);
+  assert.equal(catalogModule.CLIENT_NATIONALITY_OPTIONS.filter(({ region }) => region === "Europe").length, 44);
+  assert.equal(catalogModule.CLIENT_NATIONALITY_OPTIONS.filter(({ region }) => region === "Americas").length, 35);
+  assert.equal(component.includes('value: "other"'), false);
+  assert.deepEqual([...component.matchAll(/\{ value: "(male|female|non-binary|prefer-not-to-say)", label:/g)].map((match) => match[1]), ["male", "female", "non-binary", "prefer-not-to-say"]);
+  assert.match(component, /canonicalGenderOptions = \[/);
+  assert.match(component, /t\("clients\.v1\.legacyValue", \{ value: values\.gender \}\)/);
+  assert.match(component, /<SelectField label=\{t\("clients\.v1\.fields\.gender"\)\} value=\{values\.gender\}/);
+  assert.match(component, /<SelectField label=\{t\("clients\.v1\.fields\.nationality"\)\} value=\{values\.nationality\}/);
+  assert.equal(toClientPayload({ ...baseForm, gender: "male" }).gender, "male");
+  assert.equal(toClientPayload({ ...baseForm, gender: "" }).gender, null);
+  assert.equal(toClientPayload({ ...baseForm, gender: "Masc" }).gender, "Masc");
+  assert.equal(toClientPayload({ ...baseForm, nationality: "PT" }).nationality, "PT");
+  assert.equal(toClientPayload({ ...baseForm, nationality: "Português" }).nationality, "Português");
+  assert.equal(toClientPayload({ ...baseForm, nationality: "" }).nationality, null);
+  assert.equal(toClientPayload({ ...baseForm, gender: " legacy " }).gender, " legacy ");
+  assert.equal(toClientPayload({ ...baseForm, nationality: " PT " }).nationality, " PT ");
+
+  for (const localeId of localeIds) {
+    const locale = JSON.parse(await readFile("locales/" + localeId + "/common.json", "utf8"));
+    for (const key of ["male", "female", "nonBinary", "preferNotToSay"]) assert.equal(typeof locale["clients.v1.gender." + key], "string");
+    assert.deepEqual(["male", "female", "nonBinary", "preferNotToSay"].map((key) => locale["clients.v1.gender." + key]), expectedGenderLabels[localeId]);
+    assert.equal(locale["clients.v1.gender.other"], undefined);
+    assert.equal(typeof locale["clients.v1.legacyValue"], "string");
+    assert.equal(typeof locale["clients.v1.nationality.region.europe"], "string");
+    assert.equal(typeof locale["clients.v1.nationality.region.americas"], "string");
+    for (const code of expectedCodes) assert.equal(typeof locale["clients.v1.nationality." + code], "string", "missing " + localeId + " label for " + code);
+  }
+});
 test("Organization payload clears incompatible individual values and keeps canonical properties", () => {
   const payload = toClientPayload({
     ...baseForm, partyTypeId: "2", name: "Acme Ltd", companyRegistrationNumber: "123",

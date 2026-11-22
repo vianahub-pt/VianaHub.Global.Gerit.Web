@@ -168,9 +168,15 @@ export function HubGrid<Item>({
             })}
           </div>
         </div>
-        <p className="mt-4 text-xs font-semibold text-foreground dark:text-primary">
-          {pageCaption}
-        </p>
+        <div className="mt-4 flex min-h-4 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs font-semibold text-foreground dark:text-primary">
+          <p>{pageCaption}</p>
+          {loading && items.length > 0 ? (
+            <p role="status" className="inline-flex items-center gap-1.5 text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              {loadingText}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       <div className="px-6 py-4">
@@ -263,8 +269,11 @@ export function HubGrid<Item>({
                 ) : null}
               </tr>
             </thead>
-            <tbody>
-              {loading ? (
+            <tbody
+              inert={loading && items.length > 0}
+              className={loading && items.length > 0 ? "opacity-60" : undefined}
+            >
+              {loading && items.length === 0 ? (
                 <tr>
                   <td colSpan={columnCount} className="px-4 py-12">
                     <div className="flex items-center justify-center gap-2 text-muted-foreground dark:text-muted-foreground">

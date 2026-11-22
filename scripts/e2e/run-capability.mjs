@@ -17,12 +17,19 @@ function fail(message) {
   process.exit(1);
 }
 
-function getRunPlan(capability, env = process.env) {
+function getRunPlan(capability, env = process.env, { mockedVisual = false } = {}) {
+  if (mockedVisual && capability === "clients") {
+    return {
+      specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+      project: "journey",
+      mode: "mocked-visual-read-only",
+    };
+  }
   if (capability === "user-preferences" && env.CI === "true") {
     return { spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
   if (capability === "clients" && env.CI === "true") {
-    return { spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression" };
+    return { specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression" };
   }
   if (capability === "users" && (env.CI === "true" || !env.E2E_USERS_QA_MUTATION_APPROVAL)) {
     return { spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression" };
@@ -30,12 +37,12 @@ function getRunPlan(capability, env = process.env) {
   return { spec: `tests/e2e/${capability}-journey.spec.ts`, project: "journey", mode: "canonical-journey" };
 }
 
-function getBatchPlan(capabilities, env = process.env) {
-  const plans = capabilities.map((capability) => getRunPlan(capability, env));
+function getBatchPlan(capabilities, env = process.env, options = {}) {
+  const plans = capabilities.map((capability) => getRunPlan(capability, env, options));
   return {
-    specs: [...new Set(plans.map((plan) => plan.spec))],
+    specs: [...new Set(plans.flatMap((plan) => plan.specs ?? [plan.spec]))],
     projects: [...new Set(plans.map((plan) => plan.project))],
-    nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode === "nonmutating-regression"),
+    nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode !== "canonical-journey"),
   };
 }
 
@@ -43,6 +50,7 @@ function parseInvocation(args) {
   let scopeValue = null;
   let scopeApproved = false;
   let mutatingApproved = false;
+  let mockedVisual = false;
   const capabilities = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -53,6 +61,9 @@ function parseInvocation(args) {
       scopeApproved = true;
     } else if (argument === "--mutating-approved") {
       mutatingApproved = true;
+    } else if (argument === "--mocked-visual") {
+      if (mockedVisual) throw new Error("The mocked visual mode may be selected only once.");
+      mockedVisual = true;
     } else if (argument.startsWith("--")) {
       throw new Error("Unknown runner option " + argument + ".");
     } else {
@@ -72,7 +83,10 @@ function parseInvocation(args) {
   if (new Set(capabilities).size !== capabilities.length || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     throw new Error("Provide unique, supported capability slugs.");
   }
-  return { capabilities, scope, scopeApproved, mutatingApproved };
+  if (mockedVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved)) {
+    throw new Error("Mocked visual mode is read-only and limited to the clients capability.");
+  }
+  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual };
 }
 
 function selfTest() {
@@ -94,7 +108,11 @@ function selfTest() {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    spec: "tests/e2e/hub-image-journey.spec.ts", project: "journey", mode: "mocked-functional-and-shared-regression",
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
+  });
+  assert.deepEqual(getBatchPlan(["clients"], { CI: "true" }), {
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
     specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],
@@ -104,13 +122,24 @@ function selfTest() {
     projects: ["journey", "chromium"],
     nonmutatingCapabilities: ["users"],
   });
+  assert.deepEqual(getRunPlan("clients", {}, { mockedVisual: true }), {
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    project: "journey", mode: "mocked-visual-read-only",
+  });
+  assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    project: "journey", mode: "mocked-functional-and-shared-regression",
+  });
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
-    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false,
+    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false,
   });
   assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
   assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
   assert.deepEqual(parseInvocation(["--scope", "users,teams", "--scope-approved", "users", "teams"]).scope, ["users", "teams"]);
   assert.equal(parseInvocation(["--scope", "equipment-types", "--mutating-approved", "equipment-types"]).mutatingApproved, true);
+  assert.equal(parseInvocation(["--scope", "clients", "--mocked-visual", "clients"]).mockedVisual, true);
+  assert.throws(() => parseInvocation(["--scope", "clients", "--mocked-visual", "clients", "--mutating-approved"]), /read-only/);
+  assert.throws(() => parseInvocation(["--scope", "clients,users", "--scope-approved", "--mocked-visual", "clients", "users"]), /read-only/);
   console.log("E2E capability runner self-tests passed.");
 }
 
@@ -127,9 +156,12 @@ try {
 }
 const { capabilities, mutatingApproved } = invocation;
 if (capabilities.length === 0) fail("Provide one or more capability slugs.");
-
-const batchPlan = getBatchPlan(capabilities);
 const localExecution = process.platform === "win32" && process.env.CI !== "true";
+if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || capabilities[0] !== "clients")) {
+  fail("Mocked visual mode is available only for one local Windows-host Client run.");
+}
+
+const batchPlan = getBatchPlan(capabilities, process.env, { mockedVisual: invocation.mockedVisual });
 if (process.env.CI !== "true" && process.platform !== "win32") {
   fail("Local E2E execution is supported only on the authorized Windows host.");
 }
@@ -163,6 +195,9 @@ try {
 
 for (const capability of batchPlan.nonmutatingCapabilities) {
   console.log(`[E2E capability] Running ${capability} nonmutating regression. The CRUD/CSV mutative journey will NOT run in CI or without per-run QA approval.`);
+}
+if (invocation.mockedVisual) {
+  console.log("[E2E capability] Local mocked visual mode selected. Only the existing Client mock regressions will run; mutating approval is not accepted in this mode.");
 }
 const playwrightArgs = [playwrightCli, "test", ...batchPlan.specs, ...batchPlan.projects.map((project) => `--project=${project}`)];
 if (localExecution) playwrightArgs.push("--headed");

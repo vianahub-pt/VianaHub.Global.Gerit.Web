@@ -8,6 +8,8 @@ import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { ClientContactPersonsPanel } from "./clients-v1-contacts";
+import { CLIENT_NATIONALITY_OPTIONS } from "./client-nationality-catalog";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { HubImage, HubSelect, HubSwitch, HubTabs } from "@/shared/ui";
@@ -399,10 +401,28 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
   const businessStatusOptions = currentStatusIsInactive
     ? [{ value: currentStatusId, label: client?.statusDefinitionName ?? t("clients.v1.errors.invalidBusinessStatus"), disabled: true }, ...activeStatusOptions.map((option) => ({ value: String(option.id), label: option.name }))]
     : activeStatusOptions.map((option) => ({ value: String(option.id), label: option.name }));
+  const canonicalGenderOptions = [
+    { value: "male", label: t("clients.v1.gender.male") },
+    { value: "female", label: t("clients.v1.gender.female") },
+    { value: "non-binary", label: t("clients.v1.gender.nonBinary") },
+    { value: "prefer-not-to-say", label: t("clients.v1.gender.preferNotToSay") },
+  ];
+  const genderOptions = values.gender && !canonicalGenderOptions.some((option) => option.value === values.gender)
+    ? [{ value: values.gender, label: t("clients.v1.legacyValue", { value: values.gender }) }, ...canonicalGenderOptions]
+    : canonicalGenderOptions;
+  const canonicalNationalityOptions = CLIENT_NATIONALITY_OPTIONS.map(({ code, region }) => ({
+    value: code,
+    label: t("clients.v1.nationality.region." + region.toLowerCase()) + " — " + t("clients.v1.nationality." + code),
+  }));
+  const nationalityOptions = values.nationality && !canonicalNationalityOptions.some((option) => option.value === values.nationality)
+    ? [{ value: values.nationality, label: t("clients.v1.legacyValue", { value: values.nationality }) }, ...canonicalNationalityOptions]
+    : canonicalNationalityOptions;
   const selectedStatusDefinitionId = Number(values.statusDefinitionId);
   const selectedStatusIsValid = Number.isInteger(selectedStatusDefinitionId) && selectedStatusDefinitionId > 0 &&
     activeStatusOptions.some((option) => option.id === selectedStatusDefinitionId);
   const fieldsDisabled = submitting || catalogsLoading;
+  const clientTabsEnabled = isEditingRoute && validId && !loading && client !== null && client.id === parsedId;
+  const selectedTab: ClientTab = clientTabsEnabled ? tab : "client";
 
   if (!isHydrating && isAuthenticated && (isEditingRoute ? (!canRead || !canUpdate) : !canCreate)) return (
     <div data-testid={isEditingRoute ? "client-detail-page" : "client-create-page"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -450,8 +470,8 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
         <HubTabs<ClientTab>
           id="client-v1-tabs"
           ariaLabel={t("clients.v1.tabs.label")}
-          tabs={relatedTabs.map((item) => ({ ...item, panel: null, panelId: "client-v1-tab-panel" }))}
-          activeTab={tab}
+          tabs={relatedTabs.map((item) => ({ ...item, panel: null, panelId: "client-v1-tab-panel", disabled: item.id !== "client" && !clientTabsEnabled }))}
+          activeTab={selectedTab}
           onTabChange={setTab}
           renderPanel={false}
           className="mb-6"
@@ -459,13 +479,9 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
 
         {formError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{formError}</p>}
         {catalogError && <p role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{catalogError}</p>}
-        <div id="client-v1-tab-panel" role="tabpanel" aria-labelledby={`client-v1-tabs-tab-${tab}`} tabIndex={0}>
-        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : tab !== "client" ? (
-          <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
-            <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === tab)?.label}</h2>
-            <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[tab as Exclude<ClientTab, "client">]}</p>
-          </section>
-        ) : (
+        <div id="client-v1-tab-panel" role="tabpanel" aria-labelledby={`client-v1-tabs-tab-${selectedTab}`} tabIndex={0}>
+        <div hidden={selectedTab !== "client"}>
+        {loading || catalogsLoading ? <div role="status" className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("clients.loading")}</span></div> : (
           <form onSubmit={(event) => void submit(event)} className="space-y-6" data-testid="client-form">
             <section data-testid="client-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
               <fieldset disabled={fieldsDisabled} data-testid="client-fields-grid" className="grid grid-cols-1 gap-x-5 gap-y-5 lg:grid-cols-3">
@@ -482,7 +498,7 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
                 </>}
                 {isIndividual && <>
                   <Field label={t("clients.v1.fields.birthDate")} value={values.birthDate} onChange={(value) => updateValue("birthDate", value)} disabled={fieldsDisabled} type="date" max={new Date().toISOString().slice(0, 10)} testId="client-birth-date" className="lg:col-start-1 lg:row-start-3" />
-                  <Field label={t("clients.v1.fields.gender")} value={values.gender} onChange={(value) => updateValue("gender", value)} disabled={fieldsDisabled} testId="client-gender" className="lg:col-start-2 lg:row-start-3" />
+                  <SelectField label={t("clients.v1.fields.gender")} value={values.gender} onChange={(value) => updateValue("gender", value)} options={genderOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} testId="client-gender" className="lg:col-start-2 lg:row-start-3" />
                 </>}
 
                 <Field label={t("clients.v1.fields.phoneNumber")} value={values.phoneNumber} onChange={(value) => updateValue("phoneNumber", value)} disabled={fieldsDisabled} testId="client-phone" className="lg:col-start-1 lg:row-start-4" />
@@ -497,7 +513,7 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
 
                 <Field label={t("clients.v1.fields.email")} value={values.email} onChange={(value) => updateValue("email", value)} disabled={fieldsDisabled} testId="client-email" className="lg:col-start-1 lg:row-start-5" />
                 <Field label={t("clients.v1.fields.websiteUrl")} value={values.websiteUrl} onChange={(value) => updateValue("websiteUrl", value)} disabled={fieldsDisabled} testId="client-website" className="lg:col-start-2 lg:row-start-5" />
-                {isIndividual && <Field label={t("clients.v1.fields.nationality")} value={values.nationality} onChange={(value) => updateValue("nationality", value)} disabled={fieldsDisabled} testId="client-nationality" className="lg:col-start-3 lg:row-start-5" />}
+                {isIndividual && <SelectField label={t("clients.v1.fields.nationality")} value={values.nationality} onChange={(value) => updateValue("nationality", value)} options={nationalityOptions} disabled={fieldsDisabled} placeholder={t("clients.v1.select")} testId="client-nationality" className="lg:col-start-3 lg:row-start-5" />}
                 {isOrganization && <Field label={t("clients.v1.fields.numberOfEmployees")} value={values.numberOfEmployees} onChange={(value) => updateValue("numberOfEmployees", value)} disabled={fieldsDisabled} type="number" min="0" testId="client-number-employees" className="lg:col-start-3 lg:row-start-5" />}
 
                 <label className="flex flex-col gap-1.5 text-sm font-medium text-foreground lg:col-span-3 lg:row-start-6"><span>{t("clients.form.observation")}</span><Textarea data-testid="client-note" className="min-h-32 resize-y" value={values.note} maxLength={!isEditingRoute ? CLIENT_NOTE_MAX_LENGTH : undefined} disabled={fieldsDisabled} onChange={(event) => updateValue("note", event.target.value)} /></label>
@@ -510,6 +526,22 @@ export function ClientFormPage({ clientId }: { clientId?: string }) {
             </div>}
           </form>
         )}
+        </div>
+        <div hidden={selectedTab !== "contacts"}>
+          <ClientContactPersonsPanel
+            key={String(clientTabsEnabled ? client.id : parsedId ?? "unavailable")}
+            clientId={clientTabsEnabled ? client.id : null}
+            active={selectedTab === "contacts" && clientTabsEnabled && !loading}
+          />
+        </div>
+        {(["addresses", "documents", "fiscalData"] as const).map((tabId) => (
+          <div key={tabId} hidden={selectedTab !== tabId}>
+            <section className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+              <h2 className="text-lg font-semibold text-foreground">{relatedTabs.find((item) => item.id === tabId)?.label}</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{relatedTabContent[tabId]}</p>
+            </section>
+          </div>
+        ))}
         </div>
 
         {isEditingRoute && client && <ConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!open && !deleteSubmitting) setDeleteOpen(false); }}

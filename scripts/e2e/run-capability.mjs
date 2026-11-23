@@ -32,7 +32,7 @@ function getRunPlan(capability, env = process.env, { mockedVisual = false, readO
     return { spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
   if (capability === "clients" && env.CI === "true") {
-    return { specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression" };
+    return { specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression" };
   }
   if (capability === "users" && (env.CI === "true" || !env.E2E_USERS_QA_MUTATION_APPROVAL)) {
     return { spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression" };
@@ -118,10 +118,10 @@ function selfTest() {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
   });
   assert.deepEqual(getBatchPlan(["clients"], { CI: "true" }), {
-    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"],
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
     projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
@@ -137,7 +137,7 @@ function selfTest() {
     project: "journey", mode: "mocked-visual-read-only",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
-    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
+    specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
   });
   assert.deepEqual(getBatchPlan(["clients"], {}, { mockedVisual: true }), {
     specs: ["tests/e2e/client-contact-person-journey.spec.ts"],

@@ -100,6 +100,10 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
+async function waitForNotificationsToClear(page: Page) {
+  await expect(page.locator('[role="region"][aria-label^="Notifications"] [role="status"][data-state="open"]')).toHaveCount(0, { timeout: 15_000 });
+}
+
 function pageBody(items: Address[]) { return { items, pageNumber: 1, pageSize: 10, totalItems: items.length, totalPages: items.length ? 1 : 0 }; }
 
 async function verifyDeletedAddress(page: Page, parentClientId: number, addressId: number, markers: string[]) {
@@ -316,10 +320,12 @@ test("ClientAddress CRUD journey is run-scoped, parent-bound, and cleans up its 
     await page.getByTestId("client-address-form").getByRole("button", { name: /save|guardar|salvar/i }).click();
     expect((await updateResponsePromise).status()).toBe(200);
     await expect(panel.getByRole("row").filter({ hasText: `${uniqueStreet}-EDITED` })).toBeVisible();
+    await waitForNotificationsToClear(page);
 
     const deactivatePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/addresses/${addressId}/deactivate`));
     await page.getByTestId(`client-address-toggle-${addressId}`).click(); expect((await deactivatePromise).status()).toBe(200);
     await expect(panel.getByTestId(`client-address-toggle-${addressId}`)).toHaveAttribute("aria-label", /activate|ativar/i);
+    await waitForNotificationsToClear(page);
     const activatePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/addresses/${addressId}/activate`));
     await page.getByTestId(`client-address-toggle-${addressId}`).click(); expect((await activatePromise).status()).toBe(200);
     await expect(panel.getByTestId(`client-address-toggle-${addressId}`)).toHaveAttribute("aria-label", /deactivate|desativar/i);

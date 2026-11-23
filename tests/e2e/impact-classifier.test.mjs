@@ -255,6 +255,14 @@ test("ClientAddress read-only QA journey is classified as Client-only E2E impact
   assert.equal(plan.runE2E, true);
   assert.equal(plan.sharedUiRegressionRequired, false);
 });
+test("ClientAddress CRUD guard tests are classified as Client-only E2E impact", () => {
+  const plan = selectCapabilities(["tests/e2e/client-address-crud-guard.test.mjs"], { scope: ["clients"] });
+  assert.deepEqual(plan.functionalCapabilities, ["clients"]);
+  assert.deepEqual(plan.capabilities, ["clients"]);
+  assert.equal(plan.runE2E, true);
+  assert.equal(plan.sharedUiRegressionRequired, false);
+});
+
 test("ClientAddress mocked CRUD journey is classified as Client-only E2E impact", () => {
   const plan = selectCapabilities(["tests/e2e/client-address-crud-journey.spec.ts"], { scope: ["clients"] });
   assert.deepEqual(plan.functionalCapabilities, ["clients"]);

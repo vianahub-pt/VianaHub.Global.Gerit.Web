@@ -31,7 +31,7 @@ const capabilityTestPaths = new Map([
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
   ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
-  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-read-only-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"]],
+  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-read-only-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts", "tests/e2e/client-address-crud-guard.test.mjs"]],
 ]);
 
 const ciOnlyPaths = new Set([

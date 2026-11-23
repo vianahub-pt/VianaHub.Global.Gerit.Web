@@ -63,6 +63,25 @@ test("ClientAddress edit preserves unknown two-character country and complete de
   assert.equal(toClientAddressPayload(form).countryCode, "ZZ");
 });
 
+test("ClientAddress form fields follow the approved responsive desktop order", () => {
+  const panel = readFileSync(resolve("domains/operations/clients/clients-v1-addresses.tsx"), "utf8");
+  const formStart = panel.indexOf("<form ");
+  const formContentStart = panel.indexOf(">", formStart) + 1;
+  const formEnd = panel.indexOf("</form>", formContentStart);
+  const form = formStart >= 0 && formEnd >= formContentStart ? panel.slice(formContentStart, formEnd) : null;
+  assert.ok(form, "ClientAddress form should remain present");
+  assert.match(form, /grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3/);
+  const fields = [
+    'testId="client-address-addressTypeId"', 'field("street"', 'field("streetNumber"',
+    'field("complement"', 'field("neighborhood"', 'field("city"', 'field("district"',
+    'field("postalCode"', 'testId="client-address-countryCode"', 'field("latitude"',
+    'field("longitude"', 'testId="client-address-isPrimary"', 'data-testid="client-address-note"',
+  ];
+  const positions = fields.map((field) => form.indexOf(field));
+  assert.ok(positions.every((position) => position >= 0), "all existing fields should remain in the form");
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+  assert.match(form, /className="col-span-full flex[^\"]*"[^>]*><span>\{t\("clients\.addresses\.form\.note"\)\}/);
+});
 test("ClientAddress new labels and validation messages exist in all four supported locales", () => {
   const keys = [
     "clients.addresses.form.title", "clients.addresses.form.countryPlaceholder", "clients.addresses.form.countryLegacy",

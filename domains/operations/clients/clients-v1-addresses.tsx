@@ -263,7 +263,6 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
       <form onSubmit={(event) => void submitForm(event)} className="space-y-4" data-testid="client-address-form">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <HubSelect label={t("clients.addresses.form.addressType")} value={form.addressTypeId} onValueChange={(value) => updateField("addressTypeId", value)} options={typeOptions} placeholder={t("clients.addresses.form.addressTypePlaceholder")} disabled={submitting || detailLoading || typesLoading || !canReadTypes} required testId="client-address-addressTypeId" />
-          <HubSelect label={t("clients.addresses.form.country")} value={form.countryCode} onValueChange={(value) => updateField("countryCode", value)} options={countries} placeholder={t("clients.addresses.form.countryPlaceholder")} disabled={submitting || detailLoading} required searchable testId="client-address-countryCode" />
           {field("street", "clients.addresses.form.street", 200, true)}
           {field("streetNumber", "clients.addresses.form.number", 20)}
           {field("complement", "clients.addresses.form.complement", 100)}
@@ -271,11 +270,12 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
           {field("city", "clients.addresses.form.city", 100, true)}
           {field("district", "clients.addresses.form.state", 100)}
           {field("postalCode", "clients.addresses.form.postalCode", 20, true)}
+          <HubSelect label={t("clients.addresses.form.country")} value={form.countryCode} onValueChange={(value) => updateField("countryCode", value)} options={countries} placeholder={t("clients.addresses.form.countryPlaceholder")} disabled={submitting || detailLoading} required searchable testId="client-address-countryCode" />
           {field("latitude", "clients.addresses.form.latitude", 40, false, "number")}
           {field("longitude", "clients.addresses.form.longitude", 40, false, "number")}
-          <label className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-foreground"><span>{t("clients.addresses.form.note")}</span><Textarea data-testid="client-address-note" value={form.note} onChange={(event) => updateField("note", event.currentTarget.value)} maxLength={500} disabled={submitting || detailLoading || mode === "idle"} className="min-h-24 resize-y" /></label>
+          <label className="inline-flex min-w-0 items-center gap-3 text-sm font-medium"><HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={submitting || detailLoading || mode === "idle"} testId="client-address-isPrimary" /><span>{t("clients.addresses.form.isPrimary")}</span></label>
+          <label className="col-span-full flex min-w-0 flex-col gap-1.5 text-sm font-medium text-foreground"><span>{t("clients.addresses.form.note")}</span><Textarea data-testid="client-address-note" value={form.note} onChange={(event) => updateField("note", event.currentTarget.value)} maxLength={500} disabled={submitting || detailLoading || mode === "idle"} className="min-h-24 resize-y" /></label>
         </div>
-        <label className="inline-flex items-center gap-3 text-sm font-medium"><HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={submitting || detailLoading || mode === "idle"} testId="client-address-isPrimary" /><span>{t("clients.addresses.form.isPrimary")}</span></label>
         {formError ? <p role="alert" data-testid="client-address-form-error" className="rounded-sm border border-destructive/40 p-3 text-sm text-destructive">{formError}</p> : null}
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
           {canSubmit ? <><button type="button" onClick={cancelForm} disabled={submitting || detailLoading} className="rounded-sm border border-border px-4 py-2 text-sm">{t("clients.actions.cancel")}</button><button type="submit" disabled={submitting || typesLoading || activeTypes.length === 0} className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("clients.actions.save")}</button></> : null}

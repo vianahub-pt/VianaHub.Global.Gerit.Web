@@ -224,6 +224,15 @@ test("package test gate and CI runner execute every required shared regression a
   assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 
+test("Next 16 toolchain config is supporting scope but still requires the Client journey", () => {
+  const files = [".eslintrc.json", "eslint.config.mjs", "next-env.d.ts", "tsconfig.json", "package.json", "package-lock.json", "tests/e2e/client-contact-person-journey.spec.ts"];
+  const plan = selectCapabilities(files, { scope: ["clients"] });
+  assert.deepEqual(plan.capabilities, ["clients"]);
+  assert.equal(plan.runE2E, true);
+  assert.ok(plan.supportingChanges.includes("eslint.config.mjs"));
+  assert.throws(() => selectCapabilities(["eslint.config.mjs"], { scope: ["clients"] }), /shared-only changes do not prove the declared capability/);
+});
+
 test("HubGrid changes require the mocked ClientContactPerson journey and pass shared validation", () => {
   const plan = selectCapabilities([
     "domains/operations/clients/clients-v1-contacts.tsx",

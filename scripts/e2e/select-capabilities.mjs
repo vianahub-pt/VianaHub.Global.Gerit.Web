@@ -99,6 +99,10 @@ function isKnownSharedSupport(file) {
     file === "tests/e2e/hub-select-visual-journey.spec.ts" ||
     file === "tests/e2e/workspace-header-theme-journey.spec.ts" ||
     file === "tests/e2e/impact-classifier.test.mjs" ||
+    file === ".eslintrc.json" ||
+    file === "eslint.config.mjs" ||
+    file === "next-env.d.ts" ||
+    file === "tsconfig.json" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||

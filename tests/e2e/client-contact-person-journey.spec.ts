@@ -53,7 +53,7 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function installApiMocks(page: Page) {
+async function installApiMocks(page: Page, options: { blockUnmockedReads?: boolean } = {}) {
   let records: Contact[] = Array.from({ length: 23 }, (_, index) => ({
     ...contactFixture,
     id: contactId + index,
@@ -73,6 +73,7 @@ async function installApiMocks(page: Page) {
   let detailGone = false;
   const observed: string[] = [];
   const unexpectedWrites: string[] = [];
+  const unexpectedReads: string[] = [];
   const mutationPayloads: unknown[] = [];
   let nextListDelayMs = 0;
   const delayedSearches = new Map<string, number>();
@@ -160,6 +161,7 @@ async function installApiMocks(page: Page) {
       return json(route, 200, [{ id: 4, name: "Potential", statusDomainId: 1, isActive: true, languageCode: "en-US" }]);
     }
 
+    if (path === "/api/gerit/v1/subscriptions/tenant/1" && method === "GET") return json(route, 200, []);
     if (path === "/api/gerit/v1/address-types" && method === "GET") return json(route, 200, [{ id: 3, name: "Home", isActive: true }, { id: 4, name: "Billing", isActive: true }]);
     const addressesBase = `/api/gerit/v1/clients/${clientId}/addresses`;
     if (path === addressesBase + "/paged" && method === "GET") {
@@ -245,7 +247,13 @@ async function installApiMocks(page: Page) {
         return json(route, 200, true);
       }
     }
-    if (method === "GET" || method === "HEAD") return route.continue();
+    if (method === "GET" || method === "HEAD") {
+      if (options.blockUnmockedReads) {
+        unexpectedReads.push(method + " " + path);
+        return json(route, 599, { title: "Unmocked read blocked by synthetic ClientAddress permission test" });
+      }
+      return route.continue();
+    }
     unexpectedWrites.push(method + " " + path);
     return json(route, 599, { title: "Unmocked mutating request blocked by ClientContactPerson visual test" });
   });
@@ -256,6 +264,7 @@ async function installApiMocks(page: Page) {
     setConflict: (value: "none" | "email" | "primary") => { createConflict = value; },
     setDetailGone: (value: boolean) => { detailGone = value; },
     setClientCreateStatus: (value: 201 | 500) => { clientCreateStatus = value; },
+    addInactiveAddress: () => { addresses.push({ ...addressFixture, id: addressFixture.id + 1, street: "Inactive Synthetic Street", isActive: false }); },
     delayNextList: (milliseconds: number) => { nextListDelayMs = milliseconds; },
     delayListSearch: (search: string, milliseconds: number) => { delayedSearches.set(search.toLocaleLowerCase(), milliseconds); },
     seedClient: () => { clientCreated = true; },
@@ -265,9 +274,47 @@ async function installApiMocks(page: Page) {
     clientCreateStatuses,
     observed,
     unexpectedWrites,
+    unexpectedReads,
     mutationPayloads,
     snapshot: () => records.map((record) => ({ ...record })),
   };
+}
+
+async function authenticateWithSyntheticPermissions(page: Page, deniedGrant: string) {
+  const clientAddressGrants = ["GetPaged", "GetBy", "Create", "Update", "Activate", "Deactivate", "Delete", "BulkUpload"]
+    .filter((grant) => grant !== deniedGrant);
+  const claims = {
+    sub: "9876",
+    tenant_id: "1",
+    email: "synthetic.permission@example.invalid",
+    role: ["Synthetic permission test"],
+    permissions: {
+      Clients: ["GetPaged", "GetBy", "Create", "Update", "Activate", "Deactivate", "Delete"],
+      ClientAddresses: clientAddressGrants,
+      AddressTypes: ["GetAll"],
+    },
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  };
+  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const now = Date.now();
+  const authSession = {
+    accessToken: `${header}.${payload}.synthetic-signature`,
+    refreshToken: "synthetic-refresh-token",
+    accessTokenExpiresAt: new Date(now + 30 * 60_000).toISOString(),
+    refreshTokenExpiresAt: new Date(now + 60 * 60_000).toISOString(),
+    roleId: 9876,
+    roleName: "Synthetic permission test",
+    userId: 9876,
+    userName: "Synthetic permission test",
+    tenantId: 1,
+    tenantName: "Synthetic tenant",
+    email: "synthetic.permission@example.invalid",
+    name: "Synthetic permission test",
+  };
+  await page.addInitScript(({ storageKey, session }) => {
+    window.localStorage.setItem(storageKey, JSON.stringify(session));
+  }, { storageKey: "gerit.auth.session.v1", session: authSession });
 }
 
 async function dismissSuccessToast(page: Page) {
@@ -890,3 +937,45 @@ test("ClientAddress CRUD, permissions, legacy country and CSV stay on the mocked
   expect(mocks.unexpectedWrites).toEqual([]);
   expect(mocks.observed.filter((entry) => /^(POST|PUT|PATCH|DELETE) \/api\/gerit\/v1\/clients\/4242\/addresses/.test(entry)).length).toBeGreaterThanOrEqual(5);
 });
+
+const deniedClientAddressOperations = [
+  { grant: "GetPaged", method: "GET", suffix: `/clients/${clientId}/addresses/paged` },
+  { grant: "GetBy", method: "GET", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "Create", method: "POST", suffix: `/clients/${clientId}/addresses` },
+  { grant: "Update", method: "PUT", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "Activate", method: "PATCH", suffix: `/clients/${clientId}/addresses/${addressFixture.id + 1}/activate` },
+  { grant: "Deactivate", method: "PATCH", suffix: `/clients/${clientId}/addresses/${addressFixture.id}/deactivate` },
+  { grant: "Delete", method: "DELETE", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "BulkUpload", method: "POST", suffix: `/clients/${clientId}/addresses/bulk-upload` },
+] as const;
+
+for (const deniedOperation of deniedClientAddressOperations) {
+  test(`ClientAddress blocks ${deniedOperation.grant} without issuing its API request`, async ({ page }) => {
+    test.setTimeout(90_000);
+    const mocks = await installApiMocks(page, { blockUnmockedReads: true });
+    mocks.seedClient();
+    mocks.addInactiveAddress();
+    await authenticateWithSyntheticPermissions(page, deniedOperation.grant);
+    await page.goto(`/clients/${clientId}/`);
+    await expect(page.getByTestId("client-detail-page")).toBeVisible();
+    const pageResponse = deniedOperation.grant === "GetPaged" ? null : page.waitForResponse((response) => response.url().includes(`/api/gerit/v1/clients/${clientId}/addresses/paged`) && response.status() === 200);
+    await page.getByRole("tab", { name: /Addresses|Moradas|Endereços|Direcciones/i }).click();
+    await expect(page.getByTestId("client-addresses-panel")).toBeVisible();
+    if (pageResponse) await pageResponse;
+    else await expect(page.getByTestId("client-addresses-panel").getByRole("status")).toBeVisible();
+
+    const forbiddenRequest = `${deniedOperation.method} /api/gerit/v1${deniedOperation.suffix}`;
+    expect(mocks.observed).not.toContain(forbiddenRequest);
+    expect(mocks.unexpectedReads).toEqual([]);
+    expect(mocks.unexpectedWrites).toEqual([]);
+
+    if (deniedOperation.grant === "GetBy" || deniedOperation.grant === "Update") {
+      await expect(page.getByTestId(`client-address-edit-${addressFixture.id}`)).toHaveCount(0);
+    }
+    if (deniedOperation.grant === "Create") await expect(page.getByTestId("client-address-new")).toHaveCount(0);
+    if (deniedOperation.grant === "Activate") await expect(page.getByTestId(`client-address-toggle-${addressFixture.id + 1}`)).toHaveCount(0);
+    if (deniedOperation.grant === "Deactivate") await expect(page.getByTestId(`client-address-toggle-${addressFixture.id}`)).toHaveCount(0);
+    if (deniedOperation.grant === "Delete") await expect(page.getByTestId(`client-address-delete-${addressFixture.id}`)).toHaveCount(0);
+    if (deniedOperation.grant === "BulkUpload") await expect(page.getByTestId("client-address-bulk-upload")).toHaveCount(0);
+  });
+}

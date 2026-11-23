@@ -66,7 +66,7 @@ test("Client child tabs require a persisted parent that matches the validated ro
 test("mocked visual harness rejects unexpected preference writes immediately", () => {
   const journey = readFileSync(resolve("tests/e2e/client-contact-person-journey.spec.ts"), "utf8");
   assert.match(journey, /if \(preferencesMatch && method !== "GET"\) \{[\s\S]*unexpectedWrites\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,/);
-  assert.match(journey, /if \(method === "GET" \|\| method === "HEAD"\) return route\.continue\(\);[\s\S]*unexpectedWrites\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,/);
+  assert.match(journey, /if \(method === "GET" \|\| method === "HEAD"\) \{[\s\S]*options\.blockUnmockedReads[\s\S]*unexpectedReads\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,[\s\S]*return route\.continue\(\);[\s\S]*unexpectedWrites\.push\(method \+ " " \+ path\);[\s\S]*return json\(route, 599,/);
 });
 test("ClientContactPerson read and mutation grants remain independently scoped", () => {
   const source = readFileSync(resolve("domains/operations/clients/clients-v1-contacts.tsx"), "utf8");

@@ -84,23 +84,23 @@ function actionFrom(payload: unknown): ActionData | null {
 }
 
 export const test = base.extend<ActionFixture>({
-  createdActionIds: async ({}, use) => {
+  createdActionIds: async ({}, useFixture) => {
     const ids: number[] = [];
-    await use(ids);
+    await useFixture(ids);
   },
-  registerCreatedAction: async ({ createdActionIds }, use) => {
-    await use((id) => {
+  registerCreatedAction: async ({ createdActionIds }, useFixture) => {
+    await useFixture((id) => {
       if (!createdActionIds.includes(id)) createdActionIds.push(id);
     });
   },
-  markActionDeleted: async ({ createdActionIds }, use) => {
-    await use((id) => {
+  markActionDeleted: async ({ createdActionIds }, useFixture) => {
+    await useFixture((id) => {
       const index = createdActionIds.indexOf(id);
       if (index >= 0) createdActionIds.splice(index, 1);
     });
   },
-  createAction: async ({ page, registerCreatedAction }, use) => {
-    await use(async (name, description = `E2E managed description for ${name}`) => {
+  createAction: async ({ page, registerCreatedAction }, useFixture) => {
+    await useFixture(async (name, description = `E2E managed description for ${name}`) => {
       const createResult = await authenticatedRequest(page, "POST", "/api/gerit/v1/actions/", { name, description });
       const createError = safeApiErrors(createResult.body, [name, description]);
       expect(createResult.status, `Action create must return HTTP 201${createError ? `; ${createError}` : ""}`).toBe(201);
@@ -117,8 +117,8 @@ export const test = base.extend<ActionFixture>({
       return action;
     });
   },
-  page: async ({ page, createdActionIds }, use) => {
-    await use(page);
+  page: async ({ page, createdActionIds }, useFixture) => {
+    await useFixture(page);
     for (const id of [...createdActionIds].reverse()) {
       try {
         const result = await authenticatedRequest(page, "DELETE", `/api/gerit/v1/actions/${id}`);

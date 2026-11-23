@@ -11,7 +11,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint app components lib src",
+    "lint": "eslint .",
     "test": "node --test tests/actions/*.test.mjs tests/preferences/*.test.mjs tests/users/*.test.mjs tests/shared/*.test.mjs tests/clients/*.test.mjs tests/equipment-types/*.test.mjs tests/e2e/preflight.test.mjs tests/e2e/impact-classifier.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:capability": "node scripts/e2e/run-capability.mjs",

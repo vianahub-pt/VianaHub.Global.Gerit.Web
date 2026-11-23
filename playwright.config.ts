@@ -77,6 +77,7 @@ export default defineConfig({
       use: {
         ...(visualE2E ? visualJourneyDevice : devices["Desktop Chrome"]),
         storageState: undefined,
+        serviceWorkers: process.env.E2E_READ_ONLY_VISUAL === "true" ? "block" : undefined,
         headless: visualE2E ? false : undefined,
         viewport: visualE2E ? null : undefined,
         launchOptions: visualE2E

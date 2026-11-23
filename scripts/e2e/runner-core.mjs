@@ -22,9 +22,13 @@ export async function runCapabilityLifecycle({
         } else {
           playwrightStarted = true;
           const playwrightResult = await runPlaywright();
-          result = playwrightResult.code === 0
-            ? { status: "E2E_PASS", reason: "selected-playwright-spec-passed" }
-            : { status: "E2E_FAIL", reason: "selected-playwright-spec-failed", exitCode: playwrightResult.code };
+          if (playwrightResult.code !== 0) {
+            result = { status: "E2E_FAIL", reason: "selected-playwright-spec-failed", exitCode: playwrightResult.code };
+          } else if (playwrightResult.incomplete) {
+            result = { status: "E2E_INCOMPLETE", reason: playwrightResult.incomplete };
+          } else {
+            result = { status: "E2E_PASS", reason: "selected-playwright-spec-passed" };
+          }
         }
       }
     }

@@ -159,6 +159,27 @@ test("runner reports E2E pass only after cleanup and a free local port", async (
   assert.equal(cleanupCalls, 1);
 });
 
+test("runner reports missing QA fixtures as incomplete, never as E2E pass", async () => {
+  const result = await runCapabilityLifecycle({
+    preflight: async () => ({ pass: true }),
+    prepareBuild: async () => 0,
+    runPlaywright: async () => ({ code: 0, incomplete: "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE" }),
+    cleanup: async () => true,
+    isPortFree: async () => true,
+  });
+  assert.equal(result.status, "E2E_INCOMPLETE");
+  assert.equal(result.reason, "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE");
+});
+test("runner preserves Playwright failures when fixture status is incomplete", async () => {
+  const result = await runCapabilityLifecycle({
+    preflight: async () => ({ pass: true }),
+    prepareBuild: async () => 0,
+    runPlaywright: async () => ({ code: 1, incomplete: "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE" }),
+    cleanup: async () => true,
+    isPortFree: async () => true,
+  });
+  assert.equal(result.status, "E2E_FAIL");
+});
 test("runner reports incomplete cleanup when process cleanup or port verification fails", async () => {
   const processFailure = await runCapabilityLifecycle({
     preflight: async () => ({ pass: true }),

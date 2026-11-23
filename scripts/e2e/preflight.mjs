@@ -66,9 +66,12 @@ function hasEquipmentTypesCleanupPlan(specText) {
 
 function hasReadOnlyClientAddressPlan(specText) {
   return specText.includes("installReadOnlyApiGuard") &&
-    specText.includes('page.route("**/*"') &&
+    specText.includes('page.context().route("**/*"') &&
     specText.includes("classifyReadOnlyApiRequest") &&
     specText.includes('route.abort("blockedbyclient")') &&
+    specText.includes("allowedOrigin") &&
+    specText.includes("E2E_READ_ONLY_HOMOLOGATION_STATUS") &&
+    specText.includes("QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE") &&
     specText.includes("blockedRequests") &&
     specText.includes("expect(blockedRequests).toEqual([])");
 }

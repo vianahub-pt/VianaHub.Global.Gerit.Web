@@ -22,15 +22,17 @@ function safePath(pathname: string) {
 }
 
 async function installReadOnlyApiGuard(page: Page, blockedRequests: string[]) {
-  await page.route("**/*", async (route: Route) => {
+  const allowedOrigin = new URL(process.env.E2E_BASE_URL || "http://127.0.0.1:3100").origin;
+  await page.context().route("**/*", async (route: Route) => {
     const url = new URL(route.request().url());
-    const isDirectQaApi = url.hostname.toLowerCase() === "gerit-api.vianahub.pt";
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    const isDirectQaApi = hostname === "gerit-api.vianahub.pt";
     if (isDirectQaApi) {
       blockedRequests.push(`${route.request().method().toUpperCase()} direct-api-host [redacted]`);
       await route.abort("blockedbyclient");
       return;
     }
-    const decision = classifyReadOnlyApiRequest({ pathname: url.pathname, method: route.request().method() });
+    const decision = classifyReadOnlyApiRequest({ pathname: url.pathname, method: route.request().method(), origin: url.origin, allowedOrigin });
     if (decision === "outside-api") {
       await route.continue();
       return;
@@ -138,6 +140,45 @@ test("synthetic business POST is blocked before receiving any response", async (
   expect(blockedRequests).toEqual(["POST /api/gerit/v1/clients/{clientId}/addresses"]);
   expect(responses).toEqual([]);
 });
+test("mutations outside API routes and off-origin HTTP requests are blocked before network", async ({ page }) => {
+  const blockedRequests: string[] = [];
+  const responses: number[] = [];
+  await installReadOnlyApiGuard(page, blockedRequests);
+  page.on("response", (response) => {
+    if (new URL(response.url()).pathname.includes("outside-write")) responses.push(response.status());
+  });
+  await page.goto("/login/", { waitUntil: "domcontentloaded" });
+  await page.evaluate(async () => {
+    const attempts: Array<{ url: string; method: string; mode?: RequestMode }> = [
+      { url: "/submit/outside-write", method: "POST" },
+      { url: "/profile/outside-write", method: "PUT" },
+      { url: "/settings/outside-write", method: "PATCH" },
+      { url: "/upload/outside-write", method: "DELETE" },
+      { url: "/upload/outside-write", method: "OPTIONS" },
+      { url: "https://example.invalid/outside-write", method: "POST", mode: "no-cors" },
+    ];
+    for (const attempt of attempts) {
+      try {
+        await fetch(attempt.url, {
+          method: attempt.method,
+          ...(attempt.method === "GET" || attempt.method === "HEAD" ? {} : { body: "synthetic" }),
+          ...(attempt.mode ? { mode: attempt.mode } : {}),
+        });
+      } catch {
+        // The context route aborts each synthetic write before it reaches the network.
+      }
+    }
+  });
+  expect(blockedRequests).toEqual([
+    "POST /submit/outside-write",
+    "PUT /profile/outside-write",
+    "PATCH /settings/outside-write",
+    "DELETE /upload/outside-write",
+    "OPTIONS /upload/outside-write",
+    "POST /outside-write",
+  ]);
+  expect(responses).toEqual([]);
+});
 test("ClientAddress read-only QA visual journey", async ({ page }) => {
   test.setTimeout(300_000);
   const blockedRequests: string[] = [];
@@ -170,6 +211,10 @@ test("ClientAddress read-only QA visual journey", async ({ page }) => {
     console.log("[ClientAddress read-only] QA_FIXTURE_UNAVAILABLE clients=0");
     await saveSanitizedEvidence(page, trace, "clients-list-empty");
     expect(blockedRequests).toEqual([]);
+    const statusPath = process.env.E2E_READ_ONLY_HOMOLOGATION_STATUS;
+    if (statusPath) await writeFile(statusPath, JSON.stringify({ status: "INCOMPLETE", reason: "fixture-unavailable", fixture: "client" }), "utf8");
+    test.info().annotations.push({ type: "homologation-status", description: "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE: no visible Client fixture" });
+    console.log("[ClientAddress read-only] QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE clients=0");
     test.skip(true, "QA tenant has no visible Client fixture; no data was created.");
     return;
   }
@@ -208,6 +253,10 @@ test("ClientAddress read-only QA visual journey", async ({ page }) => {
   if (addressCount === 0) {
     console.log("[ClientAddress read-only] QA_FIXTURE_UNAVAILABLE addresses=0");
     expect(blockedRequests).toEqual([]);
+    const statusPath = process.env.E2E_READ_ONLY_HOMOLOGATION_STATUS;
+    if (statusPath) await writeFile(statusPath, JSON.stringify({ status: "INCOMPLETE", reason: "fixture-unavailable", fixture: "client-address" }), "utf8");
+    test.info().annotations.push({ type: "homologation-status", description: "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE: no visible ClientAddress fixture" });
+    console.log("[ClientAddress read-only] QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE addresses=0");
     test.skip(true, "No visible ClientAddress fixture exists; list and catalog GETs succeeded.");
     return;
   }

@@ -200,6 +200,13 @@ const e2eEnvironment = localExecution
   ? { ...process.env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" }
   : process.env;
 if (localExecution) delete e2eEnvironment.E2E_ALLOW_EXISTING_STORAGE_STATE;
+const readOnlyHomologationStatusPath = invocation.readOnlyVisual
+  ? resolve(repoRoot, "test-results/client-address-read-only", "homologation-status-" + Date.now() + "-" + process.pid + ".json")
+  : null;
+if (invocation.readOnlyVisual) {
+  e2eEnvironment.E2E_READ_ONLY_VISUAL = "true";
+  e2eEnvironment.E2E_READ_ONLY_HOMOLOGATION_STATUS = readOnlyHomologationStatusPath;
+}
 const canonicalDirectory = resolve(repoRoot, "tests", "e2e");
 for (const spec of batchPlan.specs) {
   const nativeSpecPath = resolve(repoRoot, spec);
@@ -259,7 +266,20 @@ const runPlaywright = () => new Promise((resolveResult) => {
   ownedPlaywrightChild.once("exit", (code, signal) => {
     process.removeListener("SIGINT", onSigint);
     process.removeListener("SIGTERM", onSigterm);
-    resolveResult({ code: code ?? (signal ? 1 : 0) });
+    const exitCode = code ?? (signal ? 1 : 0);
+    if (readOnlyHomologationStatusPath && existsSync(readOnlyHomologationStatusPath)) {
+      try {
+        const homologationStatus = JSON.parse(readFileSync(readOnlyHomologationStatusPath, "utf8"));
+        if (exitCode === 0 && homologationStatus.status === "INCOMPLETE" && homologationStatus.reason === "fixture-unavailable") {
+          resolveResult({ code: exitCode, incomplete: "QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE" });
+          return;
+        }
+      } catch {
+        resolveResult({ code: 1 });
+        return;
+      }
+    }
+    resolveResult({ code: exitCode });
   });
 });
 
@@ -326,6 +346,7 @@ if (localExecution) {
     isPortFree: portIsAvailable,
   });
   console.log("[E2E lifecycle] " + JSON.stringify(lifecycle));
+  if (lifecycle.status === "E2E_INCOMPLETE") console.log("[E2E capability] " + lifecycle.reason);
   process.exitCode = lifecycle.status === "E2E_PASS" ? 0 : 1;
 } else {
   const result = await runPlaywright();

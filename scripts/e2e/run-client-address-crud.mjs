@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { validateCrudApproval } from "./client-address-crud-guard.mjs";
+import { validateCrudApproval, validateCrudGitState } from "./client-address-crud-guard.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -47,13 +47,16 @@ if (process.platform !== "win32" || process.env.CI === "true") {
   console.error("[ClientAddress CRUD] This local runner is restricted to the authorized Windows host."); process.exit(2);
 }
 try {
-  const branch = execFileSync("git", ["branch", "--show-current"], { cwd: repoRoot, encoding: "utf8" }).trim();
-  if (branch !== branchName) throw new Error("Wrong working branch.");
-  const upstream = execFileSync("git", ["rev-parse", "origin/develop"], { cwd: repoRoot, encoding: "utf8" }).trim();
-  if (invocation.mode === "qa") {
-    try { execFileSync("git", ["merge-base", "--is-ancestor", upstream, "HEAD"], { cwd: repoRoot, stdio: "ignore" }); }
-    catch { throw new Error("QA run requires a branch based on current origin/develop."); }
-  }
+  const git = (args) => execFileSync("git", args, { cwd: repoRoot, encoding: "utf8" }).trim();
+  const branch = git(["branch", "--show-current"]);
+  const head = git(["rev-parse", "--verify", "HEAD^{commit}"]);
+  const originDevelop = git(["rev-parse", "--verify", "origin/develop^{commit}"]);
+  const worktreeClean = git(["status", "--porcelain", "--untracked-files=all"]) === "";
+  let commitValid = false;
+  try { execFileSync("git", ["cat-file", "-e", "HEAD^{commit}"], { cwd: repoRoot, stdio: "ignore" }); commitValid = true; }
+  catch { commitValid = false; }
+  const gitState = validateCrudGitState({ mode: invocation.mode, branch, head, originDevelop, worktreeClean, commitValid });
+  if (!gitState.allowed) throw new Error(gitState.reason);
 } catch (error) {
   console.error("[ClientAddress CRUD] Preflight blocked: " + (error instanceof Error ? error.message : "Git preflight failed.")); process.exit(2);
 }

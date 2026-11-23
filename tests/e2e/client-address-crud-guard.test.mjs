@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { classifyClientAddressCrudRequest, validateCrudApproval, validateQaIdentityClaims, validateSyntheticAddressPayload } from "../../scripts/e2e/client-address-crud-guard.mjs";
+import { classifyClientAddressCrudRequest, validateCrudApproval, validateQaIdentityClaims, validateSyntheticAddressPayload, validateCrudGitState } from "../../scripts/e2e/client-address-crud-guard.mjs";
 
 const origin = "http://127.0.0.1:3100";
 const clientId = 4242;
@@ -97,4 +97,30 @@ test("one synthetic create must carry the unique marker and remain non-primary",
   assert.equal(validateSyntheticAddressPayload({ street: marker, isPrimary: true }, marker), false);
   assert.equal(validateSyntheticAddressPayload({ street: "other", isPrimary: false }, marker), false);
   assert.equal(validateSyntheticAddressPayload({ street: marker, isPrimary: false }, "E2E-CA-not-a-uuid"), false);
+});
+test("mocked runner accepts only valid commits on authorized development branches", () => {
+  const head = "96d47c4a53c5ed34277d746dff5320cd81c0e6b9";
+  for (const branch of ["develop", "feature/client-address-qa-crud-journey", "fix/runner-validation", "refactor/e2e-runner", "test/crud-runner"]) {
+    assert.equal(validateCrudGitState({ mode: "mocked", branch, head, commitValid: true }).allowed, true, branch);
+  }
+  for (const branch of ["main", "release/1.0", "random-branch", "feature/", "feature/with spaces"]) {
+    assert.equal(validateCrudGitState({ mode: "mocked", branch, head, commitValid: true }).allowed, false, branch);
+  }
+  assert.equal(validateCrudGitState({ mode: "mocked", branch: "develop", head: "not-a-sha", commitValid: true }).allowed, false);
+  assert.equal(validateCrudGitState({ mode: "mocked", branch: "develop", head, commitValid: false }).allowed, false);
+});
+
+test("QA runner requires exact clean current develop and a valid commit", () => {
+  const head = "96d47c4a53c5ed34277d746dff5320cd81c0e6b9";
+  const valid = { mode: "qa", branch: "develop", head, originDevelop: head, worktreeClean: true, commitValid: true };
+  assert.deepEqual(validateCrudGitState(valid), { allowed: true, reason: "current-clean-develop" });
+  for (const invalid of [
+    { ...valid, branch: "feature/client-address-qa-crud-journey" },
+    { ...valid, branch: "main" },
+    { ...valid, originDevelop: "0000000000000000000000000000000000000000" },
+    { ...valid, worktreeClean: false },
+    { ...valid, head: "invalid" },
+    { ...valid, commitValid: false },
+  ]) assert.equal(validateCrudGitState(invalid).allowed, false);
+  assert.equal(validateCrudGitState({ ...valid, mode: "other" }).allowed, false);
 });

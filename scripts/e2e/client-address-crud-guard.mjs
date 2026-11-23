@@ -72,3 +72,20 @@ export function validateSyntheticAddressPayload(payload, marker) {
   const markerPattern = /^E2E-CA-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   return Boolean(payload && typeof payload === "object" && markerPattern.test(marker) && payload.street === marker && payload.isPrimary === false);
 }
+const DEVELOPMENT_BRANCH = /^(?:feature|fix|refactor|test)\/[a-z0-9][a-z0-9._-]*$/;
+const COMMIT_SHA = /^[0-9a-f]{40}$/i;
+
+export function validateCrudGitState({ mode, branch, head, originDevelop, worktreeClean, commitValid }) {
+  if (!COMMIT_SHA.test(typeof head === "string" ? head : "") || commitValid !== true) {
+    return { allowed: false, reason: "valid-commit-required" };
+  }
+  if (mode === "mocked") {
+    const allowedBranch = branch === "develop" || (typeof branch === "string" && DEVELOPMENT_BRANCH.test(branch));
+    return { allowed: allowedBranch, reason: allowedBranch ? "authorized-development-branch" : "unauthorized-development-branch" };
+  }
+  if (mode !== "qa") return { allowed: false, reason: "unknown-mode" };
+  const alignedDevelop = branch === "develop" && COMMIT_SHA.test(typeof originDevelop === "string" ? originDevelop : "") && head === originDevelop;
+  if (!alignedDevelop) return { allowed: false, reason: "qa-requires-current-develop" };
+  if (worktreeClean !== true) return { allowed: false, reason: "qa-requires-clean-worktree" };
+  return { allowed: true, reason: "current-clean-develop" };
+}

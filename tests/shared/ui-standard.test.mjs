@@ -17,6 +17,12 @@ const remainingTextareaPages = [
   "domains/operations/actions/action-form-page.tsx",
 ].map(read);
 const barrel = read("shared/ui/index.ts");
+const sidebar = read("components/ui/sidebar.tsx");
+
+test("sidebar skeleton rendering stays deterministic and hydration-safe", () => {
+  assert.match(sidebar, /const width = "70%"/);
+  assert.doesNotMatch(sidebar, /Math\.random\(\)/);
+});
 
 test("shared field components expose consistent tokens and HubSelect is public", () => {
   for (const token of ["h-12", "rounded-[12px]", "border-border", "bg-card", "px-4", "text-sm", "text-foreground", "focus-visible:ring-2", "disabled:opacity-50"]) assert.ok(input.includes(token), `Input missing ${token}`);

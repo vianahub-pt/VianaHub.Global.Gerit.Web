@@ -31,3 +31,17 @@ test("ClientAddress keeps grants independent and blocks child requests before a 
   assert.match(panel, /setForm\(clientAddressFormFromDetail\(result\)\)/);
   assert.doesNotMatch(panel, /tenantId|TenantId/);
 });
+
+test("ClientAddress places CSV import before Add in one responsive toolbar without bypassing its grant", () => {
+  const panel = readFileSync(resolve(panelPath), "utf8");
+  const toolbar = panel.match(/<div className="mb-4 flex flex-wrap items-center justify-between gap-3">[\s\S]*?<div className="flex flex-wrap items-center justify-end gap-2">([\s\S]*?)<\/div>\{detailLoading/)?.[1];
+
+  assert.ok(toolbar, "expected the existing form-header toolbar to remain in place");
+  const uploadPosition = toolbar.indexOf("{bulkUploadControl}");
+  const addPosition = toolbar.indexOf('data-testid="client-address-new"');
+  assert.ok(uploadPosition >= 0 && addPosition >= 0 && uploadPosition < addPosition);
+  assert.match(panel, /const bulkUploadControl = canBulkUpload \? <label[\s\S]*?data-testid="client-address-bulk-upload"/);
+  assert.match(toolbar, /\{canCreate \? <button[\s\S]*?data-testid="client-address-new"/);
+  assert.match(panel, /!canCreate && !canUpdate && bulkUploadControl/);
+  assert.equal((panel.match(/data-testid="client-address-bulk-upload"/g) ?? []).length, 1);
+});

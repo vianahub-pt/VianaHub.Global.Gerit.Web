@@ -324,6 +324,10 @@ async function dismissSuccessToast(page: Page) {
   }
 }
 
+async function waitForSuccessNotificationsToClear(page: Page) {
+  await expect(page.locator('[role="region"][aria-label^="Notifications"] [role="status"][data-state="open"]')).toHaveCount(0, { timeout: 15_000 });
+}
+
 async function openContactsTab(page: Page) {
   await page.goto(`/clients/${clientId}/`);
   await expect(page.getByTestId("client-detail-page")).toBeVisible();
@@ -917,14 +921,17 @@ test("ClientAddress CRUD, permissions, legacy country and CSV stay on the mocked
   expect(createdPayload).toMatchObject({ addressTypeId: 3, countryCode: "PT", street: "Synthetic Avenue", streetNumber: "8", city: "Coimbra", postalCode: "3000-001", latitude: 40.2033, longitude: -8.4103 });
   expect(Object.keys(createdPayload)).not.toContain("tenantId");
   await saveScreenshot(page, "11-client-addresses-inline-crud");
+  await waitForSuccessNotificationsToClear(page);
 
   const createdId = mocks.addressSnapshot().find((item) => item.street === "Synthetic Avenue")?.id;
   expect(createdId).toBeDefined();
   const createdRow = page.getByRole("row").filter({ hasText: "Synthetic Avenue" });
   await createdRow.getByTestId(`client-address-toggle-${createdId}`).click();
   await expect(createdRow).toContainText(/Inactive|Inativo|Inactiva|Inactivo/i);
+  await waitForSuccessNotificationsToClear(page);
   await createdRow.getByTestId(`client-address-toggle-${createdId}`).click();
   await expect(createdRow).toContainText(/Active|Ativo|Activa|Activo/i);
+  await waitForSuccessNotificationsToClear(page);
   await createdRow.getByTestId(`client-address-delete-${createdId}`).click();
   const dialog = page.getByRole("alertdialog");
   await expect(dialog).toBeVisible();

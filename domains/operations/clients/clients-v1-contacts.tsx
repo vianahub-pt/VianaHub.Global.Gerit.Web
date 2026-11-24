@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Power, PowerOff, SquarePen, Trash2, UserRoundPlus } from "lucide-react";
+import { Loader2, Power, PowerOff, SquarePen, Trash2, Upload, UserRoundPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -362,27 +362,37 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
         {canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-foreground">{t(mode === "edit" ? "clients.contacts.actions.edit" : mode === "create" ? "clients.contacts.actions.new" : "clients.contacts.form.selectToEdit")}</h2>
-            {canCreate ? <button type="button" data-testid="client-contact-new" disabled={detailLoading || submitting} onClick={beginCreate} className="inline-flex h-9 items-center gap-2 rounded-sm border border-primary/50 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.actions.new")}</button> : null}
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <button type="button" disabled aria-describedby="client-contact-csv-unavailable" title={t("clients.bulk.upload.unavailable")} className="inline-flex h-9 cursor-not-allowed items-center gap-2 rounded-sm border border-border bg-card px-3 text-sm font-medium text-muted-foreground opacity-70"><Upload className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.bulk.label")}</button>
+              {canCreate ? <button type="button" data-testid="client-contact-new" disabled={detailLoading || submitting} onClick={beginCreate} className="inline-flex h-9 items-center gap-2 rounded-sm border border-primary/50 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.actions.add")}</button> : null}
+            </div>
             {detailLoading ? <p role="status" className="w-full text-sm text-muted-foreground">{t("clients.contacts.loading")}</p> : null}
           </div>
+          <span id="client-contact-csv-unavailable" className="sr-only">{t("clients.bulk.upload.unavailable")}</span>
           <form onSubmit={(event) => void submitForm(event)} className="space-y-5" data-testid="client-contact-form" noValidate>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {field("name", "clients.contacts.form.name", CLIENT_CONTACT_NAME_MAX_LENGTH, true)}
               {field("email", "clients.contacts.form.email", CLIENT_CONTACT_EMAIL_MAX_LENGTH, true, "email")}
+              <div data-testid="client-contact-status" className="space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{t("clients.contacts.table.status")}</span>
+                <span className="flex min-h-10 items-center text-sm text-muted-foreground">{detail ? t(detail.isActive ? "clients.status.active" : "clients.status.inactive") : "—"}</span>
+              </div>
               {field("phoneNumber", "clients.contacts.form.phone", CLIENT_CONTACT_PHONE_MAX_LENGTH)}
               {field("cellPhoneNumber", "clients.contacts.form.cellPhone", CLIENT_CONTACT_PHONE_MAX_LENGTH)}
+              <div className="flex min-h-10 items-center">
+                <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
+                  <HubSwitch checked={form.hasCellPhoneWhatsapp} onCheckedChange={(value) => updateField("hasCellPhoneWhatsapp", value)} disabled={fieldsDisabled} testId="client-contact-whatsapp" />
+                  <span>{t("clients.contacts.form.cellPhoneWhatsapp")}</span>
+                </label>
+              </div>
               {field("jobTitle", "clients.contacts.form.jobTitle", CLIENT_CONTACT_JOB_TITLE_MAX_LENGTH)}
               {field("department", "clients.contacts.form.department", CLIENT_CONTACT_DEPARTMENT_MAX_LENGTH)}
-            </div>
-            <div className="flex flex-wrap gap-6 border-t border-border/70 pt-4">
-              <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
-                <HubSwitch checked={form.hasCellPhoneWhatsapp} onCheckedChange={(value) => updateField("hasCellPhoneWhatsapp", value)} disabled={fieldsDisabled} testId="client-contact-whatsapp" />
-                <span>{t("clients.contacts.form.cellPhoneWhatsapp")}</span>
-              </label>
-              {(!detail || detail.isActive) ? <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
-                <HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={fieldsDisabled} testId="client-contact-primary" />
-                <span>{t("clients.contacts.form.isPrimary")}</span>
-              </label> : null}
+              <div className="flex min-h-10 items-center">
+                {(!detail || detail.isActive) ? <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
+                  <HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={fieldsDisabled} testId="client-contact-primary" />
+                  <span>{t("clients.contacts.form.isPrimary")}</span>
+                </label> : null}
+              </div>
             </div>
             {formError ? <p role="alert" data-testid="client-contact-form-error" className="rounded-sm border border-destructive/40 bg-card p-3 text-sm text-destructive">{formError}</p> : null}
             <div className="flex flex-wrap gap-2">

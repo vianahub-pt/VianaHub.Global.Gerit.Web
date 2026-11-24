@@ -355,7 +355,7 @@
   "clients.contacts.toasts.deactivated": "Contact deactivated successfully.",
   "clients.addresses.title": "Addresses",
   "clients.addresses.subtitle": "Keep the customer's addresses organized.",
-  "clients.addresses.bulk.label": "Import addresses CSV",
+  "clients.addresses.bulk.label": "Import CSV",
   "clients.addresses.form.street": "Street",
   "clients.addresses.form.city": "City",
   "clients.addresses.form.state": "State",

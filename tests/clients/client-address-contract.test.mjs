@@ -102,3 +102,10 @@ test("ClientAddress new labels and validation messages exist in all four support
     for (const key of keys) assert.equal(typeof translations[key], "string", `${locale} missing ${key}`);
   }
 });
+
+test("ClientAddress CSV bulk button uses the shared short label in all supported locales", () => {
+  for (const locale of ["pt-PT", "pt-BR", "en-US", "es-ES"]) {
+    const messages = JSON.parse(readFileSync(resolve(`locales/${locale}/common.json`), "utf8"));
+    assert.equal(messages["clients.addresses.bulk.label"], locale === "en-US" ? "Import CSV" : "Importar CSV");
+  }
+});

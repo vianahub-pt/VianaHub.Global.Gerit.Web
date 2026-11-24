@@ -164,10 +164,6 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return () => { pageRequestSequence.current += 1; };
   }, [active, canRead, clientId, isAuthenticated, isHydrating, loadPage]);
 
-  useEffect(() => {
-    if (active && canCreate && mode === "idle" && editingContactId === null) setMode("create");
-  }, [active, canCreate, editingContactId, mode]);
-
   const beginEdit = useCallback(async (contactId: number) => {
     if (!activeRef.current || clientId === null || !canGetBy || !canUpdate || detailLoading) return;
     const requestId = ++detailRequestId.current;
@@ -184,13 +180,13 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     } catch (cause) {
       if (requestId !== detailRequestId.current) return;
       setForm(initialClientContactPersonFormValues());
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
       setEditingContactId(null);
       setError(errorText(cause, t("clients.contacts.errors.unavailable"), t));
     } finally {
       if (requestId === detailRequestId.current) setDetailLoading(false);
     }
-  }, [canCreate, canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
+  }, [canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
 
   const beginCreate = useCallback(() => {
     detailRequestId.current += 1;
@@ -207,12 +203,17 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
   const cancelForm = useCallback(() => {
     detailRequestId.current += 1;
     setFormError(null);
-    setDetail(null);
-    setEditingContactId(null);
     setDetailLoading(false);
-    setForm(initialClientContactPersonFormValues());
-    setMode(canCreate ? "create" : "idle");
-  }, [canCreate]);
+    if (mode === "edit" && detail) {
+      setForm(clientContactPersonFormFromDetail(detail));
+      setEditingContactId(detail.id);
+    } else {
+      setDetail(null);
+      setEditingContactId(null);
+      setForm(initialClientContactPersonFormValues());
+    }
+    setMode("idle");
+  }, [detail, mode]);
 
   useEffect(() => {
     if (mode !== "edit" || detailLoading || !active) return;
@@ -241,6 +242,7 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
       setFormError(t("clients.contacts.validation." + validationKey));
       return;
     }
+    if (mode === "edit" && detail && (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).every((key) => form[key] === clientContactPersonFormFromDetail(detail)[key])) return;
     setSubmitting(true);
     setFormError(null);
     try {
@@ -257,14 +259,13 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
       await loadPage();
       setDetail(null);
       setEditingContactId(null);
-      setForm(initialClientContactPersonFormValues());
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
     } catch (cause) {
       setFormError(errorText(cause, t("clients.contacts.errors.save"), t));
     } finally {
       setSubmitting(false);
     }
-  }, [canCreate, canUpdate, clientId, editingContactId, fetchWithAuth, form, loadPage, mode, submitting, t, toast]);
+  }, [canCreate, canUpdate, clientId, detail, editingContactId, fetchWithAuth, form, loadPage, mode, submitting, t, toast]);
 
   const toggleStatus = useCallback(async (contact: ClientContactPersonSummary) => {
     if (clientId === null || busyId !== null) return;
@@ -302,7 +303,7 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
         setEditingContactId(null);
       setForm(initialClientContactPersonFormValues());
       setFormError(null);
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
       }
     } catch (cause) {
       setError(errorText(cause, t("clients.contacts.errors.delete"), t));
@@ -351,7 +352,12 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return <section data-testid="client-contact-persons-forbidden" role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("clients.contacts.errors.forbidden")}</section>;
   }
 
-    const canSubmit = mode === "create" ? canCreate : mode === "edit" && canUpdate;
+    const validationKey = validateClientContactPersonForm(form);
+    const formValid = validationKey === null;
+    const formDirty = mode === "create"
+      ? (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).some((key) => form[key] !== initialClientContactPersonFormValues()[key])
+      : mode === "edit" && detail !== null && (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).some((key) => form[key] !== clientContactPersonFormFromDetail(detail)[key]);
+    const canSubmit = (mode === "create" && canCreate || mode === "edit" && canUpdate) && formValid && formDirty;
     const fieldsDisabled = submitting || detailLoading || mode === "idle";
     const field = (key: keyof ClientContactPersonFormValues, labelKey: string, maxLength: number, required = false, type = "text") => (
       <Field key={key} inputRef={key === "name" ? firstFieldRef : undefined} label={t(labelKey)} value={form[key] as string} onChange={(value) => updateField(key, value)} disabled={fieldsDisabled} required={required} maxLength={maxLength} type={type} testId={"client-contact-" + key} />
@@ -359,7 +365,7 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return (
       <section data-testid="client-contact-person-panel" className="space-y-4">
         {error ? <p role="alert" data-testid="client-contact-error" className="rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{error}<button type="button" onClick={() => void loadPage()} className="ml-3 underline">{t("clients.contacts.actions.retry")}</button></p> : null}
-        {canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        {canRead || canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-foreground">{t(mode === "edit" ? "clients.contacts.actions.edit" : mode === "create" ? "clients.contacts.actions.new" : "clients.contacts.form.selectToEdit")}</h2>
             <div className="ml-auto flex flex-wrap items-center justify-end gap-2">

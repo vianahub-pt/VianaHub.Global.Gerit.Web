@@ -1,13 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { evaluatePreflight } from "../../scripts/e2e/preflight.mjs";
 import { runCapabilityLifecycle } from "../../scripts/e2e/runner-core.mjs";
 
 const git = {
   root: "C:\\git\\VianaHub.Global.Gerit.Web",
   branch: "feature/equipment-types-crud",
-  worktreeCount: 1,
-  dirty: true,
+  worktreeCount: 2,
+  headSha: "a".repeat(40),
+  worktrees: [
+    `worktree C:\\git\\VianaHub.Global.Gerit.Web\nHEAD ${"a".repeat(40)}\nbranch refs/heads/feature/equipment-types-crud`,
+    `worktree C:\\git\\VianaHub.Global.Gerit.Web-client-address-layout\nHEAD ${"b".repeat(40)}\nbranch refs/heads/feature/client-address-form-layout`,
+  ],
+  dirty: false,
+  changedFiles: [],
 };
 const config = {
   E2E_BASE_URL: "http://127.0.0.1:3100",
@@ -15,6 +22,7 @@ const config = {
   E2E_USER_EMAIL: "configured",
   E2E_USER_PASSWORD: "configured",
 };
+const clientsCleanupSpec = await readFile("tests/e2e/clients-journey.spec.ts", "utf8");
 const valid = {
   capability: "equipment-types",
   mode: "mutating",
@@ -27,18 +35,35 @@ const valid = {
   fileExists: () => true,
   readText: async () => "finally randomUUID DELETE 410",
 };
+const withBranch = (branch) => ({
+  ...git,
+  branch,
+  worktrees: [git.worktrees[0].replace(`refs/heads/${git.branch}`, `refs/heads/${branch}`), git.worktrees[1]],
+});
 
-test("preflight accepts official local E2E configuration and dirty preserved worktree", async () => {
+test("preflight accepts official local E2E configuration on a clean worktree", async () => {
   const result = await evaluatePreflight(valid);
   assert.equal(result.status, "PRECHECK_CONFIG_PASS");
   assert.equal(result.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
-  assert.equal(result.git.workingTreeDirty, true);
+  assert.equal(result.git.workingTreeDirty, false);
+});
+
+test("preflight accepts only scoped dirty Client files for local mocked visual validation", async () => {
+  const result = await evaluatePreflight({
+    ...valid,
+    capability: "clients",
+    mode: "read-only",
+    git: { ...withBranch("feature/client-crud-v1"), dirty: true, changedFiles: ["domains/operations/clients/clients-v1-addresses.tsx"] },
+    readText: async () => clientsCleanupSpec,
+  });
+  assert.equal(result.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(result.authorization, "READ_ONLY_AUTHORIZED");
 });
 
 test("preflight accepts the authorized EquipmentTypes visual hotfix branch", async () => {
   const result = await evaluatePreflight({
     ...valid,
-    git: { ...git, branch: "hotfix/equipment-types-form-design" },
+    git: withBranch("hotfix/equipment-types-form-design"),
   });
   assert.equal(result.status, "PRECHECK_CONFIG_PASS");
   assert.equal(result.checks.branch, true);
@@ -52,17 +77,39 @@ test("preflight blocks wrong local URL, unknown capability, missing credentials 
   assert.equal((await evaluatePreflight({ ...valid, buildCurrent: async () => false })).checks.buildCurrent, false);
 });
 
-test("preflight blocks the wrong API origin, branch, workspace and extra worktrees", async () => {
+test("preflight allows separate worktrees but blocks an unregistered checkout, wrong branch, SHA or workspace", async () => {
   assert.equal((await evaluatePreflight({ ...valid, config: { ...config, GERIT_API_BASE_URL: "https://example.invalid" } })).checks.qaApiOrigin, false);
   assert.equal((await evaluatePreflight({ ...valid, git: { ...git, branch: "develop" } })).checks.branch, false);
   assert.equal((await evaluatePreflight({ ...valid, git: { ...git, root: "C:\\other" } })).checks.workspace, false);
-  assert.equal((await evaluatePreflight({ ...valid, git: { ...git, worktreeCount: 2 } })).checks.singleWorktree, false);
+  assert.equal((await evaluatePreflight(valid)).checks.activeWorktreeRegistered, true);
+  assert.equal((await evaluatePreflight({ ...valid, git: { ...git, worktreeCount: 1 } })).status, "PRECHECK_CONFIG_PASS");
+  assert.equal((await evaluatePreflight({ ...valid, git: { ...git, worktrees: [git.worktrees[1]] } })).checks.activeWorktreeRegistered, false);
+  assert.equal((await evaluatePreflight({ ...valid, git: { ...git, headSha: "invalid" } })).checks.headShaValid, false);
+  assert.equal((await evaluatePreflight({ ...valid, git: { ...git, worktrees: [git.worktrees[0].replace("HEAD " + "a".repeat(40), "HEAD " + "c".repeat(40)), git.worktrees[1]] } })).checks.activeWorktreeRegistered, false);
 });
 
 test("preflight blocks missing spec, missing cleanup plan, and an occupied port", async () => {
   assert.equal((await evaluatePreflight({ ...valid, fileExists: () => false })).checks.canonicalSpec, false);
   assert.equal((await evaluatePreflight({ ...valid, readText: async () => "randomUUID" })).checks.cleanupPlan, false);
   assert.equal((await evaluatePreflight({ ...valid, portAvailable: async () => false })).checks.portAvailable, false);
+});
+
+test("preflight blocks when another E2E run owns the shared port", async () => {
+  const result = await evaluatePreflight({ ...valid, portAvailable: async () => false });
+  assert.equal(result.status, "PREFLIGHT_BLOCKED");
+  assert.equal(result.checks.portAvailable, false);
+});
+
+test("preflight blocks dirty worktrees containing files outside the selected Client E2E scope", async () => {
+  const result = await evaluatePreflight({
+    ...valid,
+    capability: "clients",
+    mode: "read-only",
+    git: { ...withBranch("feature/client-crud-v1"), dirty: true, changedFiles: [".env.e2e.local"] },
+    readText: async () => clientsCleanupSpec,
+  });
+  assert.equal(result.status, "PREFLIGHT_BLOCKED");
+  assert.equal(result.checks.workingTreePreserved, false);
 });
 
 test("preflight separates read-only authorization from pending mutating authorization", async () => {
@@ -80,20 +127,20 @@ test("preflight separates read-only authorization from pending mutating authoriz
   const clientWithoutOptIn = await evaluatePreflight({
     ...valid,
     capability: "clients",
-    git: { ...git, branch: "feature/client-crud-v1" },
+    git: withBranch("feature/client-crud-v1"),
     clientMutationApproved: false,
   });
   const clientWithoutFlag = await evaluatePreflight({
     ...valid,
     capability: "clients",
-    git: { ...git, branch: "feature/client-crud-v1" },
+    git: withBranch("feature/client-crud-v1"),
     mutatingApproved: false,
     clientMutationApproved: true,
   });
   const clientApproved = await evaluatePreflight({
     ...valid,
     capability: "clients",
-    git: { ...git, branch: "feature/client-crud-v1" },
+    git: withBranch("feature/client-crud-v1"),
     clientMutationApproved: true,
   });
   assert.equal(clientWithoutOptIn.authorization, "MUTATING_AUTHORIZATION_PENDING");

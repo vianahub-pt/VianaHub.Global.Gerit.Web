@@ -123,10 +123,6 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
     return () => { live = false; };
   }, [active, addressTypes.length, canReadTypes, clientId, fetchWithAuth, isAuthenticated, isHydrating, t]);
 
-  useEffect(() => {
-    if (active && canCreate && mode === "idle" && !detail) setMode("create");
-  }, [active, canCreate, detail, mode]);
-
   const beginCreate = useCallback(() => {
     if (!activeRef.current || !canCreate || submitting || detailLoading) return;
     detailSequence.current += 1; setDetail(null); setForm(initialClientAddressFormValues()); setFormError(null); setMode("create");
@@ -142,15 +138,17 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
       setDetail(result); setForm(clientAddressFormFromDetail(result));
     } catch (error) {
       if (sequence !== detailSequence.current) return;
-      setMode(canCreate ? "create" : "idle"); setForm(initialClientAddressFormValues());
+      setMode("idle"); setForm(initialClientAddressFormValues());
       setPageError(apiError(error, t, t("clients.addresses.errors.unavailable")));
     } finally { if (sequence === detailSequence.current) setDetailLoading(false); }
-  }, [canCreate, canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, submitting, t]);
+  }, [canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, submitting, t]);
 
   const cancelForm = useCallback(() => {
-    detailSequence.current += 1; setDetail(null); setDetailLoading(false); setForm(initialClientAddressFormValues());
-    setFormError(null); setMode(canCreate ? "create" : "idle");
-  }, [canCreate]);
+    detailSequence.current += 1; setDetailLoading(false); setFormError(null);
+    if (mode === "edit" && detail) setForm(clientAddressFormFromDetail(detail));
+    else { setDetail(null); setForm(initialClientAddressFormValues()); }
+    setMode("idle");
+  }, [detail, mode]);
 
   const updateField = (key: keyof ClientAddressFormValues, value: string | boolean) => {
     setForm((current) => ({ ...current, [key]: value })); setFormError(null);
@@ -163,6 +161,7 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
     if (mode === "edit" && detail) validTypes.add(detail.addressTypeId);
     const validation = validateClientAddressForm(form, validTypes);
     if (validation) { setFormError(t(`clients.addresses.validation.${validation}`)); return; }
+    if (mode === "edit" && detail && (Object.keys(form) as Array<keyof ClientAddressFormValues>).every((key) => form[key] === clientAddressFormFromDetail(detail)[key])) return;
     setSubmitting(true); setFormError(null);
     try {
       const payload = toClientAddressPayload(form);
@@ -173,15 +172,15 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
         await updateClientAddress(fetchWithAuth, clientId, detail.id, payload);
         toast({ title: t("clients.toasts.successTitle"), description: t("clients.addresses.toasts.updated") });
       }
-      setDetail(null); setForm(initialClientAddressFormValues()); setFormError(null); setMode(canCreate ? "create" : "idle");
       await loadPage();
+      setDetail(null); setFormError(null); setMode("idle");
     } catch (error) {
       const message = apiError(error, t, t("clients.addresses.errors.save"));
       setFormError(message); toast({ title: t("clients.toasts.errorTitle"), description: message, variant: "destructive" });
     } finally { setSubmitting(false); }
   };
 
-  const toggleStatus = async (address: ClientAddressSummary) => {
+  const toggleStatus = useCallback(async (address: ClientAddressSummary) => {
     if (clientId === null || busyId !== null) return;
     if (address.isActive ? !canDeactivate : !canActivate) return;
     setBusyId(address.id); setPageError(null);
@@ -191,7 +190,7 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
       await loadPage();
     } catch (error) { setPageError(apiError(error, t, t("clients.addresses.errors.status"))); }
     finally { setBusyId(null); }
-  };
+  }, [busyId, canActivate, canDeactivate, clientId, fetchWithAuth, loadPage, t, toast]);
 
   const confirmDelete = async () => {
     const target = deleteTarget.current;
@@ -232,7 +231,7 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
       {canToggle ? <button type="button" data-testid={`client-address-toggle-${address.id}`} disabled={busyId === address.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(address); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-primary disabled:opacity-50" title={t(address.isActive ? "clients.actions.deactivate" : "clients.actions.activate")} aria-label={t(address.isActive ? "clients.actions.deactivate" : "clients.actions.activate")}>{busyId === address.id ? <Loader2 className="h-4 w-4 animate-spin" /> : address.isActive ? <PowerOff className="h-4 w-4 text-red-500" aria-hidden="true" /> : <Power className="h-4 w-4 text-green-500" aria-hidden="true" />}</button> : null}
       {canDelete ? <button type="button" data-testid={`client-address-delete-${address.id}`} disabled={busyId === address.id} onClick={(event) => { event.stopPropagation(); deleteTarget.current = address; setDeleteOpen(true); }} className="inline-flex h-8 w-8 items-center justify-center text-destructive hover:text-destructive disabled:opacity-50" title={t("clients.actions.delete")} aria-label={t("clients.actions.delete")}><Trash2 className="h-4 w-4" aria-hidden="true" /></button> : null}
     </div>;
-  }, [beginEdit, busyId, canActivate, canDeactivate, canDelete, canGetBy, canUpdate, detailLoading, t]);
+  }, [beginEdit, busyId, canActivate, canDeactivate, canDelete, canGetBy, canUpdate, detailLoading, t, toggleStatus]);
 
   const countryOptions = useMemo(() => {
     const options = localizedCountries(state.locale);
@@ -253,17 +252,25 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
   if (!isHydrating && isAuthenticated && !canRead && !canCreate && !canUpdate && !canBulkUpload) return <section data-testid="client-addresses-forbidden" role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("clients.addresses.errors.forbidden")}</section>;
 
   const field = (name: keyof ClientAddressFormValues, key: string, maxLength: number, required = false, type = "text") => <label key={name} className="flex min-w-0 flex-col gap-1.5 text-sm font-medium text-foreground"><span>{t(key)}{required ? " *" : ""}</span><Input data-testid={`client-address-${name}`} type={type} value={form[name] as string} onChange={(event) => updateField(name, event.currentTarget.value)} disabled={submitting || detailLoading || mode === "idle"} required={required} maxLength={maxLength} min={name === "latitude" ? "-90" : name === "longitude" ? "-180" : undefined} max={name === "latitude" ? "90" : name === "longitude" ? "180" : undefined} step={type === "number" ? "any" : undefined} /></label>;
-  const canSubmit = mode === "create" ? canCreate : mode === "edit" && canUpdate && detail !== null;
+  const validTypes = new Set(addressTypes.filter((item) => item.isActive).map((item) => item.id));
+  if (mode === "edit" && detail) validTypes.add(detail.addressTypeId);
+  const formValid = validateClientAddressForm(form, validTypes) === null;
+  const initialForm = initialClientAddressFormValues();
+  const originalForm = detail ? clientAddressFormFromDetail(detail) : null;
+  const formDirty = mode === "create"
+    ? (Object.keys(form) as Array<keyof ClientAddressFormValues>).some((key) => form[key] !== initialForm[key])
+    : mode === "edit" && originalForm !== null && (Object.keys(form) as Array<keyof ClientAddressFormValues>).some((key) => form[key] !== originalForm[key]);
+  const canSubmit = (mode === "create" && canCreate || mode === "edit" && canUpdate && detail !== null) && formValid && formDirty;
   const bulkUploadControl = canBulkUpload ? <label data-testid="client-address-bulk-upload" className="inline-flex cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 py-2 text-sm font-medium has-[:disabled]:cursor-wait">{bulkLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{t("clients.addresses.bulk.label")}<input type="file" accept=".csv,text/csv" disabled={bulkLoading} className="sr-only" onChange={(event) => { const file = event.currentTarget.files?.[0] ?? null; void uploadCsv(file); event.currentTarget.value = ""; }} /></label> : null;
 
   return <section data-testid="client-addresses-panel" className="space-y-4">
     {pageError ? <p role="alert" data-testid="client-address-error" className="rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{pageError}<button type="button" onClick={() => void loadPage()} className="ml-3 underline">{t("clients.contacts.actions.retry")}</button></p> : null}
-    {(canCreate || canUpdate) ? <section data-testid="client-address-form-panel" className="rounded-sm border border-border/80 bg-surface p-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+    {canRead || canCreate || canUpdate ? <section data-testid="client-address-form-panel" className="rounded-sm border border-border/80 bg-surface p-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{t(mode === "edit" ? "clients.actions.edit" : "clients.addresses.form.title")}</h2><div className="flex flex-wrap items-center justify-end gap-2">{bulkUploadControl}{canCreate ? <button type="button" data-testid="client-address-new" onClick={beginCreate} disabled={submitting || detailLoading} className="rounded-sm border border-primary/50 px-3 py-2 text-sm font-medium text-primary disabled:opacity-50">{t("clients.actions.add")}</button> : null}</div>{detailLoading ? <p role="status" className="w-full text-sm text-muted-foreground">{t("clients.addresses.loadingDetail")}</p> : null}</div>
       {typesLoading ? <p role="status" className="mb-3 text-sm text-muted-foreground">{t("clients.addresses.loadingTypes")}</p> : null}
       <form onSubmit={(event) => void submitForm(event)} className="space-y-4" data-testid="client-address-form">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <HubSelect label={t("clients.addresses.form.addressType")} value={form.addressTypeId} onValueChange={(value) => updateField("addressTypeId", value)} options={typeOptions} placeholder={t("clients.addresses.form.addressTypePlaceholder")} disabled={submitting || detailLoading || typesLoading || !canReadTypes} required testId="client-address-addressTypeId" />
+          <HubSelect label={t("clients.addresses.form.addressType")} value={form.addressTypeId} onValueChange={(value) => updateField("addressTypeId", value)} options={typeOptions} placeholder={t("clients.addresses.form.addressTypePlaceholder")} disabled={submitting || detailLoading || typesLoading || mode === "idle" || !canReadTypes} required testId="client-address-addressTypeId" />
           {field("street", "clients.addresses.form.street", 200, true)}
           {field("streetNumber", "clients.addresses.form.number", 20)}
           {field("complement", "clients.addresses.form.complement", 100)}
@@ -271,7 +278,7 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
           {field("city", "clients.addresses.form.city", 100, true)}
           {field("district", "clients.addresses.form.state", 100)}
           {field("postalCode", "clients.addresses.form.postalCode", 20, true)}
-          <HubSelect label={t("clients.addresses.form.country")} value={form.countryCode} onValueChange={(value) => updateField("countryCode", value)} options={countries} placeholder={t("clients.addresses.form.countryPlaceholder")} disabled={submitting || detailLoading} required searchable testId="client-address-countryCode" />
+          <HubSelect label={t("clients.addresses.form.country")} value={form.countryCode} onValueChange={(value) => updateField("countryCode", value)} options={countries} placeholder={t("clients.addresses.form.countryPlaceholder")} disabled={submitting || detailLoading || mode === "idle"} required searchable testId="client-address-countryCode" />
           {field("latitude", "clients.addresses.form.latitude", 40, false, "number")}
           {field("longitude", "clients.addresses.form.longitude", 40, false, "number")}
           <label className="inline-flex min-w-0 items-center gap-3 text-sm font-medium"><HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={submitting || detailLoading || mode === "idle"} testId="client-address-isPrimary" /><span>{t("clients.addresses.form.isPrimary")}</span></label>
@@ -279,7 +286,7 @@ export function ClientAddressesPanel({ clientId, active = true }: { clientId: nu
         </div>
         {formError ? <p role="alert" data-testid="client-address-form-error" className="rounded-sm border border-destructive/40 p-3 text-sm text-destructive">{formError}</p> : null}
         <div className="flex flex-wrap items-center gap-2 border-t border-border/70 pt-4">
-          {canSubmit ? <><button type="button" onClick={cancelForm} disabled={submitting || detailLoading} className="rounded-sm border border-border px-4 py-2 text-sm">{t("clients.actions.cancel")}</button><button type="submit" disabled={submitting || typesLoading || activeTypes.length === 0} className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("clients.actions.save")}</button></> : null}
+          <button type="button" onClick={cancelForm} disabled={submitting || detailLoading || mode === "idle"} className="rounded-sm border border-border px-4 py-2 text-sm disabled:opacity-50">{t("clients.actions.cancel")}</button><button type="submit" disabled={!canSubmit || submitting || typesLoading || activeTypes.length === 0} className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}{t("clients.actions.save")}</button>
         </div>
       </form>
     </section> : null}

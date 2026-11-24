@@ -35,9 +35,28 @@ function inspectGit() {
   const root = gitValue(["rev-parse", "--show-toplevel"]);
   const branch = gitValue(["branch", "--show-current"]);
   const worktrees = gitValue(["worktree", "list", "--porcelain"]).split(/\r?\n(?=worktree )/).filter(Boolean);
-  const status = gitValue(["status", "--porcelain=v1", "--untracked-files=all"]);
-  return { root, branch, worktreeCount: worktrees.length, dirty: status.length > 0 };
+  const status = execFileSync("git", ["status", "--porcelain=v1", "--untracked-files=all"], { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).replace(/\r?\n$/, "");
+  const headSha = gitValue(["rev-parse", "HEAD"]);
+  const changedFiles = status.split(/\r?\n/).filter(Boolean).map((line) => line.slice(3).split(" -> ").at(-1));
+  return { root, branch, worktreeCount: worktrees.length, worktrees, headSha, dirty: status.length > 0, changedFiles };
 }
+
+function normalizePath(path) {
+  return String(path || "").replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase();
+}
+
+const CLIENT_E2E_WORKING_FILES = new Set([
+  "domains/operations/clients/clients-v1-addresses.tsx",
+  "domains/operations/clients/clients-v1-contacts.tsx",
+  "package.json",
+  "scripts/e2e/preflight.mjs",
+  "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/run-lock.mjs",
+  "tests/e2e/client-address-crud-journey.spec.ts",
+  "tests/e2e/client-contact-person-journey.spec.ts",
+  "tests/e2e/preflight.test.mjs",
+  "tests/e2e/run-lock.test.mjs",
+]);
 
 function isExpectedBranch(branch, capability) {
   if (capability === "clients" && branch === "refactor/global-spa-ux-foundations") {
@@ -109,10 +128,23 @@ export async function evaluatePreflight({
 } = {}) {
   const checks = {};
   checks.windowsHost = platform === "win32";
-  checks.workspace = git.root.toLowerCase().replaceAll("/", "\\") === expectedRepo.toLowerCase();
-  checks.singleWorktree = git.worktreeCount === 1;
+  checks.workspace = normalizePath(git.root) === normalizePath(expectedRepo);
+  const activeWorktree = (git.worktrees || []).some((entry) => {
+    const lines = String(entry).split(/\r?\n/);
+    const values = Object.fromEntries(lines.map((line) => {
+      const separator = line.indexOf(" ");
+      return separator < 0 ? [line, ""] : [line.slice(0, separator), line.slice(separator + 1)];
+    }));
+    return normalizePath(values.worktree) === normalizePath(git.root) &&
+      values.HEAD === git.headSha &&
+      (!values.branch || values.branch === `refs/heads/${git.branch}`);
+  });
+  checks.activeWorktreeRegistered = activeWorktree;
+  checks.headShaValid = /^[0-9a-f]{40}$/i.test(git.headSha || "");
   checks.branch = isExpectedBranch(git.branch, capability);
-  checks.workingTreePreserved = true;
+  checks.workingTreePreserved = !git.dirty || (capability === "clients" && mode === "read-only" &&
+    Array.isArray(git.changedFiles) && git.changedFiles.length > 0 &&
+    git.changedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(String(file).replaceAll("\\", "/"))));
   checks.localBaseUrl = config.E2E_BASE_URL === policy.localE2EOrigin;
   let apiOrigin = "";
   try { apiOrigin = new URL(config.GERIT_API_BASE_URL || "").origin; } catch {}
@@ -136,7 +168,7 @@ export async function evaluatePreflight({
   checks.buildCurrent = stage === "prepare" ? "will-refresh" : await buildCurrent();
 
   const technicalPass = Object.entries(checks)
-    .filter(([key]) => key !== "workingTreePreserved" && !(key === "buildCurrent" && stage === "prepare"))
+    .filter(([key]) => !(key === "buildCurrent" && stage === "prepare"))
     .every(([, passed]) => passed === true);
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
@@ -154,6 +186,8 @@ export async function evaluatePreflight({
       branch: git.branch,
       worktreeCount: git.worktreeCount,
       workingTreeDirty: git.dirty,
+      headSha: git.headSha,
+      changedFiles: git.changedFiles || [],
     },
   };
 }
@@ -192,8 +226,14 @@ async function selfTest() {
   const validGit = {
     root: expectedRepo,
     branch: "feature/equipment-types-crud",
-    worktreeCount: 1,
-    dirty: true,
+    worktreeCount: 2,
+    worktrees: [
+      `worktree ${expectedRepo}\nHEAD ${"a".repeat(40)}\nbranch refs/heads/feature/equipment-types-crud`,
+      "worktree C:/git/VianaHub.Global.Gerit.Web-client-address-layout\nHEAD " + "b".repeat(40) + "\nbranch refs/heads/feature/client-address-form-layout",
+    ],
+    headSha: "a".repeat(40),
+    dirty: false,
+    changedFiles: [],
   };
   const validConfig = {
     E2E_BASE_URL: policy.localE2EOrigin,
@@ -213,12 +253,17 @@ async function selfTest() {
     fileExists: () => true,
     readText: async () => "finally randomUUID DELETE 410",
   };
+  const gitWithBranch = (branch) => ({
+    ...validGit,
+    branch,
+    worktrees: [validGit.worktrees[0].replace(`refs/heads/${validGit.branch}`, `refs/heads/${branch}`), validGit.worktrees[1]],
+  });
   const pass = await evaluatePreflight(common);
   assert.equal(pass.status, "PRECHECK_CONFIG_PASS");
   assert.equal(pass.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
   const hotfixBranch = await evaluatePreflight({
     ...common,
-    git: { ...validGit, branch: "hotfix/equipment-types-form-design" },
+    git: gitWithBranch("hotfix/equipment-types-form-design"),
   });
   assert.equal(hotfixBranch.status, "PRECHECK_CONFIG_PASS");
   assert.equal(hotfixBranch.checks.branch, true);
@@ -235,13 +280,21 @@ async function selfTest() {
   assert.equal(pending.authorization, "MUTATING_AUTHORIZATION_PENDING");
   const occupiedPort = await evaluatePreflight({ ...common, portAvailable: async () => false });
   assert.equal(occupiedPort.checks.portAvailable, false);
+  const unsafeWorkingTree = await evaluatePreflight({
+    ...common,
+    capability: "clients",
+    mode: "read-only",
+    git: { ...gitWithBranch("feature/client-crud-v1"), dirty: true, changedFiles: [".env.e2e.local"] },
+  });
+  assert.equal(unsafeWorkingTree.status, "PREFLIGHT_BLOCKED");
+  assert.equal(unsafeWorkingTree.checks.workingTreePreserved, false);
   const staleBuild = await evaluatePreflight({ ...common, buildCurrent: async () => false });
   assert.equal(staleBuild.checks.buildCurrent, false);
   const clientSpec = await readFile(resolve(repoRoot, "tests/e2e/clients-journey.spec.ts"), "utf8");
   const clientBase = {
     ...common,
     capability: "clients",
-    git: { ...validGit, branch: "feature/client-crud-v1" },
+    git: gitWithBranch("feature/client-crud-v1"),
     stage: "prepare",
     buildCurrent: async () => true,
     fileExists: (path) => path.endsWith("clients-journey.spec.ts"),
@@ -252,7 +305,7 @@ async function selfTest() {
     mode: "read-only",
     mutatingApproved: false,
     clientMutationApproved: false,
-    git: { ...validGit, branch: "refactor/global-spa-ux-foundations" },
+    git: gitWithBranch("refactor/global-spa-ux-foundations"),
   });
   assert.equal(authorizedRefactorBranch.status, "PRECHECK_CONFIG_PASS");
   assert.equal(authorizedRefactorBranch.checks.branch, true);

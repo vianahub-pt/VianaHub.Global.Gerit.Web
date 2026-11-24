@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Power, PowerOff, SquarePen, Trash2, UserRoundPlus } from "lucide-react";
+import { Loader2, Power, PowerOff, SquarePen, Trash2, Upload, UserRoundPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
@@ -164,10 +164,6 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return () => { pageRequestSequence.current += 1; };
   }, [active, canRead, clientId, isAuthenticated, isHydrating, loadPage]);
 
-  useEffect(() => {
-    if (active && canCreate && mode === "idle" && editingContactId === null) setMode("create");
-  }, [active, canCreate, editingContactId, mode]);
-
   const beginEdit = useCallback(async (contactId: number) => {
     if (!activeRef.current || clientId === null || !canGetBy || !canUpdate || detailLoading) return;
     const requestId = ++detailRequestId.current;
@@ -184,13 +180,13 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     } catch (cause) {
       if (requestId !== detailRequestId.current) return;
       setForm(initialClientContactPersonFormValues());
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
       setEditingContactId(null);
       setError(errorText(cause, t("clients.contacts.errors.unavailable"), t));
     } finally {
       if (requestId === detailRequestId.current) setDetailLoading(false);
     }
-  }, [canCreate, canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
+  }, [canGetBy, canUpdate, clientId, detailLoading, fetchWithAuth, t]);
 
   const beginCreate = useCallback(() => {
     detailRequestId.current += 1;
@@ -207,12 +203,17 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
   const cancelForm = useCallback(() => {
     detailRequestId.current += 1;
     setFormError(null);
-    setDetail(null);
-    setEditingContactId(null);
     setDetailLoading(false);
-    setForm(initialClientContactPersonFormValues());
-    setMode(canCreate ? "create" : "idle");
-  }, [canCreate]);
+    if (mode === "edit" && detail) {
+      setForm(clientContactPersonFormFromDetail(detail));
+      setEditingContactId(detail.id);
+    } else {
+      setDetail(null);
+      setEditingContactId(null);
+      setForm(initialClientContactPersonFormValues());
+    }
+    setMode("idle");
+  }, [detail, mode]);
 
   useEffect(() => {
     if (mode !== "edit" || detailLoading || !active) return;
@@ -241,6 +242,7 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
       setFormError(t("clients.contacts.validation." + validationKey));
       return;
     }
+    if (mode === "edit" && detail && (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).every((key) => form[key] === clientContactPersonFormFromDetail(detail)[key])) return;
     setSubmitting(true);
     setFormError(null);
     try {
@@ -257,14 +259,13 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
       await loadPage();
       setDetail(null);
       setEditingContactId(null);
-      setForm(initialClientContactPersonFormValues());
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
     } catch (cause) {
       setFormError(errorText(cause, t("clients.contacts.errors.save"), t));
     } finally {
       setSubmitting(false);
     }
-  }, [canCreate, canUpdate, clientId, editingContactId, fetchWithAuth, form, loadPage, mode, submitting, t, toast]);
+  }, [canCreate, canUpdate, clientId, detail, editingContactId, fetchWithAuth, form, loadPage, mode, submitting, t, toast]);
 
   const toggleStatus = useCallback(async (contact: ClientContactPersonSummary) => {
     if (clientId === null || busyId !== null) return;
@@ -302,7 +303,7 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
         setEditingContactId(null);
       setForm(initialClientContactPersonFormValues());
       setFormError(null);
-      setMode(canCreate ? "create" : "idle");
+      setMode("idle");
       }
     } catch (cause) {
       setError(errorText(cause, t("clients.contacts.errors.delete"), t));
@@ -351,7 +352,12 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return <section data-testid="client-contact-persons-forbidden" role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("clients.contacts.errors.forbidden")}</section>;
   }
 
-    const canSubmit = mode === "create" ? canCreate : mode === "edit" && canUpdate;
+    const validationKey = validateClientContactPersonForm(form);
+    const formValid = validationKey === null;
+    const formDirty = mode === "create"
+      ? (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).some((key) => form[key] !== initialClientContactPersonFormValues()[key])
+      : mode === "edit" && detail !== null && (Object.keys(form) as Array<keyof ClientContactPersonFormValues>).some((key) => form[key] !== clientContactPersonFormFromDetail(detail)[key]);
+    const canSubmit = (mode === "create" && canCreate || mode === "edit" && canUpdate) && formValid && formDirty;
     const fieldsDisabled = submitting || detailLoading || mode === "idle";
     const field = (key: keyof ClientContactPersonFormValues, labelKey: string, maxLength: number, required = false, type = "text") => (
       <Field key={key} inputRef={key === "name" ? firstFieldRef : undefined} label={t(labelKey)} value={form[key] as string} onChange={(value) => updateField(key, value)} disabled={fieldsDisabled} required={required} maxLength={maxLength} type={type} testId={"client-contact-" + key} />
@@ -359,30 +365,40 @@ export function ClientContactPersonsPanel({ clientId, active = true }: { clientI
     return (
       <section data-testid="client-contact-person-panel" className="space-y-4">
         {error ? <p role="alert" data-testid="client-contact-error" className="rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{error}<button type="button" onClick={() => void loadPage()} className="ml-3 underline">{t("clients.contacts.actions.retry")}</button></p> : null}
-        {canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
+        {canRead || canCreate || canUpdate ? <section data-testid="client-contact-inline-form-panel" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)]">
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <h2 className="text-lg font-semibold text-foreground">{t(mode === "edit" ? "clients.contacts.actions.edit" : mode === "create" ? "clients.contacts.actions.new" : "clients.contacts.form.selectToEdit")}</h2>
-            {canCreate ? <button type="button" data-testid="client-contact-new" disabled={detailLoading || submitting} onClick={beginCreate} className="inline-flex h-9 items-center gap-2 rounded-sm border border-primary/50 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.actions.new")}</button> : null}
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+              <button type="button" disabled aria-describedby="client-contact-csv-unavailable" title={t("clients.bulk.upload.unavailable")} className="inline-flex h-9 cursor-not-allowed items-center gap-2 rounded-sm border border-border bg-card px-3 text-sm font-medium text-muted-foreground opacity-70"><Upload className="h-4 w-4" aria-hidden="true" />{t("clients.contacts.bulk.label")}</button>
+              {canCreate ? <button type="button" data-testid="client-contact-new" disabled={detailLoading || submitting} onClick={beginCreate} className="inline-flex h-9 items-center gap-2 rounded-sm border border-primary/50 bg-card px-3 text-sm font-medium text-primary hover:bg-primary/5 disabled:opacity-50"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("clients.actions.add")}</button> : null}
+            </div>
             {detailLoading ? <p role="status" className="w-full text-sm text-muted-foreground">{t("clients.contacts.loading")}</p> : null}
           </div>
+          <span id="client-contact-csv-unavailable" className="sr-only">{t("clients.bulk.upload.unavailable")}</span>
           <form onSubmit={(event) => void submitForm(event)} className="space-y-5" data-testid="client-contact-form" noValidate>
-            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               {field("name", "clients.contacts.form.name", CLIENT_CONTACT_NAME_MAX_LENGTH, true)}
               {field("email", "clients.contacts.form.email", CLIENT_CONTACT_EMAIL_MAX_LENGTH, true, "email")}
+              <div data-testid="client-contact-status" className="space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{t("clients.contacts.table.status")}</span>
+                <span className="flex min-h-10 items-center text-sm text-muted-foreground">{detail ? t(detail.isActive ? "clients.status.active" : "clients.status.inactive") : "—"}</span>
+              </div>
               {field("phoneNumber", "clients.contacts.form.phone", CLIENT_CONTACT_PHONE_MAX_LENGTH)}
               {field("cellPhoneNumber", "clients.contacts.form.cellPhone", CLIENT_CONTACT_PHONE_MAX_LENGTH)}
+              <div className="flex min-h-10 items-center">
+                <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
+                  <HubSwitch checked={form.hasCellPhoneWhatsapp} onCheckedChange={(value) => updateField("hasCellPhoneWhatsapp", value)} disabled={fieldsDisabled} testId="client-contact-whatsapp" />
+                  <span>{t("clients.contacts.form.cellPhoneWhatsapp")}</span>
+                </label>
+              </div>
               {field("jobTitle", "clients.contacts.form.jobTitle", CLIENT_CONTACT_JOB_TITLE_MAX_LENGTH)}
               {field("department", "clients.contacts.form.department", CLIENT_CONTACT_DEPARTMENT_MAX_LENGTH)}
-            </div>
-            <div className="flex flex-wrap gap-6 border-t border-border/70 pt-4">
-              <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
-                <HubSwitch checked={form.hasCellPhoneWhatsapp} onCheckedChange={(value) => updateField("hasCellPhoneWhatsapp", value)} disabled={fieldsDisabled} testId="client-contact-whatsapp" />
-                <span>{t("clients.contacts.form.cellPhoneWhatsapp")}</span>
-              </label>
-              {(!detail || detail.isActive) ? <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
-                <HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={fieldsDisabled} testId="client-contact-primary" />
-                <span>{t("clients.contacts.form.isPrimary")}</span>
-              </label> : null}
+              <div className="flex min-h-10 items-center">
+                {(!detail || detail.isActive) ? <label className="inline-flex items-center gap-3 text-sm font-medium text-foreground">
+                  <HubSwitch checked={form.isPrimary} onCheckedChange={(value) => updateField("isPrimary", value)} disabled={fieldsDisabled} testId="client-contact-primary" />
+                  <span>{t("clients.contacts.form.isPrimary")}</span>
+                </label> : null}
+              </div>
             </div>
             {formError ? <p role="alert" data-testid="client-contact-form-error" className="rounded-sm border border-destructive/40 bg-card p-3 text-sm text-destructive">{formError}</p> : null}
             <div className="flex flex-wrap gap-2">

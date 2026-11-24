@@ -76,3 +76,25 @@ test("ClientContactPerson read and mutation grants remain independently scoped",
   assert.match(source, /clientId === null \|\| !canRead/);
   assert.match(source, /mode === "create" \? !canCreate : !canUpdate/);
 });
+
+test("ClientContactPerson form follows the three-column layout without enabling CSV upload", () => {
+  const source = readFileSync(resolve("domains/operations/clients/clients-v1-contacts.tsx"), "utf8");
+  assert.match(source, /grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3/);
+  const fields = [
+    'field("name", "clients.contacts.form.name"',
+    'field("email", "clients.contacts.form.email"',
+    'data-testid="client-contact-status"',
+    'field("phoneNumber", "clients.contacts.form.phone"',
+    'field("cellPhoneNumber", "clients.contacts.form.cellPhone"',
+    'testId="client-contact-whatsapp"',
+    'field("jobTitle", "clients.contacts.form.jobTitle"',
+    'field("department", "clients.contacts.form.department"',
+    'testId="client-contact-primary"',
+  ];
+  const positions = fields.map((field) => source.indexOf(field));
+  assert.ok(positions.every((position) => position >= 0), "all requested existing fields and read-only status should be present");
+  assert.deepEqual(positions, [...positions].sort((left, right) => left - right));
+  assert.match(source, /disabled aria-describedby="client-contact-csv-unavailable"[\s\S]*?t\("clients\.contacts\.bulk\.label"\)/);
+  assert.match(source, /data-testid="client-contact-new"[\s\S]*?onClick=\{beginCreate\}[\s\S]*?t\("clients\.actions\.add"\)/);
+  assert.match(source, /t\("clients\.actions\.cancel"\)[\s\S]*?t\("clients\.actions\.save"\)/);
+});

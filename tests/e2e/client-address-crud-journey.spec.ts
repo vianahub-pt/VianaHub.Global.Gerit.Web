@@ -278,7 +278,23 @@ test("ClientAddress CRUD journey is run-scoped, parent-bound, and cleans up its 
     await page.getByRole("tab", { name: /addresses|endereços|moradas|direcciones/i }).click();
     const panel = page.getByTestId("client-addresses-panel"); await expect(panel).toBeVisible();
     await expect(page.getByTestId("client-address-form")).toBeVisible();
+    await expect(page.getByTestId("client-address-addressTypeId")).toBeDisabled();
+    await expect(page.getByTestId("client-address-countryCode")).toBeDisabled();
+    await expect(page.getByTestId("client-address-street")).toBeDisabled();
+    await expect(page.getByTestId("client-address-isPrimary")).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Cancel|Cancelar/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeDisabled();
     await saveEvidence(page, "before-create");
+
+    await page.getByTestId("client-address-new").click();
+    await expect(page.getByTestId("client-address-street")).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Cancel|Cancelar/i })).toBeEnabled();
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeDisabled();
+    await page.getByRole("button", { name: /Cancel|Cancelar/i }).click();
+    await expect(page.getByTestId("client-address-street")).toBeDisabled();
+    await expect(page.getByTestId("client-address-street")).toHaveValue("");
+    expect(mutations.some((entry) => /^(POST|PUT) .*\/addresses/.test(`${entry.method} ${entry.path}`))).toBe(false);
+    await page.getByTestId("client-address-new").click();
 
     if (mode === "mocked") {
       await page.getByTestId("client-address-addressTypeId").click(); await page.getByRole("option", { name: "Home", exact: true }).click();
@@ -300,6 +316,9 @@ test("ClientAddress CRUD journey is run-scoped, parent-bound, and cleans up its 
       await page.getByTestId("client-address-postalCode").fill("0000-000");
     }
 
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeEnabled();
+    expect(mutations.some((entry) => /^(POST|PUT) .*\/addresses/.test(`${entry.method} ${entry.path}`))).toBe(false);
+
     const createResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.replace(/\/$/, "") === `/api/gerit/v1/clients/${clientId}/addresses`);
     await page.getByTestId("client-address-form").getByRole("button", { name: /save|guardar|salvar/i }).click();
     const created = await createResponse; expect(created.status()).toBe(201);
@@ -308,6 +327,9 @@ test("ClientAddress CRUD journey is run-scoped, parent-bound, and cleans up its 
     const addressId = createBody.id; createdIds.add(addressId);
     const uniqueStreet = mode === "mocked" ? syntheticMarker : syntheticMarker;
     await expect(panel.getByRole("row").filter({ hasText: uniqueStreet })).toBeVisible();
+    await expect(page.getByTestId("client-address-street")).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Cancel|Cancelar/i })).toBeDisabled();
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeDisabled();
     trace.push({ method: "POST", path: `/clients/{clientId}/addresses`, status: 201 });
     await saveEvidence(page, "created");
 
@@ -315,11 +337,23 @@ test("ClientAddress CRUD journey is run-scoped, parent-bound, and cleans up its 
     await page.getByTestId(`client-address-edit-${addressId}`).click();
     const detailResponse = await detailPromise; expect(detailResponse.status()).toBe(200);
     await expect(page.getByTestId("client-address-street")).toHaveValue(uniqueStreet);
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeDisabled();
+    await page.getByTestId("client-address-street").fill(`${uniqueStreet}-UNSAVED`);
+    await page.getByRole("button", { name: /Cancel|Cancelar/i }).click();
+    await expect(page.getByTestId("client-address-street")).toBeDisabled();
+    await expect(page.getByTestId("client-address-street")).toHaveValue(uniqueStreet);
+    expect(mutations.filter((entry) => entry.method === "PUT" && entry.path.endsWith("/addresses"))).toHaveLength(0);
+    const editAgain = page.waitForResponse((response) => response.request().method() === "GET" && new URL(response.url()).pathname.endsWith(`/addresses/${addressId}`));
+    await page.getByTestId(`client-address-edit-${addressId}`).click();
+    expect((await editAgain).status()).toBe(200);
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeDisabled();
     await page.getByTestId("client-address-street").fill(`${uniqueStreet}-EDITED`);
+    await expect(page.getByRole("button", { name: /Save|Guardar|Salvar/i })).toBeEnabled();
     const updateResponsePromise = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/addresses/${addressId}`));
     await page.getByTestId("client-address-form").getByRole("button", { name: /save|guardar|salvar/i }).click();
     expect((await updateResponsePromise).status()).toBe(200);
     await expect(panel.getByRole("row").filter({ hasText: `${uniqueStreet}-EDITED` })).toBeVisible();
+    await expect(page.getByTestId("client-address-street")).toBeDisabled();
     await waitForNotificationsToClear(page);
 
     const deactivatePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/addresses/${addressId}/deactivate`));

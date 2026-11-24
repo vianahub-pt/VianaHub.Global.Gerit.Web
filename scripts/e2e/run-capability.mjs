@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { evaluatePreflight, loadConfig, portIsAvailable } from "./preflight.mjs";
 import { CAPABILITIES } from "./capabilities.mjs";
 import { runCapabilityLifecycle } from "./runner-core.mjs";
+import { acquireE2ERunLock } from "./run-lock.mjs";
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDirectory, "../..");
@@ -23,7 +24,7 @@ function getRunPlan(capability, env = process.env, { mockedVisual = false, readO
   }
   if (mockedVisual && capability === "clients") {
     return {
-      spec: "tests/e2e/client-contact-person-journey.spec.ts",
+      specs: ["tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
       project: "journey",
       mode: "mocked-visual-read-only",
     };
@@ -47,6 +48,22 @@ function getBatchPlan(capabilities, env = process.env, options = {}) {
     projects: [...new Set(plans.map((plan) => plan.project))],
     nonmutatingCapabilities: capabilities.filter((capability, index) => plans[index].mode !== "canonical-journey"),
   };
+}
+
+function getE2EEnvironment(env, { localExecution, mockedVisual, readOnlyVisual }) {
+  if (!localExecution) return env;
+  const result = { ...env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" };
+  if (mockedVisual) {
+    result.E2E_CLIENT_ADDRESS_MODE = "mocked";
+    for (const key of [
+      "E2E_CLIENT_ADDRESS_QA_APPROVAL_ID", "E2E_CLIENT_ADDRESS_QA_APPROVAL", "E2E_CLIENT_ADDRESS_MUTATING_APPROVED",
+      "E2E_CLIENT_ADDRESS_QA_CLIENT_ID", "E2E_CLIENT_ADDRESS_QA_ALLOWED_CLIENT_ID",
+      "E2E_CLIENT_ADDRESS_QA_EXPECTED_USER_ID", "E2E_CLIENT_ADDRESS_QA_EXPECTED_TENANT_ID",
+    ]) delete result[key];
+  }
+  if (readOnlyVisual) result.E2E_READ_ONLY_VISUAL = "true";
+  delete result.E2E_ALLOW_EXISTING_STORAGE_STATE;
+  return result;
 }
 
 function parseInvocation(args) {
@@ -133,17 +150,23 @@ function selfTest() {
     nonmutatingCapabilities: ["users"],
   });
   assert.deepEqual(getRunPlan("clients", {}, { mockedVisual: true }), {
-    spec: "tests/e2e/client-contact-person-journey.spec.ts",
+    specs: ["tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
     project: "journey", mode: "mocked-visual-read-only",
   });
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
     specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
   });
   assert.deepEqual(getBatchPlan(["clients"], {}, { mockedVisual: true }), {
-    specs: ["tests/e2e/client-contact-person-journey.spec.ts"],
+    specs: ["tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
     projects: ["journey"],
     nonmutatingCapabilities: ["clients"],
   });
+  const explicitlyMockedEnvironment = getE2EEnvironment({ E2E_CLIENT_ADDRESS_MODE: "qa", E2E_CLIENT_ADDRESS_MUTATING_APPROVED: "true" }, {
+    localExecution: true, mockedVisual: true, readOnlyVisual: false,
+  });
+  assert.equal(explicitlyMockedEnvironment.E2E_CLIENT_ADDRESS_MODE, "mocked");
+  assert.equal(explicitlyMockedEnvironment.E2E_VISUAL, "true");
+  assert.equal(explicitlyMockedEnvironment.E2E_CLIENT_ADDRESS_MUTATING_APPROVED, undefined);
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
     capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false,
   });
@@ -196,10 +219,11 @@ if (process.env.CI !== "true" && process.platform !== "win32") {
 if (localExecution && capabilities.length !== 1) {
   fail("Local E2E execution requires exactly one selected capability.");
 }
-const e2eEnvironment = localExecution
-  ? { ...process.env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" }
-  : process.env;
-if (localExecution) delete e2eEnvironment.E2E_ALLOW_EXISTING_STORAGE_STATE;
+const e2eEnvironment = getE2EEnvironment(process.env, {
+  localExecution,
+  mockedVisual: invocation.mockedVisual,
+  readOnlyVisual: invocation.readOnlyVisual,
+});
 const readOnlyHomologationStatusPath = invocation.readOnlyVisual
   ? resolve(repoRoot, "test-results/client-address-read-only", "homologation-status-" + Date.now() + "-" + process.pid + ".json")
   : null;
@@ -316,6 +340,12 @@ if (localExecution) {
     fail("Mutating E2E requires the explicit --mutating-approved option for this run.");
   }
   const config = await loadConfig();
+  let runLock;
+  try {
+    runLock = acquireE2ERunLock({ root: repoRoot });
+  } catch (error) {
+    fail(error instanceof Error ? error.message : "Unable to acquire the shared E2E run lock.");
+  }
   const lifecycle = await runCapabilityLifecycle({
     preflight: async (stage) => {
       const report = await evaluatePreflight({
@@ -345,6 +375,7 @@ if (localExecution) {
     cleanup: cleanupOwnedPlaywright,
     isPortFree: portIsAvailable,
   });
+  if (lifecycle.status !== "CLEANUP_INCOMPLETE") runLock.release();
   console.log("[E2E lifecycle] " + JSON.stringify(lifecycle));
   if (lifecycle.status === "E2E_INCOMPLETE") console.log("[E2E capability] " + lifecycle.reason);
   process.exitCode = lifecycle.status === "E2E_PASS" ? 0 : 1;

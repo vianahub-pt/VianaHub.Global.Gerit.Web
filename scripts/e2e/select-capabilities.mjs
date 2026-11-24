@@ -110,6 +110,7 @@ function isKnownSharedSupport(file) {
     file.startsWith("tests/e2e/helpers/") ||
     file.startsWith("tests/e2e/fixtures/") ||
     file === "tests/e2e/preflight.test.mjs" ||
+    file === "tests/e2e/run-lock.test.mjs" ||
     file.startsWith("scripts/e2e/") ||
     file === "domains/workspace/workspace-header-controls.tsx" ||
     file.startsWith("locales/") ||
@@ -653,6 +654,7 @@ function selfTest() {
     "playwright.config.ts",
     "scripts/e2e/preflight.mjs",
     "tests/e2e/preflight.test.mjs",
+    "tests/e2e/run-lock.test.mjs",
   ], ["equipment-types"]).capabilities, ["equipment-types"]);
   assert.deepEqual(scoped(["domains/operations/roles/roles-page.tsx"], ["roles"]).capabilities, ["roles"]);
   assert.deepEqual(scoped(["domains/operations/actions/actions-page.tsx"], ["actions"]).capabilities, ["actions"]);

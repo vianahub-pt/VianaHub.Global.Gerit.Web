@@ -360,7 +360,7 @@
   "clients.contacts.toasts.deactivated": "Contacto desativado com sucesso.",
   "clients.addresses.title": "Endereços",
   "clients.addresses.subtitle": "Mantenha os endereços do cliente organizados.",
-  "clients.addresses.bulk.label": "Importar CSV de endereços",
+  "clients.addresses.bulk.label": "Importar CSV",
   "clients.addresses.form.street": "Rua",
   "clients.addresses.form.city": "Cidade",
   "clients.addresses.form.state": "Distrito",

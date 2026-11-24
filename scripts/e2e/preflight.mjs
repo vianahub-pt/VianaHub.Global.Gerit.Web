@@ -64,6 +64,18 @@ function hasEquipmentTypesCleanupPlan(specText) {
     specText.includes("410");
 }
 
+function hasReadOnlyClientAddressPlan(specText) {
+  return specText.includes("installReadOnlyApiGuard") &&
+    specText.includes('page.context().route("**/*"') &&
+    specText.includes("classifyReadOnlyApiRequest") &&
+    specText.includes('route.abort("blockedbyclient")') &&
+    specText.includes("allowedOrigin") &&
+    specText.includes("E2E_READ_ONLY_HOMOLOGATION_STATUS") &&
+    specText.includes("QA_READ_ONLY_HOMOLOGATION_INCOMPLETE_FIXTURE_UNAVAILABLE") &&
+    specText.includes("blockedRequests") &&
+    specText.includes("expect(blockedRequests).toEqual([])");
+}
+
 function hasClientsCleanupPlan(specText) {
   return /const createdClientIds = new Set<number>\(\)/.test(specText) &&
     /createdClientIds\.add\(clientId\)/.test(specText) &&
@@ -83,6 +95,7 @@ export async function evaluatePreflight({
   stage = "execution",
   mutatingApproved = false,
   clientMutationApproved = false,
+  readOnlyVisual = false,
   platform = process.platform,
   git = inspectGit(),
   config = {},
@@ -107,9 +120,12 @@ export async function evaluatePreflight({
   checks.credentialsConfigured = Boolean(config.E2E_USER_EMAIL && config.E2E_USER_PASSWORD);
   checks.capabilityAllowed = CAPABILITIES.includes(capability);
 
-  const spec = resolve(repoRoot, "tests", "e2e", capability + "-journey.spec.ts");
+  const spec = resolve(repoRoot, "tests", "e2e", readOnlyVisual && capability === "clients" ? "client-address-read-only-journey.spec.ts" : capability + "-journey.spec.ts");
   checks.canonicalSpec = checks.capabilityAllowed && fileExists(spec);
-  if (capability === "equipment-types" && checks.canonicalSpec) {
+  if (readOnlyVisual) {
+    checks.readOnlyMutationGuard = capability === "clients" && checks.canonicalSpec && hasReadOnlyClientAddressPlan(await readText(spec));
+    checks.cleanupPlan = checks.readOnlyMutationGuard;
+  } else if (capability === "equipment-types" && checks.canonicalSpec) {
     checks.cleanupPlan = hasEquipmentTypesCleanupPlan(await readText(spec));
   } else if (capability === "clients" && checks.canonicalSpec) {
     checks.cleanupPlan = hasClientsCleanupPlan(await readText(spec));
@@ -143,17 +159,21 @@ export async function evaluatePreflight({
 }
 
 function parseArgs(args) {
-  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false };
+  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false, readOnlyVisual: false };
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--mode") result.mode = args[++i] || "";
     else if (args[i] === "--stage") result.stage = args[++i] || "";
     else if (args[i] === "--mutating-approved") result.mutatingApproved = true;
+    else if (args[i] === "--read-only-visual") result.readOnlyVisual = true;
     else if (args[i].startsWith("--")) throw new Error("Unknown preflight option.");
     else if (result.capability) throw new Error("Select exactly one E2E capability.");
     else result.capability = args[i];
   }
   if (!["read-only", "mutating"].includes(result.mode)) throw new Error("Mode must be read-only or mutating.");
   if (!["prepare", "execution"].includes(result.stage)) throw new Error("Stage must be prepare or execution.");
+  if (result.readOnlyVisual && (result.capability !== "clients" || result.mode !== "read-only" || result.mutatingApproved)) {
+    throw new Error("Read-only visual preflight requires Client read-only mode without mutation approval.");
+  }
   return result;
 }
 
@@ -248,6 +268,28 @@ async function selfTest() {
   assert.equal(clientApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
   const clientWithoutCleanup = await evaluatePreflight({ ...clientBase, readText: async () => "randomUUID DELETE finally" });
   assert.equal(clientWithoutCleanup.checks.cleanupPlan, false);
+  const readOnlySpecText = await readFile(resolve(repoRoot, "tests/e2e/client-address-read-only-journey.spec.ts"), "utf8");
+  const readOnlyClient = await evaluatePreflight({
+    ...clientBase,
+    mode: "read-only",
+    mutatingApproved: false,
+    readOnlyVisual: true,
+    fileExists: (path) => path.endsWith("client-address-read-only-journey.spec.ts"),
+    readText: async () => readOnlySpecText,
+  });
+  assert.equal(readOnlyClient.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(readOnlyClient.authorization, "READ_ONLY_AUTHORIZED");
+  assert.equal(readOnlyClient.checks.readOnlyMutationGuard, true);
+  const readOnlyWithoutGuard = await evaluatePreflight({
+    ...clientBase,
+    mode: "read-only",
+    readOnlyVisual: true,
+    fileExists: () => true,
+    readText: async () => "no mutation guard",
+  });
+  assert.equal(readOnlyWithoutGuard.status, "PREFLIGHT_BLOCKED");
+  assert.equal(readOnlyWithoutGuard.checks.readOnlyMutationGuard, false);
+  assert.throws(() => parseArgs(["clients", "--read-only-visual"]), /Client read-only mode/);
   const readOnly = await evaluatePreflight({ ...common, mode: "read-only", mutatingApproved: false });
   assert.equal(readOnly.authorization, "READ_ONLY_AUTHORIZED");
   const missingCleanup = await evaluatePreflight({ ...common, readText: async () => "randomUUID" });

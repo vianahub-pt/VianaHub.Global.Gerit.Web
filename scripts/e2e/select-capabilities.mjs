@@ -6,6 +6,7 @@ import { verifyStructuralSync } from "./structural-sync.mjs";
 import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresentationAdapter } from "./impact-classifier.mjs";
 
 const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
+  sidebar: Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-grid": Object.freeze(["tests/e2e/client-contact-person-journey.spec.ts"]),
   "hub-select": Object.freeze(["tests/e2e/hub-image-journey.spec.ts"]),
@@ -30,7 +31,7 @@ const capabilityTestPaths = new Map([
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
   ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
-  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts"]],
+  ["clients", ["tests/clients/", "tests/e2e/clients-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-read-only-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts", "tests/e2e/client-address-crud-guard.test.mjs"]],
 ]);
 
 const ciOnlyPaths = new Set([
@@ -93,15 +94,21 @@ function isDocumentation(file) {
 
 function isKnownSharedSupport(file) {
   return file.startsWith("shared/") ||
+    file === "components/ui/sidebar.tsx" ||
     file.startsWith("tests/shared/") ||
     file === "tests/e2e/client-ui-visual-review.spec.ts" ||
     file === "tests/e2e/hub-image-journey.spec.ts" ||
     file === "tests/e2e/hub-select-visual-journey.spec.ts" ||
     file === "tests/e2e/workspace-header-theme-journey.spec.ts" ||
     file === "tests/e2e/impact-classifier.test.mjs" ||
+    file === ".eslintrc.json" ||
+    file === "eslint.config.mjs" ||
+    file === "next-env.d.ts" ||
+    file === "tsconfig.json" ||
     file.startsWith("platform/") ||
     file.startsWith("core/") ||
     file.startsWith("tests/e2e/helpers/") ||
+    file.startsWith("tests/e2e/fixtures/") ||
     file === "tests/e2e/preflight.test.mjs" ||
     file.startsWith("scripts/e2e/") ||
     file === "domains/workspace/workspace-header-controls.tsx" ||
@@ -112,6 +119,12 @@ function isKnownSharedSupport(file) {
     file === "app/layout.tsx" ||
     file === "app/globals.css" ||
     file === "app/(workspace)/layout.tsx";
+}
+
+function isSharedUiComponent(file) {
+  return file.startsWith("shared/ui/") ||
+    file === "shared/hub-grid/hub-grid.tsx" ||
+    file === "components/ui/sidebar.tsx";
 }
 
 function normalizeScope(scope) {
@@ -326,12 +339,12 @@ function selectCapabilitiesPlan(files, {
     scope: [...scope],
     scopeApproved: scope.length > 1 && scopeApproved === true,
     runE2E: true,
-    reason: presentationConsumers.size > 0 || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx") ? "functional-and-shared-ui-regression" : "declared-capability-scope",
+    reason: presentationConsumers.size > 0 || nonCiChanges.some(isSharedUiComponent) ? "functional-and-shared-ui-regression" : "declared-capability-scope",
     supportingChanges: [...new Set(supportingChanges)].sort(),
     functionalCapabilities: scope.filter((capability) => changedCapabilities.has(capability)),
     presentationConsumers: [...presentationConsumers].sort(),
-    sharedUiRegressionRequired: presentationConsumers.size > 0 || sharedTranslationChanged || nonCiChanges.some((file) => file.startsWith("shared/ui/") || file === "shared/hub-grid/hub-grid.tsx"),
-      sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file.startsWith("shared/ui/") && /\.(?:tsx|jsx)$/.test(file) ? [file.slice("shared/ui/".length).replace(/\.(?:tsx|jsx)$/, "")] : []))].sort(),
+    sharedUiRegressionRequired: presentationConsumers.size > 0 || sharedTranslationChanged || nonCiChanges.some(isSharedUiComponent),
+      sharedComponents: [...new Set(nonCiChanges.flatMap((file) => file === "shared/hub-grid/hub-grid.tsx" ? ["hub-grid"] : file === "components/ui/sidebar.tsx" ? ["sidebar"] : file.startsWith("shared/ui/") && /\.(?:tsx|jsx)$/.test(file) ? [file.slice("shared/ui/".length).replace(/\.(?:tsx|jsx)$/, "")] : []))].sort(),
     requiredRegressionTests: [...PRESENTATION_REGRESSION_TESTS],
   };
 }

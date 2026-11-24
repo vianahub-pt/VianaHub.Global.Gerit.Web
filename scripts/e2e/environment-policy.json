@@ -6,5 +6,6 @@
   "legacyGitHubEnvironmentName": "production-vianahub",
   "legacyEnvironmentNameIsClassification": false,
   "readOnlySmokeAuthorized": true,
-  "mutatingApprovalRequiredPerRun": true
+  "mutatingApprovalRequiredPerRun": true,
+  "clientAddressCrudQaEnabled": false
 }

@@ -22,6 +22,13 @@ const contactFixture = {
 
 type Contact = typeof contactFixture;
 
+const addressFixture = {
+  id: 8401, clientId, addressTypeId: 3, addressTypeName: "Home", countryCode: "PT", street: "Synthetic Street",
+  streetNumber: "1", complement: null, neighborhood: "Centre", city: "Porto", district: "Porto", postalCode: "4000-001",
+  latitude: 41.15, longitude: -8.61, note: null, isPrimary: true, isActive: true, createdAt: "2026-01-01T00:00:00Z",
+};
+type Address = typeof addressFixture;
+
 function pageBody(items: Contact[], pageNumber = 1, pageSize = 10, totalItems = items.length) {
   return { items, pageNumber, pageSize, totalItems, totalPages: totalItems ? Math.ceil(totalItems / pageSize) : 0 };
 }
@@ -46,7 +53,7 @@ async function json(route: Route, status: number, body: unknown) {
   await route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 }
 
-async function installApiMocks(page: Page) {
+async function installApiMocks(page: Page, options: { blockUnmockedReads?: boolean } = {}) {
   let records: Contact[] = Array.from({ length: 23 }, (_, index) => ({
     ...contactFixture,
     id: contactId + index,
@@ -54,6 +61,10 @@ async function installApiMocks(page: Page) {
     email: `synthetic.contact.${index + 1}@example.invalid`,
   }));
   let nextId = contactId + records.length;
+  let addresses: Address[] = [{ ...addressFixture }];
+  let nextAddressId = addressFixture.id + 1;
+  const addressMutationPayloads: unknown[] = [];
+  const addressCsvUploads: string[] = [];
   let listMode: "normal" | "empty" | "gone" = "normal";
   let clientCreated = false;
   let clientCreateStatus: 201 | 500 = 201;
@@ -62,6 +73,7 @@ async function installApiMocks(page: Page) {
   let detailGone = false;
   const observed: string[] = [];
   const unexpectedWrites: string[] = [];
+  const unexpectedReads: string[] = [];
   const mutationPayloads: unknown[] = [];
   let nextListDelayMs = 0;
   const delayedSearches = new Map<string, number>();
@@ -149,6 +161,41 @@ async function installApiMocks(page: Page) {
       return json(route, 200, [{ id: 4, name: "Potential", statusDomainId: 1, isActive: true, languageCode: "en-US" }]);
     }
 
+    if (path === "/api/gerit/v1/subscriptions/tenant/1" && method === "GET") return json(route, 200, []);
+    if (path === "/api/gerit/v1/address-types" && method === "GET") return json(route, 200, [{ id: 3, name: "Home", isActive: true }, { id: 4, name: "Billing", isActive: true }]);
+    const addressesBase = `/api/gerit/v1/clients/${clientId}/addresses`;
+    if (path === addressesBase + "/paged" && method === "GET") {
+      const term = (url.searchParams.get("Search") ?? "").toLocaleLowerCase();
+      const active = url.searchParams.get("IsActive");
+      const pageNumber = Math.max(1, Number(url.searchParams.get("PageNumber") ?? 1));
+      const pageSize = Math.max(1, Number(url.searchParams.get("PageSize") ?? 10));
+      const filtered = addresses.filter((item) => (!term || [item.street, item.city, item.postalCode, item.district, item.addressTypeName].some((value) => value?.toLocaleLowerCase().includes(term))) && (active === null || item.isActive === (active === "true")));
+      const summaries = filtered.map(({ id, addressTypeName, countryCode, street, isPrimary, isActive }) => ({ id, addressTypeName, countryCode, street, isPrimary, isActive }));
+      return json(route, 200, { items: summaries.slice((pageNumber - 1) * pageSize, pageNumber * pageSize), pageNumber, pageSize, totalItems: filtered.length, totalPages: filtered.length ? Math.ceil(filtered.length / pageSize) : 0 });
+    }
+    if (path === addressesBase && method === "POST") {
+      const body = request.postDataJSON() as Omit<Address, "id" | "clientId" | "addressTypeName" | "isActive" | "createdAt">;
+      addressMutationPayloads.push(body);
+      const created: Address = { ...addressFixture, ...body, id: nextAddressId++, clientId, addressTypeName: "Home", isActive: true, createdAt: "2026-01-01T00:00:00Z" };
+      addresses = [...addresses, created];
+      return json(route, 201, { id: created.id });
+    }
+    if (path === addressesBase + "/bulk-upload" && method === "POST") {
+      addressCsvUploads.push(request.headers()["content-type"] ?? "");
+      return json(route, 200, true);
+    }
+    const addressMatch = path.match(new RegExp(`^${addressesBase}/(\\d+)(?:/(activate|deactivate))?$`));
+    if (addressMatch) {
+      const id = Number(addressMatch[1]); const operation = addressMatch[2]; const index = addresses.findIndex((item) => item.id === id);
+      if (index < 0) return json(route, 410, { title: "Address unavailable" });
+      if (operation && method === "PATCH") { addresses[index] = { ...addresses[index], isActive: operation === "activate" }; return json(route, 200, true); }
+      if (!operation && method === "GET") return json(route, 200, addresses[index]);
+      if (!operation && method === "PUT") {
+        const body = request.postDataJSON() as Omit<Address, "id" | "clientId" | "addressTypeName" | "isActive" | "createdAt">;
+        addressMutationPayloads.push(body); addresses[index] = { ...addresses[index], ...body }; return json(route, 200, true);
+      }
+      if (!operation && method === "DELETE") { addresses = addresses.filter((item) => item.id !== id); return json(route, 200, true); }
+    }
     const base = `/api/gerit/v1/clients/${clientId}/contacts`;
     if (path === `${base}/paged` && method === "GET") {
       const term = (url.searchParams.get("Search") ?? "").toLocaleLowerCase();
@@ -200,7 +247,13 @@ async function installApiMocks(page: Page) {
         return json(route, 200, true);
       }
     }
-    if (method === "GET" || method === "HEAD") return route.continue();
+    if (method === "GET" || method === "HEAD") {
+      if (options.blockUnmockedReads) {
+        unexpectedReads.push(method + " " + path);
+        return json(route, 599, { title: "Unmocked read blocked by synthetic ClientAddress permission test" });
+      }
+      return route.continue();
+    }
     unexpectedWrites.push(method + " " + path);
     return json(route, 599, { title: "Unmocked mutating request blocked by ClientContactPerson visual test" });
   });
@@ -211,14 +264,57 @@ async function installApiMocks(page: Page) {
     setConflict: (value: "none" | "email" | "primary") => { createConflict = value; },
     setDetailGone: (value: boolean) => { detailGone = value; },
     setClientCreateStatus: (value: 201 | 500) => { clientCreateStatus = value; },
+    addInactiveAddress: () => { addresses.push({ ...addressFixture, id: addressFixture.id + 1, street: "Inactive Synthetic Street", isActive: false }); },
     delayNextList: (milliseconds: number) => { nextListDelayMs = milliseconds; },
     delayListSearch: (search: string, milliseconds: number) => { delayedSearches.set(search.toLocaleLowerCase(), milliseconds); },
+    seedClient: () => { clientCreated = true; },
+    addressMutationPayloads,
+    addressCsvUploads,
+    addressSnapshot: () => addresses.map((item) => ({ ...item })),
     clientCreateStatuses,
     observed,
     unexpectedWrites,
+    unexpectedReads,
     mutationPayloads,
     snapshot: () => records.map((record) => ({ ...record })),
   };
+}
+
+async function authenticateWithSyntheticPermissions(page: Page, deniedGrant: string) {
+  const clientAddressGrants = ["GetPaged", "GetBy", "Create", "Update", "Activate", "Deactivate", "Delete", "BulkUpload"]
+    .filter((grant) => grant !== deniedGrant);
+  const claims = {
+    sub: "9876",
+    tenant_id: "1",
+    email: "synthetic.permission@example.invalid",
+    role: ["Synthetic permission test"],
+    permissions: {
+      Clients: ["GetPaged", "GetBy", "Create", "Update", "Activate", "Deactivate", "Delete"],
+      ClientAddresses: clientAddressGrants,
+      AddressTypes: ["GetAll"],
+    },
+    exp: Math.floor(Date.now() / 1000) + 3600,
+  };
+  const header = Buffer.from(JSON.stringify({ alg: "none", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify(claims)).toString("base64url");
+  const now = Date.now();
+  const authSession = {
+    accessToken: `${header}.${payload}.synthetic-signature`,
+    refreshToken: "synthetic-refresh-token",
+    accessTokenExpiresAt: new Date(now + 30 * 60_000).toISOString(),
+    refreshTokenExpiresAt: new Date(now + 60 * 60_000).toISOString(),
+    roleId: 9876,
+    roleName: "Synthetic permission test",
+    userId: 9876,
+    userName: "Synthetic permission test",
+    tenantId: 1,
+    tenantName: "Synthetic tenant",
+    email: "synthetic.permission@example.invalid",
+    name: "Synthetic permission test",
+  };
+  await page.addInitScript(({ storageKey, session }) => {
+    window.localStorage.setItem(storageKey, JSON.stringify(session));
+  }, { storageKey: "gerit.auth.session.v1", session: authSession });
 }
 
 async function dismissSuccessToast(page: Page) {
@@ -226,6 +322,10 @@ async function dismissSuccessToast(page: Page) {
   if (await toast.isVisible().catch(() => false)) {
     await toast.getByRole("button", { name: /Close notification|Fechar notificação|Cerrar notificación/i }).click();
   }
+}
+
+async function waitForSuccessNotificationsToClear(page: Page) {
+  await expect(page.locator('[role="region"][aria-label^="Notifications"] [role="status"][data-state="open"]')).toHaveCount(0, { timeout: 15_000 });
 }
 
 async function openContactsTab(page: Page) {
@@ -455,22 +555,22 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
 
   await page.goto(`/clients/${clientId}/`);
   await expect(page.getByTestId("client-detail-page")).toBeVisible();
-  for (const [tab, placeholder] of [
-    [addressesTab, /address|morada|dirección/i],
-    [documentsTab, /document/i],
-    [fiscalTab, /fiscal/i],
-  ] as const) {
+  await expect(addressesTab).toBeEnabled();
+  await addressesTab.click();
+  await expect(page.getByTestId("client-addresses-panel")).toBeVisible();
+  await expect(page.getByRole("table")).toContainText("Synthetic Street");
+  expect(childReads().filter((entry) => !entry.includes("/addresses/"))).toEqual([]);
+  for (const [tab, placeholder] of [[documentsTab, /document/i], [fiscalTab, /fiscal/i]] as const) {
     await expect(tab).toBeEnabled();
     await tab.click();
     await expect(page.locator("#client-v1-tab-panel > div:not([hidden])")).toContainText(placeholder);
-    expect(childReads()).toEqual([]);
   }
   await contactsTab.click();
   await expect(page.getByTestId("client-contact-person-panel")).toBeVisible();
   await expect(page.getByRole("table")).toContainText("Synthetic Contact");
   await expect(page.getByTestId("client-contact-inline-form-panel")).toBeVisible();
   await expect(page.getByTestId("client-contact-name")).toBeEnabled();
-  const contactSearch = page.getByPlaceholder(/Search|Pesquisar|Buscar/i);
+  const contactSearch = page.getByTestId("client-contact-person-panel").getByPlaceholder(/Search|Pesquisar|Buscar/i);
   const gridBeforeCreate = await measureHubGrid(page);
   await saveScreenshot(page, "01-empty-form-and-list");
 
@@ -591,7 +691,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   const reactivationRead = page.waitForResponse((response) => response.request().method() === "GET" && new URL(response.url()).pathname.replace(/\/$/, "") === `/api/gerit/v1/clients/${clientId}/contacts/paged`);
   await contactsTab.click();
   expect((await reactivationRead).status()).toBe(200);
-  const searchValueAfterTabReturn = await page.getByPlaceholder(/Search|Pesquisar|Buscar/i).inputValue();
+  const searchValueAfterTabReturn = await contactSearch.inputValue();
   const filterPreservedAcrossTabSwitch = filteredSearchValue === searchValueAfterTabReturn;
   const statusPreservedAcrossTabSwitch = await statusFilter.textContent();
   const pageSizePreservedAcrossTabSwitch = await perPageFilter.textContent();
@@ -643,7 +743,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
 
   mocks.setEmpty();
   await page.getByTestId("client-contact-error").isVisible().catch(() => false);
-  await page.getByPlaceholder(/Search|Pesquisar|Buscar/i).fill("No synthetic matches");
+  await contactSearch.fill("No synthetic matches");
   await expect(page.getByRole("table")).toBeVisible();
   await expect(page.getByText(/No contacts|Nenhum contacto|Nenhum contato|No hay contactos/i)).toBeVisible();
   await saveScreenshot(page, "07-empty-state");
@@ -683,7 +783,7 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
   mocks.setNormal();
   await openContactsTab(page);
   mocks.setDetailGone(true);
-  await page.getByPlaceholder(/Search|Pesquisar|Buscar/i).fill("Synthetic Contact One");
+  await contactSearch.fill("Synthetic Contact One");
   await page.getByRole("row").filter({ hasText: "Synthetic Contact One" }).getByRole("button", { name: /Edit|Editar/i }).click();
   await expect(page.getByTestId("client-contact-error")).toContainText("Este contacto ya no está disponible.");
   await expect(page.getByRole("table")).toBeVisible();
@@ -775,3 +875,114 @@ test("ClientContactPerson inline form and HubGrid journey use synthetic post-log
     blockedUnmockedWrites: mocks.unexpectedWrites.length,
   }));
 });
+
+
+test("ClientAddress CRUD, permissions, legacy country and CSV stay on the mocked API", async ({ page }) => {
+  test.setTimeout(120_000);
+  const mocks = await installApiMocks(page);
+  mocks.seedClient();
+  await authenticateFromLogin(page);
+  await page.goto(`/clients/${clientId}/`);
+  await expect(page.getByTestId("client-detail-page")).toBeVisible();
+  expect(mocks.observed.filter((entry) => entry.includes("/addresses"))).toEqual([]);
+  await page.getByRole("tab", { name: /Addresses|Moradas|Endereços|Direcciones/i }).click();
+  await expect(page.getByTestId("client-addresses-panel")).toBeVisible();
+  await expect(page.getByRole("table")).toContainText("Synthetic Street");
+  expect(mocks.observed).toContain(`GET /api/gerit/v1/clients/${clientId}/addresses/paged`);
+  expect(mocks.observed).toContain("GET /api/gerit/v1/address-types");
+  const countrySortRequest = page.waitForRequest((request) => {
+    const url = new URL(request.url());
+    return request.method() === "GET" && url.pathname.endsWith(`/clients/${clientId}/addresses/paged`) && url.searchParams.get("SortBy") === "CountryCode";
+  });
+  await page.getByTestId("client-addresses-panel").getByRole("button", { name: /Country|País|Pais/i }).click();
+  await countrySortRequest;
+
+  await page.getByTestId(`client-address-edit-${addressFixture.id}`).click();
+  await expect(page.getByTestId("client-address-street")).toHaveValue("Synthetic Street");
+  await expect(page.getByTestId("client-address-countryCode")).toContainText("Portugal");
+  await page.getByRole("button", { name: /Cancel|Cancelar/i }).click();
+  await page.getByTestId("client-address-new").click();
+  await page.getByTestId("client-address-addressTypeId").click();
+  await page.getByRole("option", { name: "Home" }).click();
+  await page.getByTestId("client-address-countryCode").click();
+  await page.getByRole("combobox", { name: /Search options|Pesquisar opções|Buscar opções/i }).fill("Portugal");
+  await page.getByRole("option", { name: /Portugal/ }).click();
+  await page.getByTestId("client-address-street").fill("Synthetic Avenue");
+  await page.getByTestId("client-address-streetNumber").fill("8");
+  await page.getByTestId("client-address-city").fill("Coimbra");
+  await page.getByTestId("client-address-postalCode").fill("3000-001");
+  await page.getByTestId("client-address-latitude").fill("40.2033");
+  await page.getByTestId("client-address-longitude").fill("-8.4103");
+  const createResponse = page.waitForResponse((response) => response.request().method() === "POST" && new URL(response.url()).pathname.endsWith(`/clients/${clientId}/addresses`));
+  await page.getByRole("button", { name: /Save|Guardar|Salvar/i }).click();
+  expect((await createResponse).status()).toBe(201);
+  await expect(page.getByRole("table")).toContainText("Synthetic Avenue");
+  const createdPayload = mocks.addressMutationPayloads.at(-1) as Record<string, unknown>;
+  expect(createdPayload).toMatchObject({ addressTypeId: 3, countryCode: "PT", street: "Synthetic Avenue", streetNumber: "8", city: "Coimbra", postalCode: "3000-001", latitude: 40.2033, longitude: -8.4103 });
+  expect(Object.keys(createdPayload)).not.toContain("tenantId");
+  await saveScreenshot(page, "11-client-addresses-inline-crud");
+  await waitForSuccessNotificationsToClear(page);
+
+  const createdId = mocks.addressSnapshot().find((item) => item.street === "Synthetic Avenue")?.id;
+  expect(createdId).toBeDefined();
+  const createdRow = page.getByRole("row").filter({ hasText: "Synthetic Avenue" });
+  await createdRow.getByTestId(`client-address-toggle-${createdId}`).click();
+  await expect(createdRow).toContainText(/Inactive|Inativo|Inactiva|Inactivo/i);
+  await waitForSuccessNotificationsToClear(page);
+  await createdRow.getByTestId(`client-address-toggle-${createdId}`).click();
+  await expect(createdRow).toContainText(/Active|Ativo|Activa|Activo/i);
+  await waitForSuccessNotificationsToClear(page);
+  await createdRow.getByTestId(`client-address-delete-${createdId}`).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: /Delete|Eliminar|Excluir/i }).click();
+  await expect(page.getByRole("table")).not.toContainText("Synthetic Avenue");
+
+  await page.getByTestId("client-address-bulk-upload").locator('input[type="file"]').setInputFiles({ name: "addresses.csv", mimeType: "text/csv", buffer: Buffer.from("Street,City\\nMocked,Porto\\n") });
+  await expect.poll(() => mocks.addressCsvUploads.length).toBe(1);
+  expect(mocks.addressCsvUploads[0]).toContain("multipart/form-data");
+  expect(mocks.unexpectedWrites).toEqual([]);
+  expect(mocks.observed.filter((entry) => /^(POST|PUT|PATCH|DELETE) \/api\/gerit\/v1\/clients\/4242\/addresses/.test(entry)).length).toBeGreaterThanOrEqual(5);
+});
+
+const deniedClientAddressOperations = [
+  { grant: "GetPaged", method: "GET", suffix: `/clients/${clientId}/addresses/paged` },
+  { grant: "GetBy", method: "GET", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "Create", method: "POST", suffix: `/clients/${clientId}/addresses` },
+  { grant: "Update", method: "PUT", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "Activate", method: "PATCH", suffix: `/clients/${clientId}/addresses/${addressFixture.id + 1}/activate` },
+  { grant: "Deactivate", method: "PATCH", suffix: `/clients/${clientId}/addresses/${addressFixture.id}/deactivate` },
+  { grant: "Delete", method: "DELETE", suffix: `/clients/${clientId}/addresses/${addressFixture.id}` },
+  { grant: "BulkUpload", method: "POST", suffix: `/clients/${clientId}/addresses/bulk-upload` },
+] as const;
+
+for (const deniedOperation of deniedClientAddressOperations) {
+  test(`ClientAddress blocks ${deniedOperation.grant} without issuing its API request`, async ({ page }) => {
+    test.setTimeout(90_000);
+    const mocks = await installApiMocks(page, { blockUnmockedReads: true });
+    mocks.seedClient();
+    mocks.addInactiveAddress();
+    await authenticateWithSyntheticPermissions(page, deniedOperation.grant);
+    await page.goto(`/clients/${clientId}/`);
+    await expect(page.getByTestId("client-detail-page")).toBeVisible();
+    const pageResponse = deniedOperation.grant === "GetPaged" ? null : page.waitForResponse((response) => response.url().includes(`/api/gerit/v1/clients/${clientId}/addresses/paged`) && response.status() === 200);
+    await page.getByRole("tab", { name: /Addresses|Moradas|Endereços|Direcciones/i }).click();
+    await expect(page.getByTestId("client-addresses-panel")).toBeVisible();
+    if (pageResponse) await pageResponse;
+    else await expect(page.getByTestId("client-addresses-panel").getByRole("status")).toBeVisible();
+
+    const forbiddenRequest = `${deniedOperation.method} /api/gerit/v1${deniedOperation.suffix}`;
+    expect(mocks.observed).not.toContain(forbiddenRequest);
+    expect(mocks.unexpectedReads).toEqual([]);
+    expect(mocks.unexpectedWrites).toEqual([]);
+
+    if (deniedOperation.grant === "GetBy" || deniedOperation.grant === "Update") {
+      await expect(page.getByTestId(`client-address-edit-${addressFixture.id}`)).toHaveCount(0);
+    }
+    if (deniedOperation.grant === "Create") await expect(page.getByTestId("client-address-new")).toHaveCount(0);
+    if (deniedOperation.grant === "Activate") await expect(page.getByTestId(`client-address-toggle-${addressFixture.id + 1}`)).toHaveCount(0);
+    if (deniedOperation.grant === "Deactivate") await expect(page.getByTestId(`client-address-toggle-${addressFixture.id}`)).toHaveCount(0);
+    if (deniedOperation.grant === "Delete") await expect(page.getByTestId(`client-address-delete-${addressFixture.id}`)).toHaveCount(0);
+    if (deniedOperation.grant === "BulkUpload") await expect(page.getByTestId("client-address-bulk-upload")).toHaveCount(0);
+  });
+}

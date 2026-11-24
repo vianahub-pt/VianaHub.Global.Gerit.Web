@@ -1,7 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const localE2eEnvironment = ".env.e2e.local";
+if (process.env.E2E_CLIENT_ADDRESS_MODE === "qa") {
+  const policy = JSON.parse(readFileSync("scripts/e2e/environment-policy.json", "utf8")) as { clientAddressCrudQaEnabled?: boolean };
+  if (policy.clientAddressCrudQaEnabled !== true) {
+    throw new Error("ClientAddress QA CRUD is disabled until prior cleanup is verified and fresh approval is authorized.");
+  }
+}
 if (existsSync(localE2eEnvironment)) {
   for (const variable of ["E2E_BASE_URL", "E2E_USER_EMAIL", "E2E_USER_PASSWORD"]) {
     if (process.env[variable] === "") delete process.env[variable];
@@ -77,6 +83,7 @@ export default defineConfig({
       use: {
         ...(visualE2E ? visualJourneyDevice : devices["Desktop Chrome"]),
         storageState: undefined,
+        serviceWorkers: process.env.E2E_READ_ONLY_VISUAL === "true" || Boolean(process.env.E2E_CLIENT_ADDRESS_MODE) ? "block" : undefined,
         headless: visualE2E ? false : undefined,
         viewport: visualE2E ? null : undefined,
         launchOptions: visualE2E

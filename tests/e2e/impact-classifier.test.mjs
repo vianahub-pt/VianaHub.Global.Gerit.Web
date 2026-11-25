@@ -248,6 +248,13 @@ test("sidebar purity correction is shared support and requires its focused regre
   assert.throws(() => selectCapabilities(["components/ui/sidebar.tsx"], { scope: ["clients"] }), /shared-only changes do not prove the declared capability/);
 });
 
+test("Actions cleanup safety tests are classified as Actions-only E2E impact", () => {
+  const plan = selectCapabilities(["tests/e2e/actions-cleanup.test.mjs"], { scope: ["actions"] });
+  assert.deepEqual(plan.functionalCapabilities, ["actions"]);
+  assert.deepEqual(plan.capabilities, ["actions"]);
+  assert.equal(plan.runE2E, true);
+  assert.equal(plan.sharedUiRegressionRequired, false);
+});
 test("ClientAddress read-only QA journey is classified as Client-only E2E impact", () => {
   const plan = selectCapabilities(["tests/e2e/client-address-read-only-journey.spec.ts"], { scope: ["clients"] });
   assert.deepEqual(plan.functionalCapabilities, ["clients"]);

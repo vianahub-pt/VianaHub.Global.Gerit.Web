@@ -60,6 +60,50 @@ test("preflight accepts only scoped dirty Client files for local mocked visual v
   assert.equal(result.authorization, "READ_ONLY_AUTHORIZED");
 });
 
+test("preflight accepts scoped dirty Actions files only for the Actions mocked visual journey", async () => {
+  const result = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    mode: "read-only",
+    mockedVisual: true,
+    git: {
+      ...withBranch("feature/actions-isactive-form-refactor"),
+      dirty: true,
+      changedFiles: [
+        "domains/operations/actions/action-form-page.tsx",
+        "tests/e2e/actions-form-mocked-journey.spec.ts",
+        "scripts/e2e/preflight.mjs",
+      ],
+    },
+    readText: async () => await readFile("tests/e2e/actions-form-mocked-journey.spec.ts", "utf8"),
+  });
+  assert.equal(result.checks.workingTreePreserved, true);
+  assert.equal(result.checks.canonicalSpec, true);
+  assert.equal(result.checks.cleanupPlan, true);
+  assert.equal(result.status, "PRECHECK_CONFIG_PASS");
+});
+
+test("preflight blocks Actions mocked visual with an unrelated dirty file or without mock mode", async () => {
+  const dirtySecrets = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    mode: "read-only",
+    mockedVisual: true,
+    git: { ...withBranch("feature/actions-isactive-form-refactor"), dirty: true, changedFiles: [".env.e2e.local"] },
+    readText: async () => await readFile("tests/e2e/actions-form-mocked-journey.spec.ts", "utf8"),
+  });
+  assert.equal(dirtySecrets.checks.workingTreePreserved, false);
+
+  const noMockMode = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    mode: "read-only",
+    git: { ...withBranch("feature/actions-isactive-form-refactor"), dirty: true, changedFiles: ["domains/operations/actions/action-form-page.tsx"] },
+    readText: async () => await readFile("tests/e2e/actions-form-mocked-journey.spec.ts", "utf8"),
+  });
+  assert.equal(noMockMode.checks.workingTreePreserved, false);
+});
+
 test("preflight accepts the authorized EquipmentTypes visual hotfix branch", async () => {
   const result = await evaluatePreflight({
     ...valid,

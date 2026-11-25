@@ -8,19 +8,29 @@ export interface ActionDetailResponse {
 export interface ActionCreateFormState {
   name: string;
   description: string;
+  isActive: boolean;
 }
 
 export interface ActionUpdateFormState {
   description: string;
+  isActive: boolean;
+}
+
+export interface ActionCreatePayload {
+  name: string;
+  description: string;
+  isActive: boolean;
 }
 
 export interface ActionUpdatePayload {
   description: string;
+  isActive: boolean;
 }
 
 export const emptyActionCreateFormState: ActionCreateFormState = {
   name: "",
   description: "",
+  isActive: true,
 };
 
 export function normalizeActionDetail(payload: unknown): ActionDetailResponse | null {
@@ -55,11 +65,16 @@ export function isActionForRoute(
 export function toActionUpdateFormState(action: ActionDetailResponse): ActionUpdateFormState {
   return {
     description: action.description ?? "",
+    isActive: action.isActive,
   };
 }
 
-export function toActionUpdatePayload(description: string): ActionUpdatePayload {
-  return { description };
+export function toActionCreatePayload(name: string, description: string, isActive: boolean): ActionCreatePayload {
+  return { name, description, isActive };
+}
+
+export function toActionUpdatePayload(description: string, isActive: boolean): ActionUpdatePayload {
+  return { description, isActive };
 }
 
 export function isLatestActionRequest(requestId: number, currentRequestId: number) {

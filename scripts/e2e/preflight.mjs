@@ -57,6 +57,20 @@ const CLIENT_E2E_WORKING_FILES = new Set([
   "tests/e2e/preflight.test.mjs",
   "tests/e2e/run-lock.test.mjs",
 ]);
+const ACTIONS_VISUAL_WORKING_FILES = new Set([
+  "domains/operations/actions/action-contract.ts",
+  "domains/operations/actions/action-form-page.tsx",
+  "scripts/e2e/preflight.mjs",
+  "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/select-capabilities.mjs",
+  "tests/actions/action-contract.test.mjs",
+  "tests/e2e/actions-form-mocked-journey.spec.ts",
+  "tests/e2e/actions-journey.spec.ts",
+  "tests/e2e/actions-cleanup.test.mjs",
+  "scripts/e2e/actions-cleanup.mjs",
+  "scripts/e2e/actions-cleanup.d.mts",
+  "tests/e2e/preflight.test.mjs",
+]);
 
 function isExpectedBranch(branch, capability) {
   if (capability === "clients" && branch === "refactor/global-spa-ux-foundations") {
@@ -95,6 +109,17 @@ function hasReadOnlyClientAddressPlan(specText) {
     specText.includes("expect(blockedRequests).toEqual([])");
 }
 
+function hasActionsMockedVisualPlan(specText) {
+  return specText.includes('page.route("**/api/**"') &&
+    specText.includes('path === "/api/auth/login" && method === "POST"') &&
+    specText.includes('route.fulfill({ status: 200') &&
+    specText.includes("unexpectedRequests.push") &&
+    specText.includes('new URL(item.url()).pathname === "/api/auth/login"') &&
+    specText.includes('businessRequests.filter((item) => item.method === "POST")') &&
+    specText.includes('businessRequests.filter((item) => item.method === "PUT")') &&
+    specText.includes('expect(businessRequests.some((item) => item.method === "PATCH")).toBe(false)');
+}
+
 function hasClientsCleanupPlan(specText) {
   return /const createdClientIds = new Set<number>\(\)/.test(specText) &&
     /createdClientIds\.add\(clientId\)/.test(specText) &&
@@ -114,7 +139,9 @@ export async function evaluatePreflight({
   stage = "execution",
   mutatingApproved = false,
   clientMutationApproved = false,
+  actionsMutationApproved = false,
   readOnlyVisual = false,
+  mockedVisual = false,
   platform = process.platform,
   git = inspectGit(),
   config = {},
@@ -142,9 +169,23 @@ export async function evaluatePreflight({
   checks.activeWorktreeRegistered = activeWorktree;
   checks.headShaValid = /^[0-9a-f]{40}$/i.test(git.headSha || "");
   checks.branch = isExpectedBranch(git.branch, capability);
-  checks.workingTreePreserved = !git.dirty || (capability === "clients" && mode === "read-only" &&
-    Array.isArray(git.changedFiles) && git.changedFiles.length > 0 &&
-    git.changedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(String(file).replaceAll("\\", "/"))));
+  checks.actionsAuthorizedBranch = capability !== "actions" || git.branch === "feature/actions-isactive-form-refactor";
+  checks.actionsExpectedIdentity = capability !== "actions" || mode !== "mutating" || (Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_USER_ID)) && Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_TENANT_ID)));
+  const normalizedChangedFiles = Array.isArray(git.changedFiles)
+    ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))
+    : [];
+  const scopedClientVisualChanges = capability === "clients" && mode === "read-only" && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(file));
+  const scopedActionsVisualChanges = capability === "actions" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => ACTIONS_VISUAL_WORKING_FILES.has(file));
+  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges;
+  const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");
+  if (capability === "actions" && mode === "mutating" && fileExists(actionsManifestPath)) {
+    try {
+      const manifest = JSON.parse(await readText(actionsManifestPath));
+      checks.actionsCleanupManifestClear = manifest?.schemaVersion === 1 && manifest.status === "verified" && Array.isArray(manifest.records) && manifest.records.every((record) => record?.status === "verified");
+    } catch { checks.actionsCleanupManifestClear = false; }
+  } else checks.actionsCleanupManifestClear = capability !== "actions" || mode !== "mutating";
   checks.localBaseUrl = config.E2E_BASE_URL === policy.localE2EOrigin;
   let apiOrigin = "";
   try { apiOrigin = new URL(config.GERIT_API_BASE_URL || "").origin; } catch {}
@@ -152,11 +193,22 @@ export async function evaluatePreflight({
   checks.credentialsConfigured = Boolean(config.E2E_USER_EMAIL && config.E2E_USER_PASSWORD);
   checks.capabilityAllowed = CAPABILITIES.includes(capability);
 
-  const spec = resolve(repoRoot, "tests", "e2e", readOnlyVisual && capability === "clients" ? "client-address-read-only-journey.spec.ts" : capability + "-journey.spec.ts");
+  const selectedSpec = readOnlyVisual && capability === "clients"
+    ? "client-address-read-only-journey.spec.ts"
+    : mockedVisual && capability === "actions"
+      ? "actions-form-mocked-journey.spec.ts"
+      : capability + "-journey.spec.ts";
+  const spec = resolve(repoRoot, "tests", "e2e", selectedSpec);
   checks.canonicalSpec = checks.capabilityAllowed && fileExists(spec);
   if (readOnlyVisual) {
     checks.readOnlyMutationGuard = capability === "clients" && checks.canonicalSpec && hasReadOnlyClientAddressPlan(await readText(spec));
     checks.cleanupPlan = checks.readOnlyMutationGuard;
+  } else if (mockedVisual && capability === "actions" && checks.canonicalSpec) {
+    checks.cleanupPlan = hasActionsMockedVisualPlan(await readText(spec));
+  } else if (capability === "actions" && mode === "mutating" && checks.canonicalSpec) {
+    const text = await readText(spec);
+    const cleanupText = await readText(resolve(scriptDir, "actions-cleanup.mjs"));
+    checks.cleanupPlan = text.includes("registerOwnedAction") && text.includes("cleanupOwnedActions") && text.includes("test.afterEach") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp");
   } else if (capability === "equipment-types" && checks.canonicalSpec) {
     checks.cleanupPlan = hasEquipmentTypesCleanupPlan(await readText(spec));
   } else if (capability === "clients" && checks.canonicalSpec) {
@@ -173,7 +225,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved))
+      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsExpectedIdentity && checks.actionsCleanupManifestClear))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -216,7 +268,7 @@ export async function loadConfig() {
   const fromFile = existsSync(localFile) ? parseEnvFile(await readFile(localFile, "utf8")) : {};
   return {
     ...fromFile,
-    ...Object.fromEntries(["E2E_BASE_URL", "GERIT_API_BASE_URL", "E2E_USER_EMAIL", "E2E_USER_PASSWORD"]
+    ...Object.fromEntries(["E2E_BASE_URL", "GERIT_API_BASE_URL", "E2E_USER_EMAIL", "E2E_USER_PASSWORD", "E2E_ACTIONS_QA_EXPECTED_USER_ID", "E2E_ACTIONS_QA_EXPECTED_TENANT_ID"]
       .filter((key) => process.env[key] !== undefined && process.env[key] !== "")
       .map((key) => [key, process.env[key]])),
   };
@@ -347,6 +399,18 @@ async function selfTest() {
   assert.equal(readOnly.authorization, "READ_ONLY_AUTHORIZED");
   const missingCleanup = await evaluatePreflight({ ...common, readText: async () => "randomUUID" });
   assert.equal(missingCleanup.checks.cleanupPlan, false);
+  const actionsGit = gitWithBranch("feature/actions-isactive-form-refactor");
+  const actionsConfig = { ...validConfig, E2E_ACTIONS_QA_EXPECTED_USER_ID: "1", E2E_ACTIONS_QA_EXPECTED_TENANT_ID: "1" };
+  const actionsPreflight = { ...common, capability: "actions", mode: "mutating", mutatingApproved: true, actionsMutationApproved: true, git: actionsGit, config: actionsConfig, stage: "prepare", fileExists: (path) => path.endsWith("actions-journey.spec.ts") || path.endsWith("cleanup-manifest.json"), readText: async (path) => path.endsWith("cleanup-manifest.json") ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [{ id: 1230, name: "synthetic", status: "verified" }] }) : path.endsWith("actions-cleanup.mjs") ? await readFile(resolve(repoRoot, "scripts/e2e/actions-cleanup.mjs"), "utf8") : await readFile(resolve(repoRoot, "tests/e2e/actions-journey.spec.ts"), "utf8") };
+  const actionsApproved = await evaluatePreflight(actionsPreflight);
+  assert.equal(actionsApproved.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(actionsApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, actionsMutationApproved: false })).authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, git: { ...actionsGit, branch: "feature/other" } })).checks.actionsAuthorizedBranch, false);
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, git: { ...actionsGit, dirty: true } })).checks.workingTreePreserved, false);
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, config: validConfig })).checks.actionsExpectedIdentity, false);
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, readText: async (path) => path.endsWith("cleanup-manifest.json") ? JSON.stringify({ schemaVersion: 1, status: "pending", records: [{ id: 1230, name: "synthetic", status: "pending" }] }) : path.endsWith("actions-cleanup.mjs") ? await readFile(resolve(repoRoot, "scripts/e2e/actions-cleanup.mjs"), "utf8") : await readFile(resolve(repoRoot, "tests/e2e/actions-journey.spec.ts"), "utf8") })).checks.actionsCleanupManifestClear, false);
+
   console.log("E2E preflight self-tests passed.");
 }
 
@@ -360,6 +424,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       const result = await evaluatePreflight({
         ...args,
         clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
+        actionsMutationApproved: args.capability === "actions" && process.argv.includes("--actions-qa-approved"),
         config,
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");

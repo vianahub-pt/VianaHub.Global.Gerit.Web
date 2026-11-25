@@ -19,6 +19,7 @@ type MockAction = { id: number; name: string; description: string | null; isActi
 async function installActionApi(page: Page, permissions = allActionPermissions) {
   const token = syntheticToken(permissions);
   let action: MockAction = { id: actionId, name: "Review actions", description: "Existing description", isActive: false };
+  let deleted = false;
   const businessRequests: Array<{ method: string; path: string; body?: Record<string, unknown> }> = [];
   const unexpectedRequests: string[] = [];
 
@@ -47,10 +48,30 @@ async function installActionApi(page: Page, permissions = allActionPermissions) 
       return;
     }
 
+    if (path === "/api/gerit/v1/actions/paged" && method === "GET") {
+      businessRequests.push({ method, path });
+      const items = deleted ? [] : [action];
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ items, totalItems: items.length, pageNumber: 1, pageSize: 10, totalPages: 1 }) });
+      return;
+    }
+
     if (path === `/api/gerit/v1/actions/${actionId}` && method === "GET") {
       businessRequests.push({ method, path });
-      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(action) });
+      await route.fulfill({ status: deleted ? 410 : 200, contentType: "application/json", body: JSON.stringify(deleted ? { message: "Deleted" } : action) });
       return;
+    }
+
+    if (path === "/api/gerit/v1/actions/" + actionId + "/activate" && method === "PATCH") {
+      businessRequests.push({ method, path }); action = { ...action, isActive: true };
+      await route.fulfill({ status: 200, contentType: "application/json", body: "true" }); return;
+    }
+    if (path === "/api/gerit/v1/actions/" + actionId + "/deactivate" && method === "PATCH") {
+      businessRequests.push({ method, path }); action = { ...action, isActive: false };
+      await route.fulfill({ status: 200, contentType: "application/json", body: "true" }); return;
+    }
+    if (path === `/api/gerit/v1/actions/${actionId}` && method === "DELETE") {
+      businessRequests.push({ method, path }); deleted = true;
+      await route.fulfill({ status: 200, contentType: "application/json", body: "true" }); return;
     }
 
     if (path === `/api/gerit/v1/actions/${actionId}` && method === "PUT") {
@@ -148,5 +169,37 @@ test("Actions form disables operations when the independent grant is missing", a
   await expect(page.getByRole("button", { name: /save|guardar|salvar/i })).toBeDisabled();
   await expect(page.getByRole("button", { name: /delete|excluir|eliminar/i })).toHaveCount(0);
   expect(businessRequests.map((item) => item.method)).toEqual(["GET"]);
+  expect(unexpectedRequests).toEqual([]);
+});
+
+test("Actions HubGrid keeps independent lifecycle PATCH and confirmed delete for mocked records", async ({ page }) => {
+  const { businessRequests, unexpectedRequests } = await installActionApi(page);
+  await loginThroughUi(page);
+  const sidebar = page.getByTestId("desktop-sidebar");
+  const administration = sidebar.getByRole("button", { name: /^(administration|administração|administración)$/i });
+  if (await administration.getAttribute("aria-expanded") === "false") await administration.click();
+  await sidebar.getByRole("link", { name: /^(actions|ações|acciones)$/i }).click();
+  await expect(page.getByTestId("actions-page-root")).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "Review actions" });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: /activate|ativar|activar/i }).click();
+  await expect.poll(() => businessRequests.filter((item) => item.method === "PATCH").length).toBe(1);
+  await expect(row.getByRole("button", { name: /deactivate|desativar|desactivar/i })).toBeVisible();
+  await row.getByRole("button", { name: /deactivate|desativar|desactivar/i }).click();
+  await expect.poll(() => businessRequests.filter((item) => item.method === "PATCH").length).toBe(2);
+  await expect(row.getByRole("button", { name: /activate|ativar|activar/i })).toBeVisible();
+  await row.getByRole("button", { name: /delete|excluir|eliminar/i }).click();
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Review actions");
+  await dialog.getByRole("button", { name: /delete|excluir|eliminar/i }).click();
+  await expect.poll(() => businessRequests.filter((item) => item.method === "DELETE").length).toBe(1);
+  expect(businessRequests.filter((item) => item.method === "PATCH").map((item) => item.path)).toEqual([
+    "/api/gerit/v1/actions/" + actionId + "/activate", "/api/gerit/v1/actions/" + actionId + "/deactivate",
+  ]);
+  expect(businessRequests.some((item) => item.method === "PUT")).toBe(false);
+  await page.goto("/actions/" + actionId + "/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("action-details-page-root").getByRole("alert")).toBeVisible();
+  expect(businessRequests.filter((item) => item.method === "GET" && item.path === "/api/gerit/v1/actions/" + actionId).length).toBeGreaterThan(0);
   expect(unexpectedRequests).toEqual([]);
 });

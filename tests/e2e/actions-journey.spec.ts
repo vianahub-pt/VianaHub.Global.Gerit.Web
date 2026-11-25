@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { expect, test, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
+import { beginOwnedActionCreate, cleanupOwnedActions, markOwnedActionDeleteAttempted, readActionsCleanupManifest, registerOwnedAction } from "../../scripts/e2e/actions-cleanup.mjs";
 
 type Outcome = "PASS" | "FAIL" | "RECOVERED" | "BLOCKED";
 type StepResult = { area: string; name: string; outcome: Outcome; url: string; durationMs?: number; slow?: boolean; request?: string; status?: number; detail?: string };
@@ -23,6 +24,8 @@ const labels = {
   search: /^(search by name or description|pesquisar por nome ou descrição|buscar por nome ou descrição|buscar por nombre o descripción)$/i,
   active: /^(active|ativo|ativa|activa)$/i,
   inactive: /^(inactive|inativo|inativa|inactiva)$/i,
+  yes: /^(yes|sim|sí)$/i,
+  no: /^(no|não)$/i,
   columnName: /^(name|nome|nombre)$/i,
   columnStatus: /^(status|estado)$/i,
   columnActions: /^(actions|ações|acciones)$/i,
@@ -31,7 +34,12 @@ const labels = {
 const baseURL = "http://127.0.0.1:3100";
 const rawTranslationKey = /^[a-z][a-zA-Z0-9_-]*(?:\.[a-zA-Z0-9_-]+)+$/;
 const ownedIds = new Set<number>();
+const ownedNames = new Map<number, string>();
+const allCreatedNames = new Map<number, string>();
 const reportDirectory = resolve(".e2e-debug/actions-journey");
+const manifestPath = resolve(reportDirectory, "cleanup-manifest.json");
+const actionsExecutionId = randomUUID();
+let cleanupSession: { userId: number; tenantId: number; refreshToken: string } | null = null;
 const allCreatedIds = new Set<number>();
 const pageLossReasons = new WeakMap<Page, string>();
 
@@ -216,6 +224,8 @@ async function apiCall(page: Page, method: string, path: string, body?: unknown)
 }
 
 async function createViaApi(page: Page, name: string, description: string): Promise<Action> {
+  if (!cleanupSession) throw new Error("Authenticated identity is unavailable before Actions create.");
+  await beginOwnedActionCreate(manifestPath, { name, userId: cleanupSession.userId, tenantId: cleanupSession.tenantId, executionId: actionsExecutionId });
   const created = await apiCall(page, "POST", "/api/gerit/v1/actions/", { name, description });
   if (created.status !== 201 || typeof created.body !== "object" || created.body === null || typeof (created.body as { id?: unknown }).id !== "number") {
     throw new Error(`Controlled POST /api/gerit/v1/actions returned HTTP ${created.status} without a numeric ID.`);
@@ -223,6 +233,9 @@ async function createViaApi(page: Page, name: string, description: string): Prom
   const id = (created.body as { id: number }).id;
   ownedIds.add(id);
   allCreatedIds.add(id);
+  if (!cleanupSession) throw new Error("Authenticated identity is unavailable to register the created Action.");
+  await registerOwnedAction(manifestPath, { id, name, userId: cleanupSession.userId, tenantId: cleanupSession.tenantId, executionId: actionsExecutionId, createHttp: created.status });
+  ownedNames.set(id, name); allCreatedNames.set(id, name);
   const detail = await apiCall(page, "GET", `/api/gerit/v1/actions/${id}`);
   if (detail.status !== 200 || typeof detail.body !== "object" || detail.body === null) throw new Error(`Controlled GET Action ${id} returned HTTP ${detail.status}.`);
   const value = detail.body as Record<string, unknown>;
@@ -245,9 +258,12 @@ async function assertActionDetail(page: Page, action: Action, description = acti
   await expect(descriptionControl).toBeVisible();
   await expect(descriptionControl).toHaveValue(description);
   await expect(page.getByLabel(labels.name)).toHaveCount(0);
-  await expect(page.getByText(action.isActive ? labels.active : labels.inactive).first()).toBeVisible();
+  await expect(page.getByTestId("action-status-field")).toBeVisible();
+  await expect(page.getByTestId("action-is-active-switch")).toHaveAttribute("aria-checked", String(action.isActive));
+  await expect(page.getByTestId("action-is-active-label")).toHaveText(action.isActive ? labels.yes : labels.no);
+  await expect(page.getByTestId("action-details-page-root").getByText(action.isActive ? labels.active : labels.inactive).first()).toBeVisible();
   await expect(page.getByRole("button", { name: labels.back }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: action.isActive ? labels.deactivate : labels.activate })).toBeVisible();
+  await expect(page.getByRole("button", { name: action.isActive ? labels.deactivate : labels.activate })).toHaveCount(0);
   await expect(page.getByRole("button", { name: labels.delete })).toBeVisible();
   await expect(page.getByLabel(/^(code|código)$/i)).toHaveCount(0);
   const nameBox = await page.getByTestId("action-name-field").boundingBox();
@@ -346,8 +362,43 @@ async function repeatStatusMutation(page: Page, action: Action, operation: "acti
   }
 }
 
+async function cleanupActionsUsingRequest(request: APIRequestContext) {
+  if (!cleanupSession) throw new Error("Authenticated cleanup session is unavailable.");
+  const manifestState = await readActionsCleanupManifest(manifestPath);
+  const selectedIds = [...ownedIds];
+  if (selectedIds.length === 0) {
+    if (manifestState.status !== "clear") throw new Error("Actions cleanup manifest has pending or ambiguous records with no in-memory IDs; manual reconciliation is required.");
+    return null;
+  }
+  const manifest = await cleanupOwnedActions({
+    path: manifestPath, ids: selectedIds,
+    refreshSession: async () => {
+      const response = await request.post("/api/auth/refresh/", { data: { tenantId: cleanupSession!.tenantId, refreshToken: cleanupSession!.refreshToken }, headers: { "Content-Type": "application/json" } });
+      const body = await response.json().catch(() => null) as { accessToken?: unknown; refreshToken?: unknown; userId?: unknown; tenantId?: unknown } | null;
+      if (response.status() !== 200 || typeof body?.accessToken !== "string" || typeof body.refreshToken !== "string" || body.userId !== cleanupSession!.userId || body.tenantId !== cleanupSession!.tenantId) throw new Error("Authenticated cleanup session refresh failed identity/tenant validation with HTTP " + response.status() + ".");
+      cleanupSession = { ...cleanupSession!, refreshToken: body.refreshToken };
+      return { accessToken: body.accessToken, refreshToken: body.refreshToken, userId: body.userId, tenantId: body.tenantId };
+    },
+    api: async (method, id, accessToken) => {
+      const response = await request.fetch("/api/gerit/v1/actions/" + id + "/", { method, headers: { Authorization: "Bearer " + accessToken } });
+      return { status: response.status(), body: await response.json().catch(() => null) };
+    },
+  });
+  if (manifest.status !== "verified") throw new Error("Actions cleanup manifest remains pending.");
+  for (const id of selectedIds) ownedIds.delete(id);
+  return manifest;
+}
+
+test.afterEach(async ({ request }) => {
+  if (ownedIds.size > 0) {
+    console.log("[E2E Actions cleanup] Running independent authenticated teardown for owned records.");
+    await cleanupActionsUsingRequest(request);
+  }
+});
+
 test("Actions complete business and UI journey", async ({ page, context, request }, testInfo) => {
   test.setTimeout(900_000);
+  if (process.env.CI === "true" || process.env.E2E_ACTIONS_QA_MUTATION_APPROVAL !== "true") throw new Error("Real Actions mutations require the local runner’s explicit per-run QA approval; CI is always nonmutating.");
   const startedAt = Date.now();
   const results: StepResult[] = [];
   const authDiagnostic = { hydrated: false, emailFilled: false, passwordFilled: false, submitObserved: false, requestObserved: false, responseStatus: null as number | null, sessionValid: false, homeVisible: false, fallbackUsed: false, consoleErrors: [] as string[], pageErrors: [] as string[] };
@@ -357,7 +408,7 @@ test("Actions complete business and UI journey", async ({ page, context, request
   let staleB: Action | null = null;
   let initialLocale: string | null = null;
   let descriptionDiagnosis = "not inspected";
-  let cleanupAccessToken: string | null = null;
+  cleanupSession = null;
   const e2eEmail = process.env.E2E_USER_EMAIL;
   const e2ePassword = process.env.E2E_USER_PASSWORD;
   await mkdir(resolve(reportDirectory, "screenshots"), { recursive: true });
@@ -428,8 +479,12 @@ test("Actions complete business and UI journey", async ({ page, context, request
         return Boolean(value && typeof value.accessToken === "string" && value.accessToken.length > 0 && typeof value.refreshToken === "string" && Number.isFinite(Date.parse(value.accessTokenExpiresAt)) && Number.isFinite(Date.parse(value.refreshTokenExpiresAt)) && typeof value.tenantId === "number");
       } catch { return false; }
     });
-    if (authDiagnostic.sessionValid) cleanupAccessToken = await page.evaluate(() => {
-      try { return (JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { accessToken?: string } | null)?.accessToken ?? null; } catch { return null; }
+    if (authDiagnostic.sessionValid) cleanupSession = await page.evaluate(() => {
+      try {
+        const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { userId?: unknown; tenantId?: unknown; refreshToken?: unknown } | null;
+        return session && Number.isSafeInteger(session.userId) && Number.isSafeInteger(session.tenantId) && typeof session.refreshToken === "string"
+          ? { userId: session.userId as number, tenantId: session.tenantId as number, refreshToken: session.refreshToken } : null;
+      } catch { return null; }
     });
     await expect(page).toHaveURL(`${baseURL}/`, { timeout: 10_000 });
     await expect(page.getByTestId("workspace-shell-root")).toBeVisible({ timeout: 10_000 });
@@ -452,8 +507,8 @@ test("Actions complete business and UI journey", async ({ page, context, request
       authDiagnostic.responseStatus = fallback.status;
       authDiagnostic.sessionValid = true;
       await page.goto("/", { waitUntil: "domcontentloaded" });
-      cleanupAccessToken = await page.evaluate(() => {
-        try { return (JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { accessToken?: string } | null)?.accessToken ?? null; } catch { return null; }
+      cleanupSession = await page.evaluate(() => {
+        try { const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { userId?: unknown; tenantId?: unknown; refreshToken?: unknown } | null; return session && Number.isSafeInteger(session.userId) && Number.isSafeInteger(session.tenantId) && typeof session.refreshToken === "string" ? { userId: session.userId as number, tenantId: session.tenantId as number, refreshToken: session.refreshToken } : null; } catch { return null; }
       });
       initialLocale = await page.evaluate(() => localStorage.getItem("language"));
       await expect(page.getByTestId("workspace-shell-root")).toBeVisible({ timeout: 10_000 });
@@ -470,6 +525,27 @@ test("Actions complete business and UI journey", async ({ page, context, request
     authDiagnostic.homeVisible = true;
     await screenshot(page, "02-home");
   });
+
+  const authenticatedCleanupSession = cleanupSession as { userId: number; tenantId: number; refreshToken: string } | null;
+  if (!authenticatedCleanupSession) throw new Error("Authenticated identity, tenant, and refresh session could not be recovered.");
+  const expectedUserId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_USER_ID);
+  const expectedTenantId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_TENANT_ID);
+  if (!Number.isSafeInteger(expectedUserId) || !Number.isSafeInteger(expectedTenantId) || authenticatedCleanupSession.userId !== expectedUserId || authenticatedCleanupSession.tenantId !== expectedTenantId) throw new Error("Authenticated Actions identity or tenant does not match the explicitly configured QA target.");
+  const grantCheck = await page.evaluate(() => {
+    try {
+      const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { accessToken?: string } | null;
+      const payload = session?.accessToken?.split(".")[1]; if (!payload) return null;
+      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { permissions?: Record<string, unknown>; role?: unknown };
+      const permissions = Object.entries(claims.permissions ?? {}).find(([resource]) => resource.trim().toLowerCase() === "actions")?.[1];
+      const grants = Array.isArray(permissions) ? permissions.map((item) => String(item).trim().toLowerCase()) : [];
+      const roles = Array.isArray(claims.role) ? claims.role : [claims.role];
+      return { grants, roles: roles.map((role) => String(role).trim().toLowerCase()) };
+    } catch { return null; }
+  });
+  const requiredGrants = ["getby", "create", "update", "delete", "activate", "deactivate"];
+  if (!grantCheck || !["admin", "backoffice"].some((role) => grantCheck.roles.includes(role)) || requiredGrants.some((grant) => !grantCheck.grants.includes(grant))) throw new Error("Actions identity is missing a required role or CRUD/lifecycle grant; no business mutations were started.");
+  const cleanupPreflight = await readActionsCleanupManifest(manifestPath);
+  if (cleanupPreflight.status !== "clear") throw new Error("Pending or invalid Actions cleanup manifest blocks new QA records.");
 
   const sidebar = page.getByTestId("desktop-sidebar");
   const operationsSection = menuSection(sidebar, labels.operations);
@@ -598,6 +674,8 @@ test("Actions complete business and UI journey", async ({ page, context, request
   }
 
   await runStep(page, testInfo, results, "CRUD", "Create Action through UI (POST 201)", async () => {
+    if (!cleanupSession) throw new Error("Authenticated identity is unavailable before Actions create.");
+    await beginOwnedActionCreate(manifestPath, { name: actionName, userId: cleanupSession.userId, tenantId: cleanupSession.tenantId, executionId: actionsExecutionId });
     const responsePromise = responseMatching(page, "POST", /^\/api\/gerit\/v1\/actions\/?$/);
     await page.getByRole("button", { name: labels.save }).click();
     const response = await responsePromise;
@@ -607,21 +685,17 @@ test("Actions complete business and UI journey", async ({ page, context, request
     main = { id: payload.id, name: actionName, description: originalDescription, isActive: true };
     ownedIds.add(main.id);
     allCreatedIds.add(main.id);
+    if (!cleanupSession) throw new Error("Authenticated identity is unavailable to register the created Action.");
+    await registerOwnedAction(manifestPath, { id: main.id, name: main.name, userId: cleanupSession.userId, tenantId: cleanupSession.tenantId, executionId: actionsExecutionId, createHttp: response.status() });
+    ownedNames.set(main.id, main.name); allCreatedNames.set(main.id, main.name);
     const requestPayload = response.request().postDataJSON() as Record<string, unknown>;
-    if (JSON.stringify(requestPayload) !== JSON.stringify({ name: actionName, description: originalDescription })) throw new Error("Create payload must contain exactly name and description.");
+    if (JSON.stringify(requestPayload) !== JSON.stringify({ name: actionName, description: originalDescription, isActive: true })) throw new Error("Create payload must include name, description, and explicit isActive=true.");
     await expect(page).toHaveURL(new RegExp(`/actions/${main.id}/?$`));
     await expect(page.getByTestId("action-details-page-root")).toBeVisible();
     return { request: "POST /api/gerit/v1/actions/", status: response.status(), detail: `Created ID ${main.id}` };
   });
-  if (!main && authDiagnostic.sessionValid) {
-    await runStep(page, testInfo, results, "CRUD", "Create recovery via real Actions API", async () => {
-      main = await createViaApi(page, actionName, originalDescription);
-      await page.goto(`/actions/${main.id}/`, { waitUntil: "domcontentloaded" });
-      await expect(page.getByTestId("action-details-page-root")).toBeVisible();
-      results.push({ area: "CRUD", name: "Create UI", outcome: "FAIL", url: pathOf(page), request: "POST /api/gerit/v1/actions/", status: 201, detail: "UI create failed; API recovery created an owned record." });
-      return { request: "POST /api/gerit/v1/actions/", status: 201, detail: `Recovery ID ${main.id}; original Create UI failure retained.` };
-    });
-  }
+  // Do not retry a POST when the UI response is ambiguous; any returned ID is already persisted to the manifest.
+
   if (main && !(await page.getByTestId("action-details-page-root").isVisible().catch(() => false))) {
     await runStep(page, testInfo, results, "CRUD", "Recovery: open created detail", async () => {
       await page.goto(`/actions/${main!.id}/`, { waitUntil: "domcontentloaded" });
@@ -668,12 +742,19 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await expect(page).toHaveURL(new RegExp(`/actions/${main!.id}/?$`));
       await expect(page.getByLabel(labels.name)).toHaveCount(0);
       await descriptionInput(page).fill(updatedDescription);
+      const statusSwitch = page.getByTestId("action-is-active-switch");
+      await statusSwitch.focus();
+      await page.keyboard.press("Space");
+      await expect(statusSwitch).not.toBeChecked();
+      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.no);
+      await expect(page.getByTestId("action-details-page-root").getByText(labels.active).first()).toBeVisible();
       const responsePromise = responseMatching(page, "PUT", new RegExp(`^/api/gerit/v1/actions/${main!.id}/?$`));
       await page.getByRole("button", { name: labels.save }).click();
       const response = await responsePromise;
       if (response.status() !== 200) throw new Error(`PUT Action returned HTTP ${response.status()}.`);
-      if (JSON.stringify(response.request().postDataJSON()) !== JSON.stringify({ description: updatedDescription })) throw new Error("PUT payload was not exactly { description }.");
+      if (JSON.stringify(response.request().postDataJSON()) !== JSON.stringify({ description: updatedDescription, isActive: false })) throw new Error("PUT payload must contain the edited description and isActive=false.");
       main!.description = updatedDescription;
+      main!.isActive = false;
       await expect(page).toHaveURL(/\/actions\/?$/);
       await screenshot(page, "07-updated");
       return { request: `PUT /api/gerit/v1/actions/${main!.id}`, status: response.status() };
@@ -686,42 +767,29 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await expect(page.getByTestId("action-name-value")).toHaveText(main!.name);
     });
 
-    for (const operation of ["deactivate", "activate"] as const) {
-      const targetActive = operation === "activate";
-      const label = targetActive ? labels.activate : labels.deactivate;
-      const operationName = targetActive ? "Activate on Detail" : "Deactivate on Detail";
-      await runStep(page, testInfo, results, "Detail", `${targetActive ? "Ensure Inactive" : "Ensure Active"} before ${operationName}`, async () => {
-        main = await ensureDetailState(page, main!.id, !targetActive);
-        return { request: `GET /api/gerit/v1/actions/${main!.id}`, detail: `Precondition verified: ${main!.isActive ? "Active" : "Inactive"}; incompatible toggle is not sent.` };
-      });
-      await runStep(page, testInfo, results, "Detail", operationName, async () => {
-        const before = await readCurrentAction(page, main!.id);
-        if (before.isActive === targetActive) throw new Error(`Cannot ${operation} while Action is already ${targetActive ? "Active" : "Inactive"}.`);
-        const response = await clickAndCheckMutation(page, label, "PATCH", new RegExp(`^/api/gerit/v1/actions/${main!.id}/${operation}/?$`), 200);
-        main!.isActive = targetActive;
-        await expect(page.getByText(targetActive ? labels.active : labels.inactive).first()).toBeVisible();
-        await expect(page.getByRole("button", { name: targetActive ? labels.deactivate : labels.activate })).toBeVisible();
-        await assertActionStatusToast(page, operation);
-        await screenshot(page, targetActive ? "09-active-detail" : "08-inactive-detail");
-        return { request: `PATCH /api/gerit/v1/actions/${main!.id}/${operation}`, status: response.status() };
-      });
-      await runStep(page, testInfo, results, "Detail", `${targetActive ? "Active" : "Inactive"} persists after reload`, async () => {
-        const responsePromise = responseMatching(page, "GET", new RegExp(`^/api/gerit/v1/actions/${main!.id}/?$`));
-        await page.reload({ waitUntil: "domcontentloaded" });
-        const response = await responsePromise;
-        if (response.status() !== 200) throw new Error(`Reload detail GET returned HTTP ${response.status()}.`);
-        await expect(page.getByText(targetActive ? labels.active : labels.inactive).first()).toBeVisible();
-      });
-      await runStep(page, testInfo, results, "Detail", `${targetActive ? "Activate" : "Deactivate"} idempotency`, async () => {
-        await repeatStatusMutation(page, main!, operation, "Detail");
-        return {
-          request: `PATCH /api/gerit/v1/actions/${main!.id}/${operation}`,
-          status: 200,
-          detail: `The detail UI switches to ${targetActive ? "Deactivate" : "Activate"} after the first success, so the same operation was repeated through the authenticated same-origin proxy and state remained ${targetActive ? "Active" : "Inactive"}.`,
-        };
-      });
-    }
-
+    await runStep(page, testInfo, results, "CRUD", "Reactivate through edit form with one PUT and no PATCH", async () => {
+      if (!(await page.getByTestId("actions-page-root").isVisible().catch(() => false))) await page.goto("/actions/", { waitUntil: "domcontentloaded" });
+      await assertList(page); await page.getByPlaceholder(labels.search).fill(main!.name);
+      await actionRow(page, main!.name).getByRole("button", { name: labels.edit }).click();
+      await expect(page.getByTestId("action-is-active-switch")).not.toBeChecked();
+      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.no);
+      await expect(page.getByTestId("action-details-page-root").getByText(labels.inactive).first()).toBeVisible();
+      await page.getByTestId("action-is-active-switch").focus();
+      await page.keyboard.press("Space");
+      await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
+      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.yes);
+      await expect(page.getByTestId("action-details-page-root").getByText(labels.inactive).first()).toBeVisible();
+      const responsePromise = responseMatching(page, "PUT", new RegExp("^/api/gerit/v1/actions/" + main!.id + "/?$"));
+      await page.getByRole("button", { name: labels.save }).click();
+      const response = await responsePromise;
+      if (response.status() !== 200) throw new Error("Reactivation PUT returned HTTP " + response.status() + ".");
+      if (JSON.stringify(response.request().postDataJSON()) !== JSON.stringify({ description: updatedDescription, isActive: true })) throw new Error("Reactivation PUT did not persist the selected status and description.");
+      main!.isActive = true;
+      const persisted = await readCurrentAction(page, main!.id);
+      if (!persisted.isActive || persisted.description !== updatedDescription) throw new Error("Reactivation PUT was not confirmed by GET.");
+      await expect(page).toHaveURL(/\/actions\/?$/);
+      return { request: "PUT /api/gerit/v1/actions/" + main!.id, status: response.status(), detail: "Form reactivation persisted by PUT; no detail lifecycle PATCH is used." };
+    });
     await runStep(page, testInfo, results, "Detail", "Delete a second Action through detail", async () => {
       if (!authDiagnostic.sessionValid) throw new Error("No authenticated session is available to create the detail-delete Action.");
       secondary = await createViaApi(page, `E2E delete ${randomUUID()}`, `detail delete ${randomUUID()}`);
@@ -729,14 +797,14 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await expect(page.getByTestId("action-details-page-root")).toBeVisible();
       await page.getByRole("button", { name: labels.delete }).click();
       const dialog = page.getByRole("alertdialog"); await expect(dialog).toBeVisible(); await expect(dialog).toContainText(secondary.name); await screenshot(page, "12-delete-detail-modal");
-      const responsePromise = responseMatching(page, "DELETE", new RegExp(`^/api/gerit/v1/actions/${secondary.id}/?$`));
+      const responsePromise = responseMatching(page, "DELETE", new RegExp("^/api/gerit/v1/actions/" + secondary.id + "/?$"));
+      await markOwnedActionDeleteAttempted(manifestPath, secondary.id);
       await dialog.getByRole("button", { name: labels.delete }).click();
       const response = await responsePromise;
       if (response.status() !== 200) throw new Error(`Detail DELETE returned HTTP ${response.status()}.`);
       await expect(page).toHaveURL(/\/actions\/?$/);
       const detail = await apiCall(page, "GET", `/api/gerit/v1/actions/${secondary.id}`);
       if (detail.status !== 410) throw new Error(`GET deleted detail returned HTTP ${detail.status}, expected 410.`);
-      ownedIds.delete(secondary.id);
       return { request: `DELETE /api/gerit/v1/actions/${secondary.id}`, status: response.status(), detail: "Detail delete confirmed; subsequent detail GET returned 410." };
     });
 
@@ -788,12 +856,12 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await row.getByRole("button", { name: labels.delete }).click();
       const dialog = page.getByRole("alertdialog");
       await expect(dialog).toBeVisible(); await expect(dialog).toContainText(main!.name); await screenshot(page, "13-delete-grid-modal");
-      const responsePromise = responseMatching(page, "DELETE", new RegExp(`^/api/gerit/v1/actions/${main!.id}/?$`));
+      const responsePromise = responseMatching(page, "DELETE", new RegExp("^/api/gerit/v1/actions/" + main!.id + "/?$"));
+      await markOwnedActionDeleteAttempted(manifestPath, main!.id);
       await dialog.getByRole("button", { name: labels.delete }).click();
       const response = await responsePromise;
       if (response.status() !== 200) throw new Error(`Grid DELETE returned HTTP ${response.status()}.`);
       await expect(actionRow(page, main!.name)).toHaveCount(0);
-      ownedIds.delete(main!.id);
       return { request: `DELETE /api/gerit/v1/actions/${main!.id}`, status: response.status() };
     });
   } else {
@@ -852,19 +920,10 @@ test("Actions complete business and UI journey", async ({ page, context, request
     await assertNoRawKeys(page);
   });
 
-  for (const id of [...ownedIds]) {
-    await runStep(page, testInfo, results, "Cleanup", `Delete test-owned Action ${id}`, async () => {
-      if (page.isClosed()) {
-        if (!cleanupAccessToken) throw new Error("Page is closed and no in-memory authenticated session is available for cleanup.");
-        const response = await request.delete(`${baseURL}/api/gerit/v1/actions/${id}`, { headers: { Authorization: `Bearer ${cleanupAccessToken}` } });
-        if (![200, 404, 410].includes(response.status())) throw new Error(`Cleanup API DELETE Action ${id} returned HTTP ${response.status()}.`);
-      } else {
-        await deleteViaApi(page, id);
-      }
-      ownedIds.delete(id);
-      return { request: `DELETE /api/gerit/v1/actions/${id}`, detail: "Only ID created by this journey." };
-    }, true);
-  }
+  await runStep(page, testInfo, results, "Cleanup", "Delete and verify all test-owned Actions", async () => {
+    const manifest = await cleanupActionsUsingRequest(request);
+    return { request: "GET/DELETE/GET /api/gerit/v1/actions/{id}", status: manifest ? 410 : undefined, detail: "Fresh session used in an independent API context; only manifest-owned IDs were reconciled and each DELETE was attempted once." };
+  }, true);
   await runStep(page, testInfo, results, "Evidence", "Final screenshot and report", async () => {
     let finalScreenshot = "captured";
     if (!page.isClosed()) {

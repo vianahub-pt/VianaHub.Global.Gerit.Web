@@ -32,6 +32,9 @@ function getRunPlan(capability, env = process.env, { mockedVisual = false, readO
       mode: "mocked-visual-read-only",
     };
   }
+  if (capability === "actions" && env.CI === "true") {
+    return { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
+  }
   if (capability === "user-preferences" && env.CI === "true") {
     return { spec: "tests/e2e/workspace-header-theme-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
@@ -75,6 +78,7 @@ function parseInvocation(args) {
   let mutatingApproved = false;
   let mockedVisual = false;
   let readOnlyVisual = false;
+  let actionsQaApproved = false;
   const capabilities = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -91,6 +95,9 @@ function parseInvocation(args) {
     } else if (argument === "--read-only-visual") {
       if (readOnlyVisual) throw new Error("The read-only visual mode may be selected only once.");
       readOnlyVisual = true;
+    } else if (argument === "--actions-qa-approved") {
+      if (actionsQaApproved) throw new Error("Actions QA approval may be selected only once.");
+      actionsQaApproved = true;
     } else if (argument.startsWith("--")) {
       throw new Error("Unknown runner option " + argument + ".");
     } else {
@@ -113,10 +120,13 @@ function parseInvocation(args) {
   if (mockedVisual && (capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]) || mutatingApproved || readOnlyVisual)) {
     throw new Error("Mocked visual mode is read-only and limited to one explicitly supported capability.");
   }
+  if (actionsQaApproved && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || mockedVisual || readOnlyVisual)) {
+    throw new Error("Actions QA approval requires one Actions scope, --mutating-approved, and canonical mutating mode.");
+  }
   if (readOnlyVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved || mockedVisual)) {
     throw new Error("Read-only visual mode is limited to one clients scope and cannot include mutation approval.");
   }
-  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual };
+  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual, actionsQaApproved };
 }
 
 function selfTest() {
@@ -147,10 +157,11 @@ function selfTest() {
   assert.deepEqual(getBatchPlan(["equipment-types"], { CI: "true" }), {
     specs: ["tests/e2e/equipment-types-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: [],
   });
+  assert.deepEqual(getRunPlan("actions", { CI: "true" }), { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "nonmutating-regression" });
   assert.deepEqual(getBatchPlan(["actions", "users"], { CI: "true" }), {
-    specs: ["tests/e2e/actions-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"],
+    specs: ["tests/e2e/actions-form-mocked-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"],
     projects: ["journey", "chromium"],
-    nonmutatingCapabilities: ["users"],
+    nonmutatingCapabilities: ["actions", "users"],
   });
   assert.deepEqual(getRunPlan("clients", {}, { mockedVisual: true }), {
     specs: ["tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
@@ -176,12 +187,15 @@ function selfTest() {
   assert.equal(explicitlyMockedEnvironment.E2E_VISUAL, "true");
   assert.equal(explicitlyMockedEnvironment.E2E_CLIENT_ADDRESS_MUTATING_APPROVED, undefined);
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
-    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false,
+    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false, actionsQaApproved: false,
   });
   assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
   assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
   assert.deepEqual(parseInvocation(["--scope", "users,teams", "--scope-approved", "users", "teams"]).scope, ["users", "teams"]);
   assert.equal(parseInvocation(["--scope", "equipment-types", "--mutating-approved", "equipment-types"]).mutatingApproved, true);
+  assert.equal(parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "actions"]).actionsQaApproved, true);
+  assert.throws(() => parseInvocation(["--scope", "actions", "--actions-qa-approved", "actions"]), /requires one Actions scope/);
+  assert.throws(() => parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "--mocked-visual", "actions"]), /read-only/);
   assert.equal(parseInvocation(["--scope", "clients", "--mocked-visual", "clients"]).mockedVisual, true);
   assert.deepEqual(getRunPlan("clients", {}, { readOnlyVisual: true }), {
     spec: "tests/e2e/client-address-read-only-journey.spec.ts", project: "journey", mode: "read-only-visual",
@@ -190,7 +204,7 @@ function selfTest() {
     specs: ["tests/e2e/client-address-read-only-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(parseInvocation(["--scope", "clients", "--read-only-visual", "clients"]), {
-    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true,
+    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false,
   });
   assert.throws(() => parseInvocation(["--scope", "clients", "--read-only-visual", "clients", "--mutating-approved"]), /cannot include mutation approval/);
   assert.throws(() => parseInvocation(["--scope", "users", "--read-only-visual", "users"]), /limited to one clients scope/);
@@ -227,11 +241,13 @@ if (process.env.CI !== "true" && process.platform !== "win32") {
 if (localExecution && capabilities.length !== 1) {
   fail("Local E2E execution requires exactly one selected capability.");
 }
-const e2eEnvironment = getE2EEnvironment(process.env, {
+const e2eEnvironment = { ...getE2EEnvironment(process.env, {
   localExecution,
   mockedVisual: invocation.mockedVisual,
   readOnlyVisual: invocation.readOnlyVisual,
-});
+}) };
+if (batchPlan.nonmutatingCapabilities.includes("actions")) delete e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL;
+if (invocation.actionsQaApproved && !batchPlan.nonmutatingCapabilities.includes("actions")) e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL = "true";
 const readOnlyHomologationStatusPath = invocation.readOnlyVisual
   ? resolve(repoRoot, "test-results/client-address-read-only", "homologation-status-" + Date.now() + "-" + process.pid + ".json")
   : null;
@@ -362,6 +378,7 @@ if (localExecution) {
         stage,
         mutatingApproved,
         clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
+        actionsMutationApproved: invocation.actionsQaApproved,
         readOnlyVisual: invocation.readOnlyVisual,
         mockedVisual: invocation.mockedVisual,
         config,

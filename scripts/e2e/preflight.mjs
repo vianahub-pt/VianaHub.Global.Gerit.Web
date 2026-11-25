@@ -57,6 +57,16 @@ const CLIENT_E2E_WORKING_FILES = new Set([
   "tests/e2e/preflight.test.mjs",
   "tests/e2e/run-lock.test.mjs",
 ]);
+const ACTIONS_VISUAL_WORKING_FILES = new Set([
+  "domains/operations/actions/action-contract.ts",
+  "domains/operations/actions/action-form-page.tsx",
+  "scripts/e2e/preflight.mjs",
+  "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/select-capabilities.mjs",
+  "tests/actions/action-contract.test.mjs",
+  "tests/e2e/actions-form-mocked-journey.spec.ts",
+  "tests/e2e/preflight.test.mjs",
+]);
 
 function isExpectedBranch(branch, capability) {
   if (capability === "clients" && branch === "refactor/global-spa-ux-foundations") {
@@ -95,6 +105,17 @@ function hasReadOnlyClientAddressPlan(specText) {
     specText.includes("expect(blockedRequests).toEqual([])");
 }
 
+function hasActionsMockedVisualPlan(specText) {
+  return specText.includes('page.route("**/api/**"') &&
+    specText.includes('path === "/api/auth/login" && method === "POST"') &&
+    specText.includes('route.fulfill({ status: 200') &&
+    specText.includes("unexpectedRequests.push") &&
+    specText.includes('new URL(item.url()).pathname === "/api/auth/login"') &&
+    specText.includes('businessRequests.filter((item) => item.method === "POST")') &&
+    specText.includes('businessRequests.filter((item) => item.method === "PUT")') &&
+    specText.includes('expect(businessRequests.some((item) => item.method === "PATCH")).toBe(false)');
+}
+
 function hasClientsCleanupPlan(specText) {
   return /const createdClientIds = new Set<number>\(\)/.test(specText) &&
     /createdClientIds\.add\(clientId\)/.test(specText) &&
@@ -115,6 +136,7 @@ export async function evaluatePreflight({
   mutatingApproved = false,
   clientMutationApproved = false,
   readOnlyVisual = false,
+  mockedVisual = false,
   platform = process.platform,
   git = inspectGit(),
   config = {},
@@ -142,9 +164,14 @@ export async function evaluatePreflight({
   checks.activeWorktreeRegistered = activeWorktree;
   checks.headShaValid = /^[0-9a-f]{40}$/i.test(git.headSha || "");
   checks.branch = isExpectedBranch(git.branch, capability);
-  checks.workingTreePreserved = !git.dirty || (capability === "clients" && mode === "read-only" &&
-    Array.isArray(git.changedFiles) && git.changedFiles.length > 0 &&
-    git.changedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(String(file).replaceAll("\\", "/"))));
+  const normalizedChangedFiles = Array.isArray(git.changedFiles)
+    ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))
+    : [];
+  const scopedClientVisualChanges = capability === "clients" && mode === "read-only" && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(file));
+  const scopedActionsVisualChanges = capability === "actions" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => ACTIONS_VISUAL_WORKING_FILES.has(file));
+  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges;
   checks.localBaseUrl = config.E2E_BASE_URL === policy.localE2EOrigin;
   let apiOrigin = "";
   try { apiOrigin = new URL(config.GERIT_API_BASE_URL || "").origin; } catch {}
@@ -152,11 +179,18 @@ export async function evaluatePreflight({
   checks.credentialsConfigured = Boolean(config.E2E_USER_EMAIL && config.E2E_USER_PASSWORD);
   checks.capabilityAllowed = CAPABILITIES.includes(capability);
 
-  const spec = resolve(repoRoot, "tests", "e2e", readOnlyVisual && capability === "clients" ? "client-address-read-only-journey.spec.ts" : capability + "-journey.spec.ts");
+  const selectedSpec = readOnlyVisual && capability === "clients"
+    ? "client-address-read-only-journey.spec.ts"
+    : mockedVisual && capability === "actions"
+      ? "actions-form-mocked-journey.spec.ts"
+      : capability + "-journey.spec.ts";
+  const spec = resolve(repoRoot, "tests", "e2e", selectedSpec);
   checks.canonicalSpec = checks.capabilityAllowed && fileExists(spec);
   if (readOnlyVisual) {
     checks.readOnlyMutationGuard = capability === "clients" && checks.canonicalSpec && hasReadOnlyClientAddressPlan(await readText(spec));
     checks.cleanupPlan = checks.readOnlyMutationGuard;
+  } else if (mockedVisual && capability === "actions" && checks.canonicalSpec) {
+    checks.cleanupPlan = hasActionsMockedVisualPlan(await readText(spec));
   } else if (capability === "equipment-types" && checks.canonicalSpec) {
     checks.cleanupPlan = hasEquipmentTypesCleanupPlan(await readText(spec));
   } else if (capability === "clients" && checks.canonicalSpec) {

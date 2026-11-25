@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, Loader2, Power, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
@@ -10,11 +10,13 @@ import { useToast } from "@/shared/feedback";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
 import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { HubSwitch } from "@/shared/ui/hub-switch";
 import {
   emptyActionCreateFormState,
   isActionForRoute,
   isLatestActionRequest,
   normalizeActionDetail,
+  toActionCreatePayload,
   toActionUpdatePayload,
   toActionUpdateFormState,
   type ActionDetailResponse,
@@ -43,27 +45,41 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
   const editing = actionId !== undefined;
   const parsedActionId = editing ? Number(actionId) : null;
   const validActionId = parsedActionId !== null && Number.isInteger(parsedActionId) && parsedActionId > 0;
-  const { fetchWithAuth, isAuthenticated, isHydrating } = useAuth();
+  const { fetchWithAuth, isAuthenticated, isHydrating, hasPermission, roles } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
   const [action, setAction] = useState<ActionRecord | null>(null);
   const [createFormState, setCreateFormState] = useState(emptyActionCreateFormState);
   const [description, setDescription] = useState("");
+  const [formIsActive, setFormIsActive] = useState(true);
   const [loading, setLoading] = useState(editing);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const requestSequence = useRef(0);
+  const normalizedRoles = roles.map((role) => role.trim().toLowerCase());
+  const canManage = normalizedRoles.some((role) => ["admin", "backoffice"].includes(role));
+  const canRead = ["admin", "backoffice", "manager", "operator"].some((role) => normalizedRoles.includes(role)) && hasPermission("Actions", "GetBy");
+  const canCreate = canManage && hasPermission("Actions", "Create");
+  const canUpdate = canManage && hasPermission("Actions", "Update");
+  const canDelete = canManage && hasPermission("Actions", "Delete");
+  const canSave = editing ? canUpdate : canCreate;
 
   const loadAction = useCallback(async () => {
     const sequence = ++requestSequence.current;
+    if (!canRead) {
+      setAction(null);
+      setLoadError(t("actions.errors.loadDetail"));
+      setLoading(false);
+      return;
+    }
     if (!validActionId || parsedActionId === null) {
       setAction(null);
       setCreateFormState(emptyActionCreateFormState);
       setDescription("");
+      setFormIsActive(true);
       setLoadError(t("actions.errors.invalidId"));
       setLoading(false);
       return;
@@ -71,6 +87,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
     setAction(null);
     setCreateFormState(emptyActionCreateFormState);
     setDescription("");
+    setFormIsActive(true);
     setLoading(true);
     setLoadError(null);
     try {
@@ -84,6 +101,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
       if (!isActionForRoute(detail, parsedActionId)) throw new Error(t("actions.errors.detailIdMismatch"));
       setAction(detail);
       setDescription(toActionUpdateFormState(detail).description);
+      setFormIsActive(toActionUpdateFormState(detail).isActive);
     } catch (error) {
       if (!isLatestActionRequest(sequence, requestSequence.current)) return;
       setAction(null);
@@ -93,7 +111,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
     } finally {
       if (isLatestActionRequest(sequence, requestSequence.current)) setLoading(false);
     }
-  }, [fetchWithAuth, parsedActionId, t, toast, validActionId]);
+  }, [canRead, fetchWithAuth, parsedActionId, t, toast, validActionId]);
 
   useEffect(() => {
     if (editing && !isHydrating && isAuthenticated) void loadAction();
@@ -108,7 +126,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
     event.preventDefault();
     const name = createFormState.name.trim();
     const normalizedDescription = description.trim();
-    if ((!editing && (!name || name.length > 50)) || !normalizedDescription || normalizedDescription.length > 255) {
+    if (!canSave || (editing && !currentAction) || (!editing && (!name || name.length > 50)) || !normalizedDescription || normalizedDescription.length > 255) {
       toast({ title: t("actions.toasts.validationTitle"), description: t(editing ? "actions.validation.description" : "actions.validation.fields"), variant: "destructive" });
       return;
     }
@@ -118,7 +136,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
       const response = await fetchWithAuth(editing && currentAction ? `/api/gerit/v1/actions/${currentAction.id}` : "/api/gerit/v1/actions", {
         method: editing ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editing ? toActionUpdatePayload(normalizedDescription) : { name, description: normalizedDescription }),
+        body: JSON.stringify(editing ? toActionUpdatePayload(normalizedDescription, formIsActive) : toActionCreatePayload(name, normalizedDescription, formIsActive)),
       });
       if (!response) return;
       const payload = await response.json().catch(() => null) as unknown;
@@ -136,28 +154,8 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
     }
   };
 
-  const handleToggleStatus = async () => {
-    if (!currentAction) return;
-    const operation = currentAction.isActive ? "deactivate" : "activate";
-    setStatusSubmitting(true);
-    try {
-      const response = await fetchWithAuth(`/api/gerit/v1/actions/${currentAction.id}/${operation}`, { method: "PATCH" });
-      if (!response) return;
-      const payload = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(payload, t("actions.errors.status")));
-      setAction((current) => current?.id === currentAction.id
-        ? { ...current, isActive: !current.isActive }
-        : current);
-      toast({ title: t("actions.toasts.successTitle"), description: t(operation === "activate" ? "actions.toasts.activated" : "actions.toasts.deactivated") });
-    } catch (error) {
-      toast({ title: t("actions.toasts.errorTitle"), description: error instanceof Error ? error.message : t("actions.errors.status"), variant: "destructive" });
-    } finally {
-      setStatusSubmitting(false);
-    }
-  };
-
   const handleDelete = async () => {
-    if (!currentAction) return;
+    if (!currentAction || !canDelete) return;
     setDeleteSubmitting(true);
     try {
       const response = await fetchWithAuth(`/api/gerit/v1/actions/${currentAction.id}`, { method: "DELETE" });
@@ -182,7 +180,6 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
       <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
         <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <button type="button" onClick={() => router.push("/actions/")} className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title={t("actions.actions.back")} aria-label={t("actions.actions.back")}><ArrowLeft className="h-5 w-5" /></button>
             <div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">{pageTitle}</h1>
@@ -191,12 +188,6 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
               <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">{t("actions.form.subtitle")}</p>
             </div>
           </div>
-          {editing && currentAction ? (
-            <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-              <button type="button" onClick={() => void handleToggleStatus()} disabled={statusSubmitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50"><Power className="h-4 w-4" aria-hidden="true" />{t(currentAction.isActive ? "actions.actions.deactivate" : "actions.actions.activate")}</button>
-              <button type="button" onClick={() => setDeleteConfirmOpen(true)} disabled={statusSubmitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-destructive/40 bg-card px-4 py-2 text-sm font-semibold text-destructive transition-colors hover:border-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" aria-hidden="true" />{t("actions.actions.delete")}</button>
-            </div>
-          ) : null}
         </div>
 
         {detailLoading ? <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /><span className="ml-3 text-sm text-muted-foreground">{t("actions.loadingDetail")}</span></div> : null}
@@ -204,21 +195,29 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
         {!detailLoading && (!editing || currentAction) ? (
           <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
             <section data-testid="action-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
-              <div className="grid grid-cols-1 gap-6">
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-12">
                 {editing && currentAction ? (
-                  <div data-testid="action-name-field" className="block">
+                  <div data-testid="action-name-field" className="block sm:col-span-8 md:col-span-10">
                     <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.name")}</span>
                     <p data-testid="action-name-value" className="flex h-10 items-center rounded-sm border border-border bg-muted px-3 text-sm text-foreground">{currentAction.name}</p>
                   </div>
                 ) : (
-                  <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.name")}</span><Input required maxLength={50} value={createFormState.name} onChange={(event) => setCreateFormState((current) => ({ ...current, name: event.target.value }))} disabled={submitting} /></label>
+                  <label className="block sm:col-span-8 md:col-span-10"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.name")}</span><Input required maxLength={50} value={createFormState.name} onChange={(event) => setCreateFormState((current) => ({ ...current, name: event.target.value }))} disabled={submitting || !canCreate} /></label>
                 )}
-                <label data-testid="action-description-field" className="block w-full"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.description")}</span><Textarea required maxLength={255} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting || deleteSubmitting} /></label>
+                <div data-testid="action-status-field" className="sm:col-span-4 md:col-span-2">
+                  <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.table.status")}</span>
+                  <div className="flex min-h-10 items-center gap-2">
+                    <HubSwitch checked={formIsActive} onCheckedChange={setFormIsActive} disabled={submitting || deleteSubmitting || !canSave} aria-label={t("actions.table.status")} testId="action-is-active-switch" />
+                    <span data-testid="action-is-active-label" className="text-sm text-foreground">{t(formIsActive ? "common.yes" : "common.no")}</span>
+                  </div>
+                </div>
+                <label data-testid="action-description-field" className="block w-full sm:col-span-12"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.description")}</span><Textarea required maxLength={255} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting || deleteSubmitting || !canSave} /></label>
               </div>
             </section>
-            <div className="flex justify-start gap-3">
+            <div className="flex flex-wrap justify-start gap-3">
               <button type="button" onClick={() => router.push("/actions/")} disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t("actions.actions.back")}</button>
-              <button type="submit" disabled={submitting || deleteSubmitting || (editing && currentAction === null)} className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}{t("actions.actions.save")}</button>
+              {editing && currentAction && canDelete ? <button type="button" onClick={() => setDeleteConfirmOpen(true)} disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-destructive/40 bg-card px-6 py-2.5 text-sm font-semibold text-destructive transition-colors hover:border-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" aria-hidden="true" />{t("actions.actions.delete")}</button> : null}
+              <button type="submit" disabled={submitting || deleteSubmitting || !canSave || (editing && currentAction === null)} className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}{t("actions.actions.save")}</button>
             </div>
           </form>
         ) : null}

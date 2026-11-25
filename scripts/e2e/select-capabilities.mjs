@@ -25,7 +25,7 @@ const capabilityCodePaths = new Map([
 ]);
 
 const capabilityTestPaths = new Map([
-  ["actions", ["tests/actions/", "tests/e2e/actions-journey.spec.ts"]],
+  ["actions", ["tests/actions/", "tests/e2e/actions-journey.spec.ts", "tests/e2e/actions-form-mocked-journey.spec.ts"]],
   ["user-preferences", ["tests/preferences/", "tests/e2e/user-preferences-journey.spec.ts", "tests/e2e/workspace-header-theme-journey.spec.ts"]],
   ["teams", ["tests/teams/", "tests/e2e/teams-journey.spec.ts"]],
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
@@ -683,6 +683,9 @@ function selfTest() {
   assert.deepEqual(parseScopeFromPullRequestTitle("feat(users): implement user management"), ["users"]);
   assert.deepEqual(parseScopeFromPullRequestTitle("feat(users+teams): coordinated capability change"), ["teams", "users"]);
   assert.throws(() => parseScopeFromPullRequestTitle("feat(unknown): change"), /unknown capability/);
+  assert.deepEqual(selectCapabilities(["domains/operations/actions/action-form-page.tsx", "tests/e2e/actions-form-mocked-journey.spec.ts"], {
+    scopeTitle: "refactor(actions): persist action status from forms",
+  }).functionalCapabilities, ["actions"]);
 
   assert.deepEqual(selectCapabilities(["README.md", "docs/ci.md"]), {
     capabilities: [], scope: [], scopeApproved: false, runE2E: false, reason: "documentation-only", supportingChanges: [],

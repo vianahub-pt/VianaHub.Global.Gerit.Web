@@ -19,6 +19,9 @@ function fail(message) {
 }
 
 function getRunPlan(capability, env = process.env, { mockedVisual = false, readOnlyVisual = false } = {}) {
+  if (mockedVisual && capability === "actions") {
+    return { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only" };
+  }
   if (readOnlyVisual && capability === "clients") {
     return { spec: "tests/e2e/client-address-read-only-journey.spec.ts", project: "journey", mode: "read-only-visual" };
   }
@@ -107,8 +110,8 @@ function parseInvocation(args) {
   if (new Set(capabilities).size !== capabilities.length || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     throw new Error("Provide unique, supported capability slugs.");
   }
-  if (mockedVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved || readOnlyVisual)) {
-    throw new Error("Mocked visual mode is read-only and limited to the clients capability.");
+  if (mockedVisual && (capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]) || mutatingApproved || readOnlyVisual)) {
+    throw new Error("Mocked visual mode is read-only and limited to one explicitly supported capability.");
   }
   if (readOnlyVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved || mockedVisual)) {
     throw new Error("Read-only visual mode is limited to one clients scope and cannot include mutation approval.");
@@ -153,6 +156,11 @@ function selfTest() {
     specs: ["tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"],
     project: "journey", mode: "mocked-visual-read-only",
   });
+  assert.deepEqual(getRunPlan("actions", {}, { mockedVisual: true }), {
+    spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only",
+  });
+  assert.throws(() => parseInvocation(["--scope", "actions", "--mocked-visual", "actions", "--mutating-approved"]), /read-only/);
+  assert.throws(() => parseInvocation(["--scope", "actions,clients", "--scope-approved", "--mocked-visual", "actions", "clients"]), /limited to one/);
   assert.deepEqual(getRunPlan("clients", { CI: "true" }), {
     specs: ["tests/e2e/hub-image-journey.spec.ts", "tests/e2e/client-contact-person-journey.spec.ts", "tests/e2e/client-address-crud-journey.spec.ts"], project: "journey", mode: "mocked-functional-and-shared-regression",
   });
@@ -205,8 +213,8 @@ try {
 const { capabilities, mutatingApproved } = invocation;
 if (capabilities.length === 0) fail("Provide one or more capability slugs.");
 const localExecution = process.platform === "win32" && process.env.CI !== "true";
-if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || capabilities[0] !== "clients")) {
-  fail("Mocked visual mode is available only for one local Windows-host Client run.");
+if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]))) {
+  fail("Mocked visual mode is available only for one supported local Windows-host capability run.");
 }
 if (invocation.readOnlyVisual && (!localExecution || capabilities.length !== 1 || capabilities[0] !== "clients")) {
   fail("Read-only visual mode is available only for one local Windows-host Client run.");
@@ -256,7 +264,7 @@ for (const capability of batchPlan.nonmutatingCapabilities) {
   console.log(`[E2E capability] Running ${capability} nonmutating regression. The CRUD/CSV mutative journey will NOT run in CI or without per-run QA approval.`);
 }
 if (invocation.mockedVisual) {
-  console.log("[E2E capability] Local mocked visual mode selected. Only the existing Client mock regressions will run; mutating approval is not accepted in this mode.");
+  console.log("[E2E capability] Local mocked visual mode selected. Only the selected capability's mocked visual journey will run; mutating approval is not accepted in this mode.");
 }
 if (invocation.readOnlyVisual) {
   console.log("[E2E capability] Local QA read-only visual journey selected. Only explicit authentication POSTs and GET/HEAD business requests are permitted by the spec guard.");
@@ -355,6 +363,7 @@ if (localExecution) {
         mutatingApproved,
         clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
         readOnlyVisual: invocation.readOnlyVisual,
+        mockedVisual: invocation.mockedVisual,
         config,
       });
       console.log("[E2E preflight] " + JSON.stringify(report));

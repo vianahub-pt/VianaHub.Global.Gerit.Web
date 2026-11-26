@@ -114,6 +114,62 @@ test("preflight accepts the authorized EquipmentTypes visual hotfix branch", asy
   assert.equal(result.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
 });
 
+test("Actions mutation preflight accepts only its original or current fix branch", async () => {
+  const actionsGit = withBranch("fix/actions-form-switch-save-redirect");
+  const actionsConfig = { ...config };
+  const actions = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    actionsMutationApproved: true,
+    git: actionsGit,
+    config: actionsConfig,
+    stage: "prepare",
+    fileExists: () => true,
+    readText: async (path) => path.endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [] })
+      : path.endsWith("actions-cleanup.mjs")
+        ? await readFile("scripts/e2e/actions-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/actions-journey.spec.ts", "utf8"),
+  });
+  assert.equal(actions.checks.actionsAuthorizedBranch, true);
+  assert.equal(actions.checks.actionsIdentityConfigured, true);
+  assert.equal(actions.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+
+  const arbitrary = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    actionsMutationApproved: true,
+    git: withBranch("fix/actions-other-work"),
+    config: actionsConfig,
+    stage: "prepare",
+    fileExists: () => true,
+    readText: async (path) => path.endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [] })
+      : path.endsWith("actions-cleanup.mjs")
+        ? await readFile("scripts/e2e/actions-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/actions-journey.spec.ts", "utf8"),
+  });
+  assert.equal(arbitrary.checks.actionsAuthorizedBranch, false);
+  assert.equal(arbitrary.authorization, "MUTATING_AUTHORIZATION_PENDING");
+
+  const missingConfiguredIdentity = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    actionsMutationApproved: true,
+    git: actionsGit,
+    config: { ...config, E2E_USER_EMAIL: "" },
+    stage: "prepare",
+    fileExists: () => true,
+    readText: async (path) => path.endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [] })
+      : path.endsWith("actions-cleanup.mjs")
+        ? await readFile("scripts/e2e/actions-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/actions-journey.spec.ts", "utf8"),
+  });
+  assert.equal(missingConfiguredIdentity.checks.actionsIdentityConfigured, false);
+  assert.equal(missingConfiguredIdentity.authorization, "MUTATING_AUTHORIZATION_PENDING");
+});
+
 test("preflight blocks wrong local URL, unknown capability, missing credentials and stale build", async () => {
   assert.equal((await evaluatePreflight({ ...valid, config: { ...config, E2E_BASE_URL: "http://localhost:3000" } })).status, "PREFLIGHT_BLOCKED");
   assert.equal((await evaluatePreflight({ ...valid, capability: "unknown" })).checks.capabilityAllowed, false);

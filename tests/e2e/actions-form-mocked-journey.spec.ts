@@ -107,6 +107,12 @@ async function toggleSwitchWithKeyboard(page: Page) {
   await page.keyboard.press("Space");
 }
 
+async function clickVisibleSwitch(page: Page) {
+  const box = await page.getByTestId("action-is-active-switch").boundingBox();
+  if (!box) throw new Error("Visible HubSwitch hit area is unavailable.");
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 test("Actions create and edit form persist explicit status with mocked API only", async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   const { businessRequests, unexpectedRequests } = await installActionApi(page);
@@ -126,13 +132,15 @@ test("Actions create and edit form persist explicit status with mocked API only"
   await page.goto("/actions/new/", { waitUntil: "domcontentloaded" });
   await expect(page.getByTestId("actions-create-page-root")).toBeVisible();
   await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
-  await expect(page.getByTestId("action-is-active-label")).toHaveText(/yes|sim|sí/i);
+  await expect(page.getByTestId("action-status-field").getByText(/yes|sim|sí/i)).toBeVisible();
   await page.getByLabel(/name|nome|nombre/i).fill("Synthetic Action");
   await page.getByTestId("action-description-field").locator("textarea").fill("Created in isolated mocked visual journey");
   await toggleSwitchWithKeyboard(page);
   await testInfo.attach("actions-create-form.png", { body: await page.screenshot(), contentType: "image/png" });
   await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
   await expect.poll(() => businessRequests.filter((item) => item.method === "POST").length).toBe(1);
+  await expect(page).toHaveURL(/\/actions\/$/);
+  await expect(page.getByRole("status").filter({ hasText: /created successfully|criada com sucesso|creada correctamente/i }).first()).toBeVisible();
   expect(businessRequests.find((item) => item.method === "POST")?.body).toMatchObject({
     name: "Synthetic Action", description: "Created in isolated mocked visual journey", isActive: false,
   });
@@ -141,12 +149,16 @@ test("Actions create and edit form persist explicit status with mocked API only"
   await expect(page.getByTestId("action-details-page-root")).toBeVisible();
   await expect(page.getByTestId("action-name-value")).toHaveText("Synthetic Action");
   await expect(page.getByTestId("action-is-active-switch")).not.toBeChecked();
-  await expect(page.getByTestId("action-is-active-label")).toHaveText(/no|não/i);
+  await expect(page.getByTestId("action-status-field").getByText(/no|não/i)).toBeVisible();
   await expect(page.getByTestId("action-details-page-root").getByText(/inactive|inativa|inativo/i)).toBeVisible();
   await expect(page.getByRole("button", { name: /activate|ativar|activar|deactivate|desativar/i })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /delete|excluir|eliminar/i })).toBeVisible();
   await testInfo.attach("actions-edit-form.png", { body: await page.screenshot(), contentType: "image/png" });
-  await toggleSwitchWithKeyboard(page);
+  const beforeEdit = businessRequests.length;
+  await clickVisibleSwitch(page);
+  await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
+  await expect(page.getByTestId("action-status-field").getByText(/yes|sim|sí/i)).toBeVisible();
+  expect(businessRequests).toHaveLength(beforeEdit);
   await expect(page.getByTestId("action-details-page-root").getByText(/inactive|inativa|inativo/i)).toBeVisible();
   await page.getByTestId("action-description-field").locator("textarea").fill("Updated in isolated mocked visual journey");
   const beforePut = businessRequests.filter((item) => item.method === "PUT").length;
@@ -155,6 +167,8 @@ test("Actions create and edit form persist explicit status with mocked API only"
   expect(businessRequests.filter((item) => item.method === "PUT").at(-1)?.body).toMatchObject({
     description: "Updated in isolated mocked visual journey", isActive: true,
   });
+  await expect(page).toHaveURL(/\/actions\/$/);
+  await expect(page.getByRole("status").filter({ hasText: /updated successfully|atualizada com sucesso|actualizada correctamente/i }).first()).toBeVisible();
   expect(businessRequests.some((item) => item.method === "PATCH")).toBe(false);
   expect(unexpectedRequests).toEqual([]);
 });

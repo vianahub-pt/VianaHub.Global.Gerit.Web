@@ -435,24 +435,37 @@ test("Actions focused form save smoke", async ({ page }, testInfo) => {
   const login = await loginResponse;
   if (login.status() !== 200) throw new Error(`Actions UI login returned HTTP ${login.status()}.`);
   await expect(page.getByTestId("workspace-shell-root")).toBeVisible();
-  const authenticatedIdentity = await page.evaluate(() => {
+  const authenticatedIdentity = await page.evaluate((configuredEmail) => {
     try {
-      const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { userId?: unknown; tenantId?: unknown; refreshToken?: unknown; accessToken?: unknown } | null;
-      if (!session || !Number.isSafeInteger(session.userId) || !Number.isSafeInteger(session.tenantId) || typeof session.refreshToken !== "string" || typeof session.accessToken !== "string") return null;
+      const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { userId?: unknown; tenantId?: unknown; email?: unknown; refreshToken?: unknown; accessToken?: unknown } | null;
+      if (!session || typeof session.userId !== "number" || !Number.isSafeInteger(session.userId) || session.userId <= 0 ||
+          typeof session.tenantId !== "number" || !Number.isSafeInteger(session.tenantId) || session.tenantId <= 0 ||
+          typeof session.email !== "string" || typeof session.refreshToken !== "string" || typeof session.accessToken !== "string") return null;
       const payload = session.accessToken.split(".")[1];
-      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { role?: unknown; permissions?: Record<string, unknown> };
+      if (!payload) return null;
+      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { sub?: unknown; tenant_id?: unknown; email?: unknown; role?: unknown; permissions?: Record<string, unknown> };
+      const tokenUserId = Number(claims.sub);
+      const tokenTenantId = Number(claims.tenant_id);
+      const normalizedConfiguredEmail = configuredEmail.trim().toLowerCase();
+      const normalizedSessionEmail = session.email.trim().toLowerCase();
+      const tokenEmailMatches = typeof claims.email !== "string" || claims.email.trim().toLowerCase() === normalizedConfiguredEmail;
       const roles = Array.isArray(claims.role) ? claims.role : [claims.role];
       const permissionEntry = Object.entries(claims.permissions ?? {}).find(([resource]) => resource.trim().toLowerCase() === "actions");
       const grants = Array.isArray(permissionEntry?.[1]) ? permissionEntry[1].map((grant) => String(grant).trim().toLowerCase()) : [];
-      return { userId: session.userId as number, tenantId: session.tenantId as number, refreshToken: session.refreshToken, roles: roles.map((role) => String(role).trim().toLowerCase()), grants };
+      return {
+        userId: session.userId as number,
+        tenantId: session.tenantId as number,
+        refreshToken: session.refreshToken,
+        identityConsistent: normalizedSessionEmail === normalizedConfiguredEmail && tokenEmailMatches && tokenUserId === session.userId && tokenTenantId === session.tenantId,
+        roles: roles.map((role) => String(role).trim().toLowerCase()),
+        grants,
+      };
     } catch { return null; }
-  });
-  const expectedUserId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_USER_ID);
-  const expectedTenantId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_TENANT_ID);
-  if (!authenticatedIdentity || authenticatedIdentity.userId !== expectedUserId || authenticatedIdentity.tenantId !== expectedTenantId ||
+  }, email);
+  if (!authenticatedIdentity || !authenticatedIdentity.identityConsistent ||
       !["admin", "backoffice"].some((role) => authenticatedIdentity.roles.includes(role)) ||
       ["getby", "create", "update", "delete"].some((grant) => !authenticatedIdentity.grants.includes(grant))) {
-    throw new Error("Actions QA identity, tenant, role, or required CRUD grants could not be verified before mutation.");
+    throw new Error("Actions QA identity, tenant/session claims, role, or required CRUD grants could not be verified before mutation.");
   }
   cleanupSession = { userId: authenticatedIdentity.userId, tenantId: authenticatedIdentity.tenantId, refreshToken: authenticatedIdentity.refreshToken };
   const owner = cleanupSession;

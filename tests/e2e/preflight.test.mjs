@@ -116,7 +116,7 @@ test("preflight accepts the authorized EquipmentTypes visual hotfix branch", asy
 
 test("Actions mutation preflight accepts only its original or current fix branch", async () => {
   const actionsGit = withBranch("fix/actions-form-switch-save-redirect");
-  const actionsConfig = { ...config, E2E_ACTIONS_QA_EXPECTED_USER_ID: "1", E2E_ACTIONS_QA_EXPECTED_TENANT_ID: "1" };
+  const actionsConfig = { ...config };
   const actions = await evaluatePreflight({
     ...valid,
     capability: "actions",
@@ -132,6 +132,7 @@ test("Actions mutation preflight accepts only its original or current fix branch
         : await readFile("tests/e2e/actions-journey.spec.ts", "utf8"),
   });
   assert.equal(actions.checks.actionsAuthorizedBranch, true);
+  assert.equal(actions.checks.actionsIdentityConfigured, true);
   assert.equal(actions.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
 
   const arbitrary = await evaluatePreflight({
@@ -150,6 +151,23 @@ test("Actions mutation preflight accepts only its original or current fix branch
   });
   assert.equal(arbitrary.checks.actionsAuthorizedBranch, false);
   assert.equal(arbitrary.authorization, "MUTATING_AUTHORIZATION_PENDING");
+
+  const missingConfiguredIdentity = await evaluatePreflight({
+    ...valid,
+    capability: "actions",
+    actionsMutationApproved: true,
+    git: actionsGit,
+    config: { ...config, E2E_USER_EMAIL: "" },
+    stage: "prepare",
+    fileExists: () => true,
+    readText: async (path) => path.endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [] })
+      : path.endsWith("actions-cleanup.mjs")
+        ? await readFile("scripts/e2e/actions-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/actions-journey.spec.ts", "utf8"),
+  });
+  assert.equal(missingConfiguredIdentity.checks.actionsIdentityConfigured, false);
+  assert.equal(missingConfiguredIdentity.authorization, "MUTATING_AUTHORIZATION_PENDING");
 });
 
 test("preflight blocks wrong local URL, unknown capability, missing credentials and stale build", async () => {

@@ -77,9 +77,11 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
   let csvImportAttempted = false;
   const queries: URL[] = [];
   const queryResponses: URL[] = [];
+  const statusPatches: string[] = [];
 
   page.on("request", (request) => {
     const url = new URL(request.url());
+    if (request.method() === "PATCH" && url.pathname.startsWith("/api/gerit/v1/teams/")) statusPatches.push(url.pathname);
     if (url.pathname.endsWith("/teams/paged") || url.pathname.endsWith("/teams/paged/")) queries.push(url);
   });
   page.on("response", (response) => {
@@ -124,62 +126,54 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await page.getByLabel(descriptionLabel).fill(description);
     await waitForToastToClear(page);
     const createResponsePromise = page.waitForResponse((response) => response.status() === 201 && response.request().method() === "POST" && new URL(response.url()).pathname.endsWith("/teams/"));
-    const createdDetailResponsePromise = page.waitForResponse((response) => response.status() === 200 && response.request().method() === "GET" && /^\/api\/gerit\/v1\/teams\/\d+\/$/.test(new URL(response.url()).pathname));
     await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
     const createResponse = await createResponsePromise;
     expect(createResponse.status()).toBe(201);
     const createBody = await createResponse.json() as { id?: unknown };
     expect(typeof createBody.id).toBe("number");
     if (typeof createBody.id === "number") createdIds.add(createBody.id);
+    expect(createResponse.request().postDataJSON()).toMatchObject({ name: teamName, description, isActive: true });
+    await expect(page).toHaveURL(/\/teams\/$/);
+    await expect(page.getByTestId("teams-page-root")).toBeVisible();
+    await expect(page.getByRole("status").filter({ hasText: /team created successfully|equipa criada com sucesso|equipe criada com sucesso|equipo creado con éxito/i }).first()).toBeVisible();
     await waitForToastToClear(page);
 
     expect(createBody.id).toEqual(expect.any(Number));
+    const row = page.getByRole("row").filter({ hasText: teamName });
+    await expect(row).toBeVisible();
+    const createdDetailResponsePromise = page.waitForResponse((response) => response.status() === 200 && response.request().method() === "GET" && new URL(response.url()).pathname === `/api/gerit/v1/teams/${String(createBody.id)}/`);
+    await row.click();
     await expect(page).toHaveURL(new RegExp(`/teams/${String(createBody.id)}/?$`));
     await expect(page.getByTestId("team-details-page-root")).toBeVisible();
     await expect(page.getByTestId("team-fields-section")).toBeVisible();
     await expect(page.getByRole("heading", { name: teamName })).toBeVisible();
-    await expect(page.getByRole("button", { name: /edit|editar/i })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /deactivate|desativar|desactivar/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /activate|ativar|activar|deactivate|desativar|desactivar/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /delete|eliminar|excluir/i })).toBeVisible();
     await expect(page.getByLabel(nameLabel)).toHaveValue(teamName);
     await expect(page.getByLabel(descriptionLabel)).toHaveValue(description);
+    await expect(page.getByTestId("team-is-active-switch")).toBeChecked();
     const createdDetailResponse = await createdDetailResponsePromise;
     expect(new URL(createdDetailResponse.url()).pathname).toBe(`/api/gerit/v1/teams/${String(createBody.id)}/`);
 
-    const deactivateResponsePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/deactivate/`));
-    await page.getByRole("button", { name: /deactivate|desativar|desactivar/i }).click();
-    expect((await deactivateResponsePromise).ok()).toBe(true);
-    await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body).toMatchObject({ isActive: false });
-    await waitForToastToClear(page);
-    const activateResponsePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/activate/`));
-    await page.getByRole("button", { name: /activate|ativar|activar/i }).click();
-    expect((await activateResponsePromise).ok()).toBe(true);
-    await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body).toMatchObject({ isActive: true });
-    await waitForToastToClear(page);
-
-    await page.getByRole("button", { name: /back|voltar|volver/i }).last().click();
-    await expect(page).toHaveURL(/\/teams\/?$/);
-    await expect(page.getByTestId("teams-page-root")).toBeVisible();
-    const row = page.getByRole("row").filter({ hasText: teamName });
-    await expect(row).toBeVisible();
-    await row.click();
-    await expect(page).toHaveURL(new RegExp(`/teams/${String(createBody.id)}/?$`));
-    await expect(page.getByLabel(nameLabel)).toHaveValue(teamName);
-    await expect(page.getByLabel(descriptionLabel)).toHaveValue(description);
-
     await page.getByLabel(nameLabel).fill(`${teamName} edited`);
     await page.getByLabel(descriptionLabel).fill(updatedDescription);
+    await page.getByTestId("team-is-active-switch").click();
+    await expect(page.getByTestId("team-is-active-switch")).not.toBeChecked();
+    expect(statusPatches).toEqual([]);
     await waitForToastToClear(page);
     const updateResponsePromise = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/`));
     await page.getByRole("button", { name: /save|guardar|salvar/i }).click();
-    expect((await updateResponsePromise).status()).toBe(204);
+    const updateResponse = await updateResponsePromise;
+    expect(updateResponse.status()).toBe(204);
+    expect(updateResponse.request().postDataJSON()).toMatchObject({ name: `${teamName} edited`, description: updatedDescription, isActive: false });
     await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body)
-      .toMatchObject({ name: `${teamName} edited`, description: updatedDescription });
-    await expect(page).toHaveURL(/\/teams\/?$/);
+      .toMatchObject({ name: `${teamName} edited`, description: updatedDescription, isActive: false });
+    expect(statusPatches).toEqual([]);
+    await expect(page).toHaveURL(/\/teams\/$/);
+    await expect(page.getByRole("status").filter({ hasText: /team updated successfully|equipa atualizada com sucesso|equipe atualizada com sucesso|equipo actualizado con éxito/i }).first()).toBeVisible();
     await waitForToastToClear(page);
     const updatedRow = page.getByRole("row").filter({ hasText: `${teamName} edited` });
     await expect(updatedRow).toBeVisible();
-
     const statusFilter = page.getByRole("combobox", { name: /status|estado/i }).first();
     await statusFilter.click();
     await page.getByRole("option", { name: /^(inactive|inativo|inativa|inactiva|inactivos|inactivas)$/i }).click();
@@ -195,6 +189,11 @@ test("Teams canonical CRUD, status filters, CSV and cleanup", async ({ page }) =
     await search.fill(teamName);
     await expect(updatedRow).toBeVisible();
     await expect.poll(() => queries.at(-1)?.searchParams.get("Search")).toBe(teamName);
+    const gridActivateResponsePromise = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/activate/`));
+    await updatedRow.getByRole("button", { name: /activate|ativar|activar/i }).click();
+    expect((await gridActivateResponsePromise).ok()).toBe(true);
+    expect(statusPatches).toEqual([`/api/gerit/v1/teams/${String(createBody.id)}/activate/`]);
+    await expect.poll(async () => (await api(page, "GET", `/api/gerit/v1/teams/${String(createBody.id)}/`)).body).toMatchObject({ isActive: true });
 
     const deleteResponsePromise = page.waitForResponse((response) => response.status() === 200 && response.request().method() === "DELETE" && new URL(response.url()).pathname.endsWith(`/teams/${String(createBody.id)}/`));
     await updatedRow.click();

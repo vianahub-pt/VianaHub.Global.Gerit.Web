@@ -36,6 +36,6 @@ test("normalizes detail and rejects mismatched or incomplete API data", () => {
 });
 
 test("preserves a non-empty Description in create and update payloads", () => {
-  assert.deepEqual(toTeamPayload(" Crew ", " Day shift "), { name: "Crew", description: " Day shift " });
-  assert.deepEqual(toTeamPayload("Crew", "  "), { name: "Crew", description: null });
+  assert.deepEqual(toTeamPayload(" Crew ", " Day shift ", false), { name: "Crew", description: "Day shift", isActive: false });
+  assert.deepEqual(toTeamPayload("Crew", " Day shift ", true), { name: "Crew", description: "Day shift", isActive: true });
 });

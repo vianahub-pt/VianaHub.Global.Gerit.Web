@@ -35,7 +35,17 @@ function parseTeams(payload: unknown) {
 }
 
 export function TeamsPage() {
-  const { fetchWithAuth, isAuthenticated, isHydrating } = useAuth();
+  const { fetchWithAuth, isAuthenticated, isHydrating, hasPermission, roles } = useAuth();
+  const allowedRoles = roles.map((role) => role.trim().toLowerCase());
+  const canManage = ["admin", "backoffice", "manager"].some((role) => allowedRoles.includes(role));
+  const canRead = canManage && hasPermission("Teams", "GetPaged");
+  const canGetBy = canManage && hasPermission("Teams", "GetBy");
+  const canUpdate = canManage && hasPermission("Teams", "Update");
+  const canCreate = canManage && hasPermission("Teams", "Create");
+  const canDelete = canManage && hasPermission("Teams", "Delete");
+  const canActivate = canManage && hasPermission("Teams", "Activate");
+  const canDeactivate = canManage && hasPermission("Teams", "Deactivate");
+  const canBulkUpload = canManage && hasPermission("Teams", "BulkUpload");
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
@@ -52,6 +62,7 @@ export function TeamsPage() {
   const [bulkUploading, setBulkUploading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const deleteTeamRef = useRef<TeamRecord | null>(null);
+  const busyTeamOperation = useRef<number | null>(null);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
   const [teamBusyId, setTeamBusyId] = useState<number | null>(null);
 
@@ -65,6 +76,7 @@ export function TeamsPage() {
   ], [t]);
 
   const loadTeams = useCallback(async () => {
+    if (!canRead) { setTeams([]); setTotalItems(0); setTotalPages(1); setLoading(false); return; }
     setLoading(true);
     const query = buildTeamsQuery({ search, page, pageSize, sortBy: "Name", sortDirection, status: statusFilter });
     try {
@@ -87,12 +99,15 @@ export function TeamsPage() {
       setTotalItems(0);
       toast({ title: t("teams.toasts.errorTitle"), description: error instanceof Error ? error.message : t("teams.errors.load"), variant: "destructive" });
     } finally { setLoading(false); }
-  }, [fetchWithAuth, page, pageSize, search, sortDirection, statusFilter, t, toast]);
+  }, [canRead, fetchWithAuth, page, pageSize, search, sortDirection, statusFilter, t, toast]);
 
   useEffect(() => { if (!isHydrating && isAuthenticated) void loadTeams(); }, [isAuthenticated, isHydrating, loadTeams]);
 
   const toggleStatus = useCallback(async (team: TeamRecord) => {
     const operation = team.isActive ? "deactivate" : "activate";
+    if (operation === "activate" ? !canActivate : !canDeactivate) return;
+    if (busyTeamOperation.current !== null) return;
+    busyTeamOperation.current = team.id;
     setTeamBusyId(team.id);
     try {
       const response = await fetchWithAuth(`/api/gerit/v1/teams/${team.id}/${operation}/`, { method: "PATCH" });
@@ -103,8 +118,8 @@ export function TeamsPage() {
       await loadTeams();
     } catch (error) {
       toast({ title: t("teams.toasts.errorTitle"), description: error instanceof Error ? error.message : t("teams.errors.status"), variant: "destructive" });
-    } finally { setTeamBusyId(null); }
-  }, [fetchWithAuth, loadTeams, t, toast]);
+    } finally { busyTeamOperation.current = null; setTeamBusyId(null); }
+  }, [canActivate, canDeactivate, fetchWithAuth, loadTeams, t, toast]);
 
   const requestDelete = useCallback((team: TeamRecord) => {
     deleteTeamRef.current = team;
@@ -113,7 +128,8 @@ export function TeamsPage() {
 
   const deleteTeam = useCallback(async () => {
     const team = deleteTeamRef.current;
-    if (!team) return;
+    if (!team || !canDelete || busyTeamOperation.current !== null) return;
+    busyTeamOperation.current = team.id;
     setDeleteSubmitting(true);
     setTeamBusyId(team.id);
     try {
@@ -128,13 +144,14 @@ export function TeamsPage() {
     } catch (error) {
       toast({ title: t("teams.toasts.errorTitle"), description: error instanceof Error ? error.message : t("teams.errors.delete"), variant: "destructive" });
     } finally {
+      busyTeamOperation.current = null;
       setTeamBusyId(null);
       setDeleteSubmitting(false);
     }
-  }, [fetchWithAuth, loadTeams, t, toast]);
+  }, [canDelete, fetchWithAuth, loadTeams, t, toast]);
 
   const bulkUpload = useCallback(async (file: File | null) => {
-    if (!file || bulkUploading) return;
+    if (!file || bulkUploading || !canBulkUpload) return;
     if (!file.name.toLowerCase().endsWith(".csv")) {
       toast({ title: t("teams.toasts.validationTitle"), description: t("teams.bulk.upload.csvOnly"), variant: "destructive" });
       return;
@@ -152,7 +169,7 @@ export function TeamsPage() {
     } catch (error) {
       toast({ title: t("teams.toasts.errorTitle"), description: error instanceof Error ? error.message : t("teams.bulk.upload.error", { resource: t("teams.title") }), variant: "destructive" });
     } finally { setBulkUploading(false); }
-  }, [bulkUploading, fetchWithAuth, loadTeams, t, toast]);
+  }, [bulkUploading, canBulkUpload, fetchWithAuth, loadTeams, t, toast]);
 
   const renderStatus = useCallback((team: TeamRecord) => (
     <span className={clsx("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold", team.isActive ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200")}>
@@ -162,21 +179,21 @@ export function TeamsPage() {
 
   const renderActions = useCallback((team: TeamRecord) => (
     <div className="flex items-center justify-end gap-2">
-      <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); router.push(`/teams/${team.id}/`); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("teams.actions.edit")} aria-label={t("teams.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button>
-      <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(team); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-primary disabled:opacity-50" title={t(team.isActive ? "teams.actions.deactivate" : "teams.actions.activate")} aria-label={t(team.isActive ? "teams.actions.deactivate" : "teams.actions.activate")}>{teamBusyId === team.id ? <Loader2 className="h-4 w-4 animate-spin" /> : team.isActive ? <PowerOff className="h-4 w-4 text-red-500" /> : <Power className="h-4 w-4 text-green-500" />}</button>
-      <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); requestDelete(team); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-destructive disabled:opacity-50" title={t("teams.actions.delete")} aria-label={t("teams.actions.delete")}><Trash2 className="h-4 w-4 text-red-500" /></button>
+      {canGetBy && canUpdate && <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); router.push(`/teams/${team.id}/`); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("teams.actions.edit")} aria-label={t("teams.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button>}
+      {(team.isActive ? canDeactivate : canActivate) && <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(team); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-primary disabled:opacity-50" title={t(team.isActive ? "teams.actions.deactivate" : "teams.actions.activate")} aria-label={t(team.isActive ? "teams.actions.deactivate" : "teams.actions.activate")}>{teamBusyId === team.id ? <Loader2 className="h-4 w-4 animate-spin" /> : team.isActive ? <PowerOff className="h-4 w-4 text-red-500" /> : <Power className="h-4 w-4 text-green-500" />}</button>}
+      {canDelete && <button type="button" disabled={teamBusyId === team.id} onClick={(event) => { event.stopPropagation(); requestDelete(team); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-destructive disabled:opacity-50" title={t("teams.actions.delete")} aria-label={t("teams.actions.delete")}><Trash2 className="h-4 w-4 text-red-500" /></button>}
     </div>
-  ), [requestDelete, router, t, teamBusyId, toggleStatus]);
+  ), [canActivate, canDeactivate, canDelete, canGetBy, canUpdate, requestDelete, router, t, teamBusyId, toggleStatus]);
 
   const gridToolbar = useMemo(() => (
     <div className="flex flex-wrap items-center gap-2">
-      <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
+      {canBulkUpload && <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:border-border hover:bg-secondary dark:border-border dark:bg-card dark:text-muted-foreground dark:hover:bg-secondary">
         {bulkUploading ? <Loader2 className="h-4 w-4 animate-spin text-primary" /> : null}{t("teams.bulk.upload.label")}
         <input type="file" accept=".csv" className="hidden" disabled={bulkUploading} onChange={(event) => { void bulkUpload(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} />
-      </label>
-      <button type="button" onClick={() => router.push("/teams/new/")} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("teams.actions.add")}</button>
+      </label>}
+      {canCreate && <button type="button" onClick={() => router.push("/teams/new/")} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("teams.actions.add")}</button>}
     </div>
-  ), [bulkUpload, bulkUploading, router, t]);
+  ), [bulkUpload, bulkUploading, canBulkUpload, canCreate, router, t]);
 
   const pageButtons = useMemo(() => {
     const count = Math.max(1, totalPages);
@@ -193,6 +210,7 @@ export function TeamsPage() {
             {gridToolbar}
           </div>
         </div>
+        {!canRead ? <div role="alert" className="mb-4 rounded-sm border border-destructive/40 bg-card p-4 text-sm text-destructive">{t("teams.errors.permission")}</div> : null}
         <HubGrid
           title={t("teams.title")} subtitle={t("teams.subtitle")} columns={columns} items={teams}
           renderRowCells={(team) => [team.name]} renderStatus={renderStatus}
@@ -207,7 +225,7 @@ export function TeamsPage() {
           pageCaption={t("hubgrid.itemsLabel", { count: totalItems })} page={page} totalPages={totalPages} pageButtons={pageButtons}
           onPageChange={setPage} pageSize={pageSize} pageSizeOptions={[...PAGE_SIZE_OPTIONS]} onPageSizeChange={(value) => { if ((PAGE_SIZE_OPTIONS as readonly number[]).includes(value)) { setPageSize(value as PageSizeOption); setPage(1); } }}
           paginationPreviousLabel={t("teams.pagination.previous")} paginationNextLabel={t("teams.pagination.next")} paginationPageLabel={t("teams.pagination.page")} paginationPerPageLabel={t("teams.pagination.perPage")}
-          getRowKey={(team) => team.id} onRowClick={(team) => router.push(`/teams/${team.id}/`)}
+          getRowKey={(team) => team.id} onRowClick={canGetBy ? (team) => router.push(`/teams/${team.id}/`) : undefined}
         />
       </div>
       <ConfirmDialog

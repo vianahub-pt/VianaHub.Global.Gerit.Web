@@ -142,11 +142,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
       const payload = await response.json().catch(() => null) as unknown;
       if (!response.ok) throw new Error(errorMessage(payload, t("actions.errors.save")));
       toast({ title: t("actions.toasts.successTitle"), description: t(editing ? "actions.toasts.updated" : "actions.toasts.created") });
-      if (!editing && typeof payload === "object" && payload !== null && typeof (payload as { id?: unknown }).id === "number") {
-        router.push(`/actions/${(payload as { id: number }).id}/`);
-      } else {
-        router.push("/actions/");
-      }
+      router.push("/actions/");
     } catch (error) {
       toast({ title: t("actions.toasts.errorTitle"), description: error instanceof Error ? error.message : t("actions.errors.save"), variant: "destructive" });
     } finally {
@@ -205,11 +201,7 @@ export function ActionFormPage({ actionId }: ActionFormPageProps) {
                   <label className="block sm:col-span-8 md:col-span-10"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.name")}</span><Input required maxLength={50} value={createFormState.name} onChange={(event) => setCreateFormState((current) => ({ ...current, name: event.target.value }))} disabled={submitting || !canCreate} /></label>
                 )}
                 <div data-testid="action-status-field" className="sm:col-span-4 md:col-span-2">
-                  <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.table.status")}</span>
-                  <div className="flex min-h-10 items-center gap-2">
-                    <HubSwitch checked={formIsActive} onCheckedChange={setFormIsActive} disabled={submitting || deleteSubmitting || !canSave} aria-label={t("actions.table.status")} testId="action-is-active-switch" />
-                    <span data-testid="action-is-active-label" className="text-sm text-foreground">{t(formIsActive ? "common.yes" : "common.no")}</span>
-                  </div>
+                  <HubSwitch label={t("actions.table.status")} checked={formIsActive} onCheckedChange={setFormIsActive} disabled={submitting || deleteSubmitting || !canSave} testId="action-is-active-switch" />
                 </div>
                 <label data-testid="action-description-field" className="block w-full sm:col-span-12"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("actions.form.description")}</span><Textarea required maxLength={255} value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting || deleteSubmitting || !canSave} /></label>
               </div>

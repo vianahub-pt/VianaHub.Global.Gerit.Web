@@ -79,6 +79,7 @@ function parseInvocation(args) {
   let mockedVisual = false;
   let readOnlyVisual = false;
   let actionsQaApproved = false;
+  let actionsFormSmoke = false;
   const capabilities = [];
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -98,6 +99,9 @@ function parseInvocation(args) {
     } else if (argument === "--actions-qa-approved") {
       if (actionsQaApproved) throw new Error("Actions QA approval may be selected only once.");
       actionsQaApproved = true;
+    } else if (argument === "--actions-form-smoke") {
+      if (actionsFormSmoke) throw new Error("Actions focused form smoke may be selected only once.");
+      actionsFormSmoke = true;
     } else if (argument.startsWith("--")) {
       throw new Error("Unknown runner option " + argument + ".");
     } else {
@@ -123,10 +127,13 @@ function parseInvocation(args) {
   if (actionsQaApproved && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || mockedVisual || readOnlyVisual)) {
     throw new Error("Actions QA approval requires one Actions scope, --mutating-approved, and canonical mutating mode.");
   }
+  if (actionsFormSmoke && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || !actionsQaApproved || mockedVisual || readOnlyVisual)) {
+    throw new Error("Actions focused form smoke requires one Actions scope and both explicit QA mutation approvals.");
+  }
   if (readOnlyVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved || mockedVisual)) {
     throw new Error("Read-only visual mode is limited to one clients scope and cannot include mutation approval.");
   }
-  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual, actionsQaApproved };
+  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual, actionsQaApproved, actionsFormSmoke };
 }
 
 function selfTest() {
@@ -187,13 +194,15 @@ function selfTest() {
   assert.equal(explicitlyMockedEnvironment.E2E_VISUAL, "true");
   assert.equal(explicitlyMockedEnvironment.E2E_CLIENT_ADDRESS_MUTATING_APPROVED, undefined);
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
-    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false, actionsQaApproved: false,
+    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false, actionsQaApproved: false, actionsFormSmoke: false,
   });
   assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
   assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
   assert.deepEqual(parseInvocation(["--scope", "users,teams", "--scope-approved", "users", "teams"]).scope, ["users", "teams"]);
   assert.equal(parseInvocation(["--scope", "equipment-types", "--mutating-approved", "equipment-types"]).mutatingApproved, true);
   assert.equal(parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "actions"]).actionsQaApproved, true);
+  assert.equal(parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "--actions-form-smoke", "actions"]).actionsFormSmoke, true);
+  assert.throws(() => parseInvocation(["--scope", "actions", "--actions-form-smoke", "actions"]), /requires one Actions scope/);
   assert.throws(() => parseInvocation(["--scope", "actions", "--actions-qa-approved", "actions"]), /requires one Actions scope/);
   assert.throws(() => parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "--mocked-visual", "actions"]), /read-only/);
   assert.equal(parseInvocation(["--scope", "clients", "--mocked-visual", "clients"]).mockedVisual, true);
@@ -204,7 +213,7 @@ function selfTest() {
     specs: ["tests/e2e/client-address-read-only-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(parseInvocation(["--scope", "clients", "--read-only-visual", "clients"]), {
-    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false,
+    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false, actionsFormSmoke: false,
   });
   assert.throws(() => parseInvocation(["--scope", "clients", "--read-only-visual", "clients", "--mutating-approved"]), /cannot include mutation approval/);
   assert.throws(() => parseInvocation(["--scope", "users", "--read-only-visual", "users"]), /limited to one clients scope/);
@@ -229,6 +238,9 @@ if (capabilities.length === 0) fail("Provide one or more capability slugs.");
 const localExecution = process.platform === "win32" && process.env.CI !== "true";
 if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]))) {
   fail("Mocked visual mode is available only for one supported local Windows-host capability run.");
+}
+if (invocation.actionsFormSmoke && !localExecution) {
+  fail("The focused Actions mutation smoke is available only as an explicitly approved local Windows-host run.");
 }
 if (invocation.readOnlyVisual && (!localExecution || capabilities.length !== 1 || capabilities[0] !== "clients")) {
   fail("Read-only visual mode is available only for one local Windows-host Client run.");
@@ -286,6 +298,7 @@ if (invocation.readOnlyVisual) {
   console.log("[E2E capability] Local QA read-only visual journey selected. Only explicit authentication POSTs and GET/HEAD business requests are permitted by the spec guard.");
 }
 const playwrightArgs = [playwrightCli, "test", ...batchPlan.specs, ...batchPlan.projects.map((project) => `--project=${project}`)];
+if (invocation.actionsFormSmoke) playwrightArgs.push("--grep=Actions focused form save smoke");
 if (localExecution) playwrightArgs.push("--headed");
 console.log(`[E2E capability] Starting one Playwright run for capabilities: ${capabilities.join(", ")}.`);
 let ownedPlaywrightChild;

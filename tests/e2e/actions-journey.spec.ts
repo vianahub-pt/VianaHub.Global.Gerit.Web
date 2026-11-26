@@ -260,7 +260,7 @@ async function assertActionDetail(page: Page, action: Action, description = acti
   await expect(page.getByLabel(labels.name)).toHaveCount(0);
   await expect(page.getByTestId("action-status-field")).toBeVisible();
   await expect(page.getByTestId("action-is-active-switch")).toHaveAttribute("aria-checked", String(action.isActive));
-  await expect(page.getByTestId("action-is-active-label")).toHaveText(action.isActive ? labels.yes : labels.no);
+  await expect(page.getByTestId("action-status-field").getByText(action.isActive ? labels.yes : labels.no)).toBeVisible();
   await expect(page.getByTestId("action-details-page-root").getByText(action.isActive ? labels.active : labels.inactive).first()).toBeVisible();
   await expect(page.getByRole("button", { name: labels.back }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: action.isActive ? labels.deactivate : labels.activate })).toHaveCount(0);
@@ -394,6 +394,161 @@ test.afterEach(async ({ request }) => {
     console.log("[E2E Actions cleanup] Running independent authenticated teardown for owned records.");
     await cleanupActionsUsingRequest(request);
   }
+});
+
+test("Actions focused form save smoke", async ({ page }, testInfo) => {
+  test.setTimeout(180_000);
+  if (process.env.CI === "true" || process.env.E2E_ACTIONS_QA_MUTATION_APPROVAL !== "true") {
+    throw new Error("Focused Actions QA mutations require the existing local runner’s explicit per-run approvals; CI is always nonmutating.");
+  }
+  const priorManifest = await readActionsCleanupManifest(manifestPath);
+  if (priorManifest.status !== "clear") throw new Error("Pending or ambiguous Actions cleanup blocks the focused smoke before login or mutation.");
+  ownedIds.clear();
+  cleanupSession = null;
+  await mkdir(resolve(reportDirectory, "screenshots"), { recursive: true });
+  await page.addInitScript((visual) => {
+    if (!visual) return;
+    const install = () => {
+      if (document.getElementById("gerit-e2e-pointer-style")) return;
+      const style = document.createElement("style");
+      style.id = "gerit-e2e-pointer-style";
+      style.textContent = "#gerit-e2e-pointer{position:fixed;z-index:2147483647;left:0;top:0;width:20px;height:20px;border:2px solid #ff3b30;border-radius:50%;pointer-events:none;transform:translate(-50%,-50%);opacity:.9;box-shadow:0 0 0 4px rgba(255,59,48,.22)}";
+      document.head.appendChild(style);
+      const pointer = document.createElement("div");
+      pointer.id = "gerit-e2e-pointer";
+      document.body.appendChild(pointer);
+      document.addEventListener("mousemove", (event) => { pointer.style.left = `${event.clientX}px`; pointer.style.top = `${event.clientY}px`; });
+    };
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", install, { once: true }); else install();
+  }, process.env.E2E_VISUAL === "true");
+
+  const email = process.env.E2E_USER_EMAIL;
+  const password = process.env.E2E_USER_PASSWORD;
+  if (!email || !password) throw new Error("Authorized Actions E2E credentials are not configured.");
+  await page.goto("/login/", { waitUntil: "domcontentloaded" });
+  await expect(page.getByTestId("login-screen-root")).toHaveAttribute("data-hydrated", "true", { timeout: 10_000 });
+  await screenshot(page, "focused-login");
+  await page.locator('input[type="email"]').fill(email);
+  await page.locator('input[type="password"]').fill(password);
+  const loginResponse = responseMatching(page, "POST", /^\/api\/auth\/login\/?$/);
+  await page.getByRole("button", { name: /authenticate|autenticar|sign in|log in|entrar|iniciar sesión|iniciar sess[aã]o/i }).click();
+  const login = await loginResponse;
+  if (login.status() !== 200) throw new Error(`Actions UI login returned HTTP ${login.status()}.`);
+  await expect(page.getByTestId("workspace-shell-root")).toBeVisible();
+  const authenticatedIdentity = await page.evaluate(() => {
+    try {
+      const session = JSON.parse(localStorage.getItem("gerit.auth.session.v1") ?? "null") as { userId?: unknown; tenantId?: unknown; refreshToken?: unknown; accessToken?: unknown } | null;
+      if (!session || !Number.isSafeInteger(session.userId) || !Number.isSafeInteger(session.tenantId) || typeof session.refreshToken !== "string" || typeof session.accessToken !== "string") return null;
+      const payload = session.accessToken.split(".")[1];
+      const claims = JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))) as { role?: unknown; permissions?: Record<string, unknown> };
+      const roles = Array.isArray(claims.role) ? claims.role : [claims.role];
+      const permissionEntry = Object.entries(claims.permissions ?? {}).find(([resource]) => resource.trim().toLowerCase() === "actions");
+      const grants = Array.isArray(permissionEntry?.[1]) ? permissionEntry[1].map((grant) => String(grant).trim().toLowerCase()) : [];
+      return { userId: session.userId as number, tenantId: session.tenantId as number, refreshToken: session.refreshToken, roles: roles.map((role) => String(role).trim().toLowerCase()), grants };
+    } catch { return null; }
+  });
+  const expectedUserId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_USER_ID);
+  const expectedTenantId = Number(process.env.E2E_ACTIONS_QA_EXPECTED_TENANT_ID);
+  if (!authenticatedIdentity || authenticatedIdentity.userId !== expectedUserId || authenticatedIdentity.tenantId !== expectedTenantId ||
+      !["admin", "backoffice"].some((role) => authenticatedIdentity.roles.includes(role)) ||
+      ["getby", "create", "update", "delete"].some((grant) => !authenticatedIdentity.grants.includes(grant))) {
+    throw new Error("Actions QA identity, tenant, role, or required CRUD grants could not be verified before mutation.");
+  }
+  cleanupSession = { userId: authenticatedIdentity.userId, tenantId: authenticatedIdentity.tenantId, refreshToken: authenticatedIdentity.refreshToken };
+  const owner = cleanupSession;
+  const sidebar = page.getByTestId("desktop-sidebar");
+  const administration = sidebar.getByRole("button", { name: labels.administration });
+  if (await administration.getAttribute("aria-expanded") === "false") await administration.click();
+  await sidebar.getByRole("link", { name: labels.actions }).click();
+  await assertList(page);
+
+  const statusFilter = page.getByRole("combobox", { name: /status|estado/i });
+  const inactiveFilterRequest = page.waitForRequest((requestEvent) => {
+    const url = new URL(requestEvent.url());
+    return url.pathname.endsWith("/actions/paged") && url.searchParams.get("IsActive") === "false";
+  });
+  await statusFilter.click();
+  await page.getByRole("option", { name: labels.inactive }).click();
+  await inactiveFilterRequest;
+  const activeFilterRequest = page.waitForRequest((requestEvent) => {
+    const url = new URL(requestEvent.url());
+    return url.pathname.endsWith("/actions/paged") && url.searchParams.get("IsActive") === "true";
+  });
+  await statusFilter.click();
+  await page.getByRole("option", { name: labels.active }).click();
+  await activeFilterRequest;
+
+  const name = `E2E Actions ${randomUUID()}`;
+  const description = `Actions switch save smoke ${randomUUID()}`;
+  await page.getByRole("button", { name: labels.add }).click();
+  await expect(page).toHaveURL(/\/actions\/new\/?$/);
+  await page.getByLabel(labels.name).fill(name);
+  await descriptionInput(page).fill(description);
+  await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
+  await page.getByTestId("action-is-active-switch").focus();
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("action-is-active-switch")).not.toBeChecked();
+  await testInfo.attach("actions-focused-create.png", { body: await page.screenshot(), contentType: "image/png" });
+  await beginOwnedActionCreate(manifestPath, { name, userId: owner.userId, tenantId: owner.tenantId, executionId: actionsExecutionId });
+  const createResponsePromise = responseMatching(page, "POST", /^\/api\/gerit\/v1\/actions\/?$/);
+  await page.getByRole("button", { name: labels.save }).click();
+  const createResponse = await createResponsePromise;
+  const createBody = await createResponse.json().catch(() => null) as { id?: unknown } | null;
+  if (createResponse.status() !== 201 || typeof createBody?.id !== "number" || !Number.isSafeInteger(createBody.id) || createBody.id <= 0) {
+    throw new Error(`Actions create returned HTTP ${createResponse.status()} without a verifiable ID; manifest remains pending and no retry is allowed.`);
+  }
+  const id = createBody.id;
+  ownedIds.add(id);
+  allCreatedIds.add(id);
+  await registerOwnedAction(manifestPath, { id, name, userId: owner.userId, tenantId: owner.tenantId, executionId: actionsExecutionId, createHttp: createResponse.status() });
+  ownedNames.set(id, name); allCreatedNames.set(id, name);
+  const createPayload = createResponse.request().postDataJSON() as Record<string, unknown>;
+  expect(createPayload).toMatchObject({ name, description, isActive: false });
+  await expect(page).toHaveURL(/\/actions\/$/);
+  await expect(page.getByRole("status").and(page.locator('[data-state="open"]')).filter({ hasText: /created successfully|criada com sucesso|creada correctamente/i })).toBeVisible();
+
+  const search = page.getByPlaceholder(labels.search);
+  const inactiveRecordRequest = page.waitForRequest((requestEvent) => {
+    const url = new URL(requestEvent.url());
+    return url.pathname.endsWith("/actions/paged") && url.searchParams.get("IsActive") === "false" && url.searchParams.get("Search") === name;
+  });
+  await statusFilter.click();
+  await page.getByRole("option", { name: labels.inactive }).click();
+  await search.fill(name);
+  await inactiveRecordRequest;
+  const row = actionRow(page, name);
+  await expect(row).toBeVisible();
+  const pageRequests: Array<{ method: string; url: string }> = [];
+  page.on("request", (requestEvent) => {
+    const url = new URL(requestEvent.url());
+    if (url.pathname.includes(`/actions/${id}`)) pageRequests.push({ method: requestEvent.method(), url: url.pathname });
+  });
+  await row.getByRole("button", { name: labels.edit }).click();
+  await expect(page).toHaveURL(new RegExp(`/actions/${id}/?$`));
+  await expect(page.getByTestId("action-name-value")).toHaveText(name);
+  await expect(page.getByTestId("action-is-active-switch")).not.toBeChecked();
+  await testInfo.attach("actions-focused-edit-before.png", { body: await page.screenshot(), contentType: "image/png" });
+  const switchControl = page.getByTestId("action-is-active-switch");
+  const switchBounds = await switchControl.boundingBox();
+  if (!switchBounds) throw new Error("Actions State switch does not have a visible hit area.");
+  await page.mouse.click(switchBounds.x + switchBounds.width / 2, switchBounds.y + switchBounds.height / 2);
+  await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
+  await expect(page.getByTestId("action-status-field").getByText(labels.yes)).toBeVisible();
+  expect(pageRequests.some((item) => ["PUT", "PATCH", "DELETE"].includes(item.method))).toBe(false);
+  const beforeSaveRequestCount = pageRequests.length;
+  const putResponsePromise = responseMatching(page, "PUT", new RegExp(`^/api/gerit/v1/actions/${id}/?$`));
+  await page.getByRole("button", { name: labels.save }).click();
+  const putResponse = await putResponsePromise;
+  if (![200, 201].includes(putResponse.status())) throw new Error(`Actions form PUT returned HTTP ${putResponse.status()}.`);
+  const putPayload = putResponse.request().postDataJSON() as Record<string, unknown>;
+  expect(putPayload).toMatchObject({ description, isActive: true });
+  await expect(page).toHaveURL(/\/actions\/$/);
+  await expect(page.getByRole("status").and(page.locator('[data-state="open"]')).filter({ hasText: /updated successfully|atualizada com sucesso|actualizada correctamente/i })).toBeVisible();
+  expect(pageRequests.slice(beforeSaveRequestCount).some((item) => item.method === "PATCH")).toBe(false);
+  const persisted = await readCurrentAction(page, id);
+  expect(persisted.isActive).toBe(true);
+  await testInfo.attach("actions-focused-edit-saved.png", { body: await page.screenshot(), contentType: "image/png" });
+  expect(ownedIds.has(id)).toBe(true);
 });
 
 test("Actions complete business and UI journey", async ({ page, context, request }, testInfo) => {
@@ -746,7 +901,7 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await statusSwitch.focus();
       await page.keyboard.press("Space");
       await expect(statusSwitch).not.toBeChecked();
-      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.no);
+      await expect(page.getByTestId("action-status-field").getByText(labels.no)).toBeVisible();
       await expect(page.getByTestId("action-details-page-root").getByText(labels.active).first()).toBeVisible();
       const responsePromise = responseMatching(page, "PUT", new RegExp(`^/api/gerit/v1/actions/${main!.id}/?$`));
       await page.getByRole("button", { name: labels.save }).click();
@@ -772,12 +927,12 @@ test("Actions complete business and UI journey", async ({ page, context, request
       await assertList(page); await page.getByPlaceholder(labels.search).fill(main!.name);
       await actionRow(page, main!.name).getByRole("button", { name: labels.edit }).click();
       await expect(page.getByTestId("action-is-active-switch")).not.toBeChecked();
-      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.no);
+      await expect(page.getByTestId("action-status-field").getByText(labels.no)).toBeVisible();
       await expect(page.getByTestId("action-details-page-root").getByText(labels.inactive).first()).toBeVisible();
       await page.getByTestId("action-is-active-switch").focus();
       await page.keyboard.press("Space");
       await expect(page.getByTestId("action-is-active-switch")).toBeChecked();
-      await expect(page.getByTestId("action-is-active-label")).toHaveText(labels.yes);
+      await expect(page.getByTestId("action-status-field").getByText(labels.yes)).toBeVisible();
       await expect(page.getByTestId("action-details-page-root").getByText(labels.inactive).first()).toBeVisible();
       const responsePromise = responseMatching(page, "PUT", new RegExp("^/api/gerit/v1/actions/" + main!.id + "/?$"));
       await page.getByRole("button", { name: labels.save }).click();

@@ -61,6 +61,19 @@ test("HubSwitch exposes a controlled accessible boolean with visible focus and o
   assert.match(barrel, /HubSwitch/);
 });
 
+test("HubSwitch supports localized optional labels and a visible clickable input target", () => {
+  assert.match(toggle, /label\?: React\.ReactNode/);
+  assert.match(toggle, /checkedLabel\?: React\.ReactNode/);
+  assert.match(toggle, /uncheckedLabel\?: React\.ReactNode/);
+  assert.match(toggle, /useTranslation/);
+  assert.match(toggle, /t\("common\.yes"\)/);
+  assert.match(toggle, /t\("common\.no"\)/);
+  assert.match(toggle, /htmlFor=\{inputId\}/);
+  assert.match(toggle, /aria-labelledby/);
+  assert.match(toggle, /absolute inset-0 z-10 m-0 h-full w-full cursor-pointer opacity-0/);
+  assert.match(toggle, /pointer-events-none/);
+});
+
 test("Preferences keeps callbacks and shared tabs/switch", () => {
   assert.match(preferences, /HubSelect, HubSwitch, HubTabs/);
   assert.match(preferences, /value=\{value\}[\s\S]*?onValueChange=\{onChange\}[\s\S]*?options=\{options\}/);

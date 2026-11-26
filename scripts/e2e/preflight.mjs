@@ -169,7 +169,7 @@ export async function evaluatePreflight({
   checks.activeWorktreeRegistered = activeWorktree;
   checks.headShaValid = /^[0-9a-f]{40}$/i.test(git.headSha || "");
   checks.branch = isExpectedBranch(git.branch, capability);
-  checks.actionsAuthorizedBranch = capability !== "actions" || git.branch === "feature/actions-isactive-form-refactor";
+  checks.actionsAuthorizedBranch = capability !== "actions" || ["feature/actions-isactive-form-refactor", "fix/actions-form-switch-save-redirect"].includes(git.branch);
   checks.actionsExpectedIdentity = capability !== "actions" || mode !== "mutating" || (Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_USER_ID)) && Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_TENANT_ID)));
   const normalizedChangedFiles = Array.isArray(git.changedFiles)
     ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))

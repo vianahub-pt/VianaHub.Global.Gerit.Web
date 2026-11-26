@@ -212,6 +212,7 @@ export function LoginScreen() {
           title: t("auth.login.toasts.successTitle"),
           description: t("auth.login.toasts.successDescription", {
             user: session.userName,
+            tenant: session.tenantName,
           }),
         });
 

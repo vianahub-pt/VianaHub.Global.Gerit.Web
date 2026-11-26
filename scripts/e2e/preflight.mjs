@@ -412,6 +412,20 @@ async function selfTest() {
   assert.equal((await evaluatePreflight({ ...actionsPreflight, config: { ...validConfig, E2E_USER_EMAIL: "" } })).checks.actionsIdentityConfigured, false);
   assert.equal((await evaluatePreflight({ ...actionsPreflight, readText: async (path) => path.endsWith("cleanup-manifest.json") ? JSON.stringify({ schemaVersion: 1, status: "pending", records: [{ id: 1230, name: "synthetic", status: "pending" }] }) : path.endsWith("actions-cleanup.mjs") ? await readFile(resolve(repoRoot, "scripts/e2e/actions-cleanup.mjs"), "utf8") : await readFile(resolve(repoRoot, "tests/e2e/actions-journey.spec.ts"), "utf8") })).checks.actionsCleanupManifestClear, false);
 
+  const authenticationReadOnly = await evaluatePreflight({
+    ...common,
+    capability: "authentication",
+    mode: "read-only",
+    mutatingApproved: false,
+    git: gitWithBranch("hotfix/login-e2e-hydration"),
+    stage: "prepare",
+    fileExists: (path) => path.endsWith("authentication-journey.spec.ts"),
+    readText: async () => await readFile(resolve(repoRoot, "tests/e2e/authentication-journey.spec.ts"), "utf8"),
+  });
+  assert.equal(authenticationReadOnly.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(authenticationReadOnly.authorization, "READ_ONLY_AUTHORIZED");
+  assert.equal(authenticationReadOnly.checks.canonicalSpec, true);
+
   console.log("E2E preflight self-tests passed.");
 }
 

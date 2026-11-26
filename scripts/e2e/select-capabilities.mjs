@@ -16,6 +16,7 @@ const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
 export { CAPABILITIES };
 
 const capabilityCodePaths = new Map([
+  ["authentication", ["platform/auth/login-screen.tsx"]],
   ["actions", ["app/(workspace)/actions/", "domains/operations/actions/"]],
   ["user-preferences", ["app/(workspace)/preferences/", "domains/identity/preferences/"]],
   ["teams", ["app/(workspace)/teams/", "domains/operations/teams/"]],
@@ -26,6 +27,7 @@ const capabilityCodePaths = new Map([
 ]);
 
 const capabilityTestPaths = new Map([
+  ["authentication", ["tests/shared/login-hydration.test.mjs", "tests/e2e/authentication-journey.spec.ts", "tests/e2e/helpers/auth.ts"]],
   ["actions", ["tests/actions/", "tests/e2e/actions-journey.spec.ts", "tests/e2e/actions-form-mocked-journey.spec.ts", "tests/e2e/actions-cleanup.test.mjs"]],
   ["user-preferences", ["tests/preferences/", "tests/e2e/user-preferences-journey.spec.ts", "tests/e2e/workspace-header-theme-journey.spec.ts"]],
   ["teams", ["tests/teams/", "tests/e2e/teams-journey.spec.ts"]],

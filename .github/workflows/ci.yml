@@ -201,6 +201,8 @@ jobs:
           if [ "$SHARED_REGRESSION_REQUIRED" = "true" ]; then
             if [ "${capabilities[*]}" = "actions" ] && [ "$SHARED_COMPONENTS" = '["hub-switch"]' ]; then
               echo "HubSwitch regression is covered by tests/shared/ui-standard.test.mjs in npm test."
+            elif [ "${capabilities[*]}" = "teams" ] && [ "$SHARED_COMPONENTS" = '["confirm-dialog","hub-confirm-dialog"]' ]; then
+              echo "ConfirmDialog regression is covered by tests/shared/hub-confirm-dialog.test.mjs in npm test."
             elif [ "${capabilities[*]}" != "clients" ]; then
               echo "Shared UI regression requires the selected mocked Client integration suite; unexpected capability plan."
               exit 1

@@ -241,6 +241,7 @@ test("package test gate and CI runner execute every required shared regression a
   assert.match(workflow, /name: Run required static and focused regression tests[\s\S]*?run: npm test/);
   assert.match(e2eJob, /SHARED_COMPONENTS:.*shared_components/);
   assert.match(e2eJob, /capabilities\[\*\].*=.*actions[\s\S]*SHARED_COMPONENTS.*hub-switch[\s\S]*tests\/shared\/ui-standard\.test\.mjs/);
+  assert.match(e2eJob, /capabilities\[\*\].*=.*teams[\s\S]*SHARED_COMPONENTS.*confirm-dialog.*hub-confirm-dialog[\s\S]*tests\/shared\/hub-confirm-dialog\.test\.mjs/);
   assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 

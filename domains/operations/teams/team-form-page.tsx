@@ -9,7 +9,7 @@ import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { HubConfirmDialog } from "@/shared/ui";
 import { HubSwitch } from "@/shared/ui/hub-switch";
 import { normalizeTeam, toTeamPayload, type TeamRecord } from "@/domains/operations/teams/teams-contract";
 
@@ -189,14 +189,16 @@ export function TeamFormPage({ teamId }: TeamFormPageProps) {
           </form>
         ) : null}
       </div>
-      <ConfirmDialog
+      <HubConfirmDialog
         open={deleteOpen}
         onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }}
         title={t("teams.actions.delete")}
         description={t("teams.confirm.delete", { name: currentTeam?.name ?? "" })}
         confirmLabel={t("teams.actions.delete")}
         cancelLabel={t("teams.actions.cancel")}
-        onConfirm={() => void handleDelete()}
+        variant="destructive"
+        loading={deleteSubmitting}
+        onConfirm={handleDelete}
       />
     </div>
   );

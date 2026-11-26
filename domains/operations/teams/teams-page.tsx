@@ -8,7 +8,7 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
+import { HubConfirmDialog } from "@/shared/ui";
 import { buildTeamsQuery, normalizeTeamSummary, type TeamRecord, type TeamStatusFilter } from "@/domains/operations/teams/teams-contract";
 
 interface TeamsPagedResponse { items?: unknown; data?: unknown; totalItems?: unknown; pageNumber?: number; pageSize?: number; totalPages?: number }
@@ -228,14 +228,16 @@ export function TeamsPage() {
           getRowKey={(team) => team.id} onRowClick={canGetBy ? (team) => router.push(`/teams/${team.id}/`) : undefined}
         />
       </div>
-      <ConfirmDialog
+      <HubConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={(open) => { if (!deleteSubmitting) setDeleteConfirmOpen(open); }}
         title={t("teams.actions.delete")}
         description={t("teams.confirm.delete", { name: deleteTeamRef.current?.name ?? "" })}
         confirmLabel={t("teams.actions.delete")}
         cancelLabel={t("teams.actions.cancel")}
-        onConfirm={() => void deleteTeam()}
+        variant="destructive"
+        loading={deleteSubmitting}
+        onConfirm={deleteTeam}
       />
     </div>
   );

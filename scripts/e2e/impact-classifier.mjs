@@ -18,6 +18,7 @@ const requiredBehaviorTests = [
   "tests/clients/client-ui-contract.test.mjs",
   "tests/e2e/hub-image-journey.spec.ts",
   "tests/e2e/client-contact-person-journey.spec.ts",
+  "tests/shared/hub-confirm-dialog.test.mjs",
 ];
 
 function normalizeText(value) {

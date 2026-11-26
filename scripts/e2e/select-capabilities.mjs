@@ -9,6 +9,8 @@ const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
   sidebar: Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-switch": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
+  "hub-confirm-dialog": Object.freeze(["tests/shared/hub-confirm-dialog.test.mjs"]),
+  "confirm-dialog": Object.freeze(["tests/shared/hub-confirm-dialog.test.mjs"]),
   "hub-grid": Object.freeze(["tests/e2e/client-contact-person-journey.spec.ts"]),
   "hub-select": Object.freeze(["tests/e2e/hub-image-journey.spec.ts"]),
 });
@@ -55,7 +57,7 @@ const translationPrefixes = new Map([
   ["equipmentTypes.", "equipment-types"],
   ["clients.", "clients"],
 ]);
-const sharedTranslationPrefixes = ["hubImage.", "hubSelect."];
+const sharedTranslationPrefixes = ["hubImage.", "hubSelect.", "hubConfirmDialog."];
 
 const breadcrumbRemovalSourceFiles = [
   "domains/operations/actions/action-form-page.tsx",
@@ -100,6 +102,7 @@ function isKnownSharedSupport(file) {
     file === "components/ui/sidebar.tsx" ||
     file.startsWith("tests/shared/") ||
     file === "tests/e2e/client-ui-visual-review.spec.ts" ||
+    file === "tests/e2e/hub-confirm-dialog-journey.spec.ts" ||
     file === "tests/e2e/hub-image-journey.spec.ts" ||
     file === "tests/e2e/hub-select-visual-journey.spec.ts" ||
     file === "tests/e2e/workspace-header-theme-journey.spec.ts" ||

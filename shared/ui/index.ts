@@ -42,3 +42,6 @@ export { HubImage } from "@/shared/ui/hub-image";
 export { HubSwitch } from "@/shared/ui/hub-switch";
 export type { HubSwitchProps } from "@/shared/ui/hub-switch";
 export type { HubImageProps } from "@/shared/ui/hub-image";
+
+export { HubConfirmDialog } from "@/shared/ui/hub-confirm-dialog";
+export type { HubConfirmDialogProps, HubConfirmDialogVariant } from "@/shared/ui/hub-confirm-dialog";

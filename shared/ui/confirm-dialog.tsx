@@ -1,49 +1,26 @@
 "use client";
 
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/shared/ui/alert-dialog";
+  HubConfirmDialog,
+  type HubConfirmDialogProps,
+} from "@/shared/ui/hub-confirm-dialog";
 
-export interface ConfirmDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  description: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  onConfirm: () => void;
+export interface ConfirmDialogProps extends Omit<HubConfirmDialogProps, "testId"> {
+  testId?: string;
 }
 
-export function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  description,
-  confirmLabel = "Confirmar",
-  cancelLabel = "Cancelar",
-  onConfirm,
-}: ConfirmDialogProps) {
+/** Backwards-compatible name for existing capability consumers. */
+export function ConfirmDialog({ testId = "confirm-dialog", ...props }: ConfirmDialogProps) {
   return (
-    <div data-testid="confirm-dialog-root">
-      <AlertDialog open={open} onOpenChange={onOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{title}</AlertDialogTitle>
-            <AlertDialogDescription>{description}</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{cancelLabel}</AlertDialogCancel>
-            <AlertDialogAction onClick={onConfirm}>{confirmLabel}</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
+    <HubConfirmDialog
+      {...props}
+      testId={testId}
+      onConfirm={() => {
+        const result = props.onConfirm();
+        // Preserve the legacy AlertDialogAction contract for existing consumers.
+        props.onOpenChange(false);
+        return result;
+      }}
+    />
   );
 }

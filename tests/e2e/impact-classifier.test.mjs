@@ -8,6 +8,7 @@ import { verifyStructuralSync } from "../../scripts/e2e/structural-sync.mjs";
 const tests = {
   "tests/shared/ui-standard.test.mjs": "shared UI contracts",
   "tests/shared/hub-image.test.mjs": "HubImage props and locales",
+  "tests/shared/hub-confirm-dialog.test.mjs": "HubConfirmDialog controlled API and accessibility",
   "tests/preferences/user-preferences-layout.test.mjs": "Preferences callbacks and layout",
   "tests/preferences/user-preferences-contract.test.mjs": "Preferences contract",
   "tests/users/permission-claims.test.mjs": "Users permissions",
@@ -143,6 +144,23 @@ test("selects Client functionally and reports verified presentation consumers", 
   assert.deepEqual(plan.presentationConsumers, ["users"]);
   assert.equal(plan.sharedUiRegressionRequired, true);
   assert.ok(plan.sharedComponents.includes("hub-switch"));
+});
+
+test("selects Actions and Teams plus the focused shared HubConfirmDialog regression", () => {
+  const plan = selectCapabilities([
+    "domains/operations/teams/teams-page.tsx",
+    "shared/ui/confirm-dialog.tsx",
+    "shared/ui/hub-confirm-dialog.tsx",
+    "locales/en-US/common.json",
+    "tests/e2e/hub-confirm-dialog-journey.spec.ts",
+  ], {
+    scope: ["teams"],
+    translationAnalysis: { ok: true, changedKeys: ["hubConfirmDialog.cancel", "hubConfirmDialog.confirm"], removedKeys: [] },
+  });
+  assert.deepEqual(plan.functionalCapabilities, ["teams"]);
+  assert.equal(plan.sharedUiRegressionRequired, true);
+  assert.deepEqual(plan.sharedComponents, ["confirm-dialog", "hub-confirm-dialog"]);
+  assert.ok(plan.requiredRegressionTests.includes("tests/shared/hub-confirm-dialog.test.mjs"));
 });
 
 test("all valid classifier plans expose serializable workflow fields with semantic defaults", () => {
@@ -352,4 +370,8 @@ test("shared regression outcome accepts explicit HubTabs proof and otherwise fai
   };
   assert.equal(validateE2EOutcome(actionsHubSwitch).pass, true, "Actions E2E plus the existing HubSwitch ui-standard test proves the scoped regression");
   assert.equal(validateE2EOutcome({ ...actionsHubSwitch, regressionTestsStatus: "skipped" }).reason, "required-regression-tests-did-not-succeed");
+
+  const confirmDialogRegression = { ...base, sharedComponents: ["hub-confirm-dialog"] };
+  assert.equal(validateE2EOutcome(confirmDialogRegression).pass, true, "HubConfirmDialog requires its focused mocked visual journey");
+  assert.equal(validateE2EOutcome({ ...confirmDialogRegression, sharedRegressionStatus: "skipped" }).reason, "shared-regression-did-not-succeed");
 });

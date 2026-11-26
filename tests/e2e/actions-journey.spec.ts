@@ -407,6 +407,7 @@ test("Actions focused form save smoke", async ({ page }, testInfo) => {
   cleanupSession = null;
   await mkdir(resolve(reportDirectory, "screenshots"), { recursive: true });
   await page.addInitScript((visual) => {
+    (window as Window & { __GERIT_E2E_DIAGNOSTICS__?: boolean }).__GERIT_E2E_DIAGNOSTICS__ = true;
     if (!visual) return;
     const install = () => {
       if (document.getElementById("gerit-e2e-pointer-style")) return;

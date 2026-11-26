@@ -22,6 +22,9 @@ function getRunPlan(capability, env = process.env, { mockedVisual = false, readO
   if (capability === "authentication") {
     return { spec: "tests/e2e/authentication-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
+  if (mockedVisual && capability === "teams") {
+    return { spec: "tests/e2e/teams-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only" };
+  }
   if (mockedVisual && capability === "actions") {
     return { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only" };
   }
@@ -34,6 +37,9 @@ function getRunPlan(capability, env = process.env, { mockedVisual = false, readO
       project: "journey",
       mode: "mocked-visual-read-only",
     };
+  }
+  if (capability === "teams" && env.CI === "true") {
+    return { spec: "tests/e2e/teams-form-mocked-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
   }
   if (capability === "actions" && env.CI === "true") {
     return { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
@@ -62,7 +68,7 @@ function getBatchPlan(capabilities, env = process.env, options = {}) {
 function getE2EEnvironment(env, { localExecution, mockedVisual, readOnlyVisual }) {
   if (!localExecution) return env;
   const result = { ...env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" };
-  if (mockedVisual) {
+  if (mockedVisual && env.E2E_CLIENT_ADDRESS_MODE !== undefined) {
     result.E2E_CLIENT_ADDRESS_MODE = "mocked";
     for (const key of [
       "E2E_CLIENT_ADDRESS_QA_APPROVAL_ID", "E2E_CLIENT_ADDRESS_QA_APPROVAL", "E2E_CLIENT_ADDRESS_MUTATING_APPROVED",
@@ -124,7 +130,7 @@ function parseInvocation(args) {
   if (new Set(capabilities).size !== capabilities.length || capabilities.some((item) => !CAPABILITIES.includes(item))) {
     throw new Error("Provide unique, supported capability slugs.");
   }
-  if (mockedVisual && (capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]) || mutatingApproved || readOnlyVisual)) {
+  if (mockedVisual && (capabilities.length !== 1 || !["clients", "actions", "teams"].includes(capabilities[0]) || mutatingApproved || readOnlyVisual)) {
     throw new Error("Mocked visual mode is read-only and limited to one explicitly supported capability.");
   }
   if (actionsQaApproved && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || mockedVisual || readOnlyVisual)) {
@@ -152,7 +158,10 @@ function selfTest() {
   });
   assert.equal(getRunPlan("user-preferences", {}).spec, "tests/e2e/user-preferences-journey.spec.ts");
   assert.deepEqual(getRunPlan("teams", { CI: "true" }), {
-    spec: "tests/e2e/teams-journey.spec.ts", project: "journey", mode: "canonical-journey",
+    spec: "tests/e2e/teams-form-mocked-journey.spec.ts", project: "journey", mode: "nonmutating-regression",
+  });
+  assert.deepEqual(getRunPlan("teams", {}, { mockedVisual: true }), {
+    spec: "tests/e2e/teams-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only",
   });
   assert.deepEqual(getRunPlan("equipment-types", { CI: "true" }), {
     spec: "tests/e2e/equipment-types-journey.spec.ts", project: "journey", mode: "canonical-journey",
@@ -209,6 +218,8 @@ function selfTest() {
   assert.throws(() => parseInvocation(["--scope", "actions", "--actions-qa-approved", "actions"]), /requires one Actions scope/);
   assert.throws(() => parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "--mocked-visual", "actions"]), /read-only/);
   assert.equal(parseInvocation(["--scope", "clients", "--mocked-visual", "clients"]).mockedVisual, true);
+  assert.equal(parseInvocation(["--scope", "teams", "--mocked-visual", "teams"]).mockedVisual, true);
+  assert.throws(() => parseInvocation(["--scope", "teams", "--mocked-visual", "teams", "--mutating-approved"]), /read-only/);
   assert.deepEqual(getRunPlan("authentication", {}), {
     spec: "tests/e2e/authentication-journey.spec.ts", project: "journey", mode: "nonmutating-regression",
   });
@@ -246,7 +257,7 @@ try {
 const { capabilities, mutatingApproved } = invocation;
 if (capabilities.length === 0) fail("Provide one or more capability slugs.");
 const localExecution = process.platform === "win32" && process.env.CI !== "true";
-if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || !["clients", "actions"].includes(capabilities[0]))) {
+if (invocation.mockedVisual && (!localExecution || capabilities.length !== 1 || !["clients", "actions", "teams"].includes(capabilities[0]))) {
   fail("Mocked visual mode is available only for one supported local Windows-host capability run.");
 }
 if (invocation.actionsFormSmoke && !localExecution) {

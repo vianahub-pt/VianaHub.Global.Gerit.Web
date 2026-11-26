@@ -67,7 +67,7 @@ test("authentication login hydration smoke", async ({ page }, testInfo) => {
   const loginResponse = page.waitForResponse((response) => {
     const request = response.request();
     const path = new URL(response.url()).pathname;
-    return request.method() === "POST" && (path === "/api/auth/login" || path === "/api/auth/login/");
+    return request.method() === "POST" && response.status() === 200 && (path === "/api/auth/login" || path === "/api/auth/login/");
   });
   await page.locator('input[type="email"]').fill(email);
   await page.locator('input[type="password"]').fill(password);

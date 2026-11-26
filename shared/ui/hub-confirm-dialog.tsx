@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import { LoaderCircle } from "lucide-react";
-import { useTranslation } from "@/platform/i18n";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,8 +21,8 @@ export interface HubConfirmDialogProps {
   onOpenChange: (open: boolean) => void;
   title: React.ReactNode;
   description: React.ReactNode;
-  confirmLabel?: React.ReactNode;
-  cancelLabel?: React.ReactNode;
+  confirmLabel: React.ReactNode;
+  cancelLabel: React.ReactNode;
   onConfirm: () => void | Promise<void>;
   onConfirmError?: (error: unknown) => void;
   variant?: HubConfirmDialogVariant;
@@ -53,7 +52,6 @@ export function HubConfirmDialog({
   className,
   testId = "hub-confirm-dialog",
 }: HubConfirmDialogProps) {
-  const { t } = useTranslation();
   const contentRef = React.useRef<HTMLDivElement>(null);
   const cancelRef = React.useRef<HTMLButtonElement>(null);
   const confirmRef = React.useRef<HTMLButtonElement>(null);
@@ -190,7 +188,7 @@ export function HubConfirmDialog({
                 if (destructiveBusy) event.preventDefault();
               }}
             >
-              {cancelLabel ?? t("hubConfirmDialog.cancel")}
+              {cancelLabel}
             </AlertDialogCancel>
             <AlertDialogAction
               ref={confirmRef}
@@ -205,7 +203,7 @@ export function HubConfirmDialog({
               onClick={handleConfirm}
             >
               {busy ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              {confirmLabel ?? t("hubConfirmDialog.confirm")}
+              {confirmLabel}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

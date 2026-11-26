@@ -13,8 +13,8 @@ test("HubConfirmDialog exposes a capability-independent controlled API", () => {
     "onOpenChange: (open: boolean) => void",
     "title: React.ReactNode",
     "description: React.ReactNode",
-    "confirmLabel?: React.ReactNode",
-    "cancelLabel?: React.ReactNode",
+    "confirmLabel: React.ReactNode",
+    "cancelLabel: React.ReactNode",
     "onConfirm: () => void | Promise<void>",
     "variant?: HubConfirmDialogVariant",
     "loading?: boolean",
@@ -23,7 +23,7 @@ test("HubConfirmDialog exposes a capability-independent controlled API", () => {
 
   assert.ok(component.includes('type HubConfirmDialogVariant = "default" | "destructive"'));
   assert.ok(component.includes('from "@/shared/ui/alert-dialog"'));
-  assert.doesNotMatch(component, /fetchWithAuth|Actions|Teams|Clients|Users/);
+  assert.doesNotMatch(component, /fetchWithAuth|useTranslation|hubConfirmDialog|Actions|Teams|Clients|Users/);
   assert.ok(barrel.includes("export { HubConfirmDialog }"));
 });
 
@@ -54,20 +54,34 @@ test("HubConfirmDialog keeps async dialogs controlled and blocks duplicate destr
     "if (disabled || busy || confirmLock.current) return",
   ]) assert.ok(component.includes(behavior), "missing behavior " + behavior);
   assert.ok(adapter.includes("HubConfirmDialog"));
+  assert.ok(adapter.includes("useTranslation"));
+  assert.ok(adapter.includes('t("clients.actions.confirm")'));
+  assert.ok(adapter.includes('t("clients.actions.cancel")'));
   assert.ok(adapter.includes('testId = "confirm-dialog"'));
   assert.ok(adapter.includes("props.onOpenChange(false)"), "legacy ConfirmDialog keeps closing after confirmation");
 });
 
-test("generic default labels exist in all supported locales", () => {
-  const values = {
+test("legacy adapter keeps localized defaults and direct HubConfirmDialog consumers provide labels", () => {
+  const expectedLabels = {
     "pt-PT": ["Cancelar", "Confirmar"],
     "pt-BR": ["Cancelar", "Confirmar"],
     "en-US": ["Cancel", "Confirm"],
     "es-ES": ["Cancelar", "Confirmar"],
   };
-  for (const [locale, [cancel, confirm]] of Object.entries(values)) {
+  for (const [locale, [cancel, confirm]] of Object.entries(expectedLabels)) {
     const dictionary = JSON.parse(read("locales/" + locale + "/common.json"));
-    assert.equal(dictionary["hubConfirmDialog.cancel"], cancel);
-    assert.equal(dictionary["hubConfirmDialog.confirm"], confirm);
+    assert.equal(dictionary["clients.actions.cancel"], cancel, locale + " has a localized cancel label");
+    assert.equal(dictionary["clients.actions.confirm"], confirm, locale + " has a localized confirm label");
+    assert.ok(!("hubConfirmDialog.cancel" in dictionary), locale + " has no generic cancel key");
+    assert.ok(!("hubConfirmDialog.confirm" in dictionary), locale + " has no generic confirm key");
   }
+
+  for (const path of ["domains/operations/teams/teams-page.tsx", "domains/operations/teams/team-form-page.tsx"]) {
+    const consumer = read(path);
+    assert.match(consumer, /<HubConfirmDialog[\s\S]*?confirmLabel=/, path + " provides confirmLabel");
+    assert.match(consumer, /<HubConfirmDialog[\s\S]*?cancelLabel=/, path + " provides cancelLabel");
+  }
+
+  const legacyConsumer = read("domains/operations/clients/clients-create.tsx");
+  assert.match(legacyConsumer, /<ConfirmDialog[\s\S]*?description=[\s\S]*?onConfirm=/, "legacy consumers without explicit labels remain supported by adapter defaults");
 });

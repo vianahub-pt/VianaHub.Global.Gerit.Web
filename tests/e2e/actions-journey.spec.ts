@@ -592,7 +592,7 @@ test("Actions complete business and UI journey", async ({ page, context, request
     if (!e2eEmail || !e2ePassword) throw new Error("E2E_USER_EMAIL and E2E_USER_PASSWORD must be configured in process environment or .env.e2e.local.");
     loginUiAttempts += 1;
   await page.addInitScript((visual) => {
-      window.__GERIT_E2E_DIAGNOSTICS__ = true;
+      (window as Window & { __GERIT_E2E_DIAGNOSTICS__?: boolean }).__GERIT_E2E_DIAGNOSTICS__ = true;
       if (!visual) return;
       const install = () => {
         if (document.getElementById("gerit-e2e-pointer-style")) return;

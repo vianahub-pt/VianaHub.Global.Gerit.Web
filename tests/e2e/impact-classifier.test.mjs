@@ -257,6 +257,21 @@ test("Actions cleanup safety tests are classified as Actions-only E2E impact", (
   assert.equal(plan.runE2E, true);
   assert.equal(plan.sharedUiRegressionRequired, false);
 });
+
+test("login hydration changes select only the Authentication journey", () => {
+  const files = [
+    "platform/auth/login-screen.tsx",
+    "tests/e2e/authentication-journey.spec.ts",
+    "tests/e2e/helpers/auth.ts",
+    "tests/shared/login-hydration.test.mjs",
+  ];
+  const plan = selectCapabilities(files, { scope: ["authentication"] });
+  assert.deepEqual(plan.capabilities, ["authentication"]);
+  assert.deepEqual(plan.functionalCapabilities, ["authentication"]);
+  assert.deepEqual(plan.scope, ["authentication"]);
+  assert.equal(plan.runE2E, true);
+  assert.equal(plan.sharedUiRegressionRequired, false);
+});
 test("ClientAddress read-only QA journey is classified as Client-only E2E impact", () => {
   const plan = selectCapabilities(["tests/e2e/client-address-read-only-journey.spec.ts"], { scope: ["clients"] });
   assert.deepEqual(plan.functionalCapabilities, ["clients"]);

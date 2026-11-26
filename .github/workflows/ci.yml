@@ -189,6 +189,7 @@ jobs:
           SELECTED_CAPABILITIES: ${{ steps.select.outputs.capabilities }}
           SELECTED_SCOPE: ${{ steps.select.outputs.scope }}
           SHARED_REGRESSION_REQUIRED: ${{ steps.select.outputs.shared_regression_required }}
+          SHARED_COMPONENTS: ${{ steps.select.outputs.shared_components }}
           SCOPE_APPROVED: ${{ steps.select.outputs.scope_approved }}
         run: |
           mapfile -t capabilities < <(node -e 'for (const item of JSON.parse(process.env.SELECTED_CAPABILITIES)) console.log(item)')
@@ -197,9 +198,13 @@ jobs:
             exit 1
           fi
           printf 'Running functional capabilities in one Playwright process: %s\n' "${capabilities[*]}"
-          if [ "$SHARED_REGRESSION_REQUIRED" = "true" ] && [ "${capabilities[*]}" != "clients" ]; then
-            echo "Shared UI regression requires the selected mocked Client integration suite; unexpected capability plan."
-            exit 1
+          if [ "$SHARED_REGRESSION_REQUIRED" = "true" ]; then
+            if [ "${capabilities[*]}" = "actions" ] && [ "$SHARED_COMPONENTS" = '["hub-switch"]' ]; then
+              echo "HubSwitch regression is covered by tests/shared/ui-standard.test.mjs in npm test."
+            elif [ "${capabilities[*]}" != "clients" ]; then
+              echo "Shared UI regression requires the selected mocked Client integration suite; unexpected capability plan."
+              exit 1
+            fi
           fi
           scope_args=(--scope "$SELECTED_SCOPE")
           if [ "$SCOPE_APPROVED" = "true" ]; then scope_args+=(--scope-approved); fi

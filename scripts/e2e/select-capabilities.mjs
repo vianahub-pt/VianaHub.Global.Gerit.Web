@@ -8,6 +8,7 @@ import { PRESENTATION_ADAPTER_FILES, PRESENTATION_REGRESSION_TESTS, provePresent
 const SHARED_COMPONENT_REGRESSION_TESTS = Object.freeze({
   sidebar: Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-tabs": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
+  "hub-switch": Object.freeze(["tests/shared/ui-standard.test.mjs"]),
   "hub-grid": Object.freeze(["tests/e2e/client-contact-person-journey.spec.ts"]),
   "hub-select": Object.freeze(["tests/e2e/hub-image-journey.spec.ts"]),
 });

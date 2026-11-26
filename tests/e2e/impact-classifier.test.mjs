@@ -221,6 +221,8 @@ test("package test gate and CI runner execute every required shared regression a
   assert.match(e2eJob, /"sharedComponents":\$SHARED_COMPONENTS/);
   assert.match(e2eJob, /SHARED_REGRESSION_CONSUMERS:.*presentation_consumers/);
   assert.match(workflow, /name: Run required static and focused regression tests[\s\S]*?run: npm test/);
+  assert.match(e2eJob, /SHARED_COMPONENTS:.*shared_components/);
+  assert.match(e2eJob, /capabilities\[\*\].*=.*actions[\s\S]*SHARED_COMPONENTS.*hub-switch[\s\S]*tests\/shared\/ui-standard\.test\.mjs/);
   assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 
@@ -327,4 +329,12 @@ test("shared regression outcome accepts explicit HubTabs proof and otherwise fai
   assert.equal(validateE2EOutcome({ ...consumerRegression, sharedRegressionConsumers: ["users"] }).reason, "shared-regression-consumers-do-not-match-plan");
   assert.equal(validateE2EOutcome({ ...consumerRegression, regressionTestsStatus: "unknown" }).reason, "required-regression-tests-did-not-succeed");
   assert.equal(validateE2EOutcome({ ...base, capabilities: [], scope: [], functionalCapabilities: [] }).pass, false);
+
+  const actionsHubSwitch = {
+    ...base,
+    capabilities: ["actions"], functionalCapabilities: ["actions"], scope: ["actions"],
+    reason: "functional-and-shared-ui-regression", sharedComponents: ["hub-switch"],
+  };
+  assert.equal(validateE2EOutcome(actionsHubSwitch).pass, true, "Actions E2E plus the existing HubSwitch ui-standard test proves the scoped regression");
+  assert.equal(validateE2EOutcome({ ...actionsHubSwitch, regressionTestsStatus: "skipped" }).reason, "required-regression-tests-did-not-succeed");
 });

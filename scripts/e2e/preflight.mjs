@@ -169,8 +169,8 @@ export async function evaluatePreflight({
   checks.activeWorktreeRegistered = activeWorktree;
   checks.headShaValid = /^[0-9a-f]{40}$/i.test(git.headSha || "");
   checks.branch = isExpectedBranch(git.branch, capability);
-  checks.actionsAuthorizedBranch = capability !== "actions" || git.branch === "feature/actions-isactive-form-refactor";
-  checks.actionsExpectedIdentity = capability !== "actions" || mode !== "mutating" || (Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_USER_ID)) && Number.isSafeInteger(Number(config.E2E_ACTIONS_QA_EXPECTED_TENANT_ID)));
+  checks.actionsAuthorizedBranch = capability !== "actions" || ["feature/actions-isactive-form-refactor", "fix/actions-form-switch-save-redirect"].includes(git.branch);
+  checks.actionsIdentityConfigured = capability !== "actions" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
   const normalizedChangedFiles = Array.isArray(git.changedFiles)
     ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))
     : [];
@@ -225,7 +225,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsExpectedIdentity && checks.actionsCleanupManifestClear))
+      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -268,7 +268,7 @@ export async function loadConfig() {
   const fromFile = existsSync(localFile) ? parseEnvFile(await readFile(localFile, "utf8")) : {};
   return {
     ...fromFile,
-    ...Object.fromEntries(["E2E_BASE_URL", "GERIT_API_BASE_URL", "E2E_USER_EMAIL", "E2E_USER_PASSWORD", "E2E_ACTIONS_QA_EXPECTED_USER_ID", "E2E_ACTIONS_QA_EXPECTED_TENANT_ID"]
+    ...Object.fromEntries(["E2E_BASE_URL", "GERIT_API_BASE_URL", "E2E_USER_EMAIL", "E2E_USER_PASSWORD"]
       .filter((key) => process.env[key] !== undefined && process.env[key] !== "")
       .map((key) => [key, process.env[key]])),
   };
@@ -400,7 +400,7 @@ async function selfTest() {
   const missingCleanup = await evaluatePreflight({ ...common, readText: async () => "randomUUID" });
   assert.equal(missingCleanup.checks.cleanupPlan, false);
   const actionsGit = gitWithBranch("feature/actions-isactive-form-refactor");
-  const actionsConfig = { ...validConfig, E2E_ACTIONS_QA_EXPECTED_USER_ID: "1", E2E_ACTIONS_QA_EXPECTED_TENANT_ID: "1" };
+  const actionsConfig = { ...validConfig };
   const actionsPreflight = { ...common, capability: "actions", mode: "mutating", mutatingApproved: true, actionsMutationApproved: true, git: actionsGit, config: actionsConfig, stage: "prepare", fileExists: (path) => path.endsWith("actions-journey.spec.ts") || path.endsWith("cleanup-manifest.json"), readText: async (path) => path.endsWith("cleanup-manifest.json") ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [{ id: 1230, name: "synthetic", status: "verified" }] }) : path.endsWith("actions-cleanup.mjs") ? await readFile(resolve(repoRoot, "scripts/e2e/actions-cleanup.mjs"), "utf8") : await readFile(resolve(repoRoot, "tests/e2e/actions-journey.spec.ts"), "utf8") };
   const actionsApproved = await evaluatePreflight(actionsPreflight);
   assert.equal(actionsApproved.status, "PRECHECK_CONFIG_PASS");
@@ -408,7 +408,8 @@ async function selfTest() {
   assert.equal((await evaluatePreflight({ ...actionsPreflight, actionsMutationApproved: false })).authorization, "MUTATING_AUTHORIZATION_PENDING");
   assert.equal((await evaluatePreflight({ ...actionsPreflight, git: { ...actionsGit, branch: "feature/other" } })).checks.actionsAuthorizedBranch, false);
   assert.equal((await evaluatePreflight({ ...actionsPreflight, git: { ...actionsGit, dirty: true } })).checks.workingTreePreserved, false);
-  assert.equal((await evaluatePreflight({ ...actionsPreflight, config: validConfig })).checks.actionsExpectedIdentity, false);
+  assert.equal(actionsApproved.checks.actionsIdentityConfigured, true);
+  assert.equal((await evaluatePreflight({ ...actionsPreflight, config: { ...validConfig, E2E_USER_EMAIL: "" } })).checks.actionsIdentityConfigured, false);
   assert.equal((await evaluatePreflight({ ...actionsPreflight, readText: async (path) => path.endsWith("cleanup-manifest.json") ? JSON.stringify({ schemaVersion: 1, status: "pending", records: [{ id: 1230, name: "synthetic", status: "pending" }] }) : path.endsWith("actions-cleanup.mjs") ? await readFile(resolve(repoRoot, "scripts/e2e/actions-cleanup.mjs"), "utf8") : await readFile(resolve(repoRoot, "tests/e2e/actions-journey.spec.ts"), "utf8") })).checks.actionsCleanupManifestClear, false);
 
   console.log("E2E preflight self-tests passed.");

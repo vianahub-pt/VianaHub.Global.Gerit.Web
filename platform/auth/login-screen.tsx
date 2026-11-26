@@ -45,22 +45,22 @@ type LoginE2EDiagnostic = {
   loginSignInCalled: boolean;
 };
 
-declare global {
-  interface Window {
-    __GERIT_E2E_DIAGNOSTICS__?: boolean;
-    __GERIT_E2E_LOGIN_DIAGNOSTIC__?: LoginE2EDiagnostic;
-  }
-}
+type LoginDiagnosticWindow = Window & {
+  __GERIT_E2E_DIAGNOSTICS__?: boolean;
+  __GERIT_E2E_LOGIN_DIAGNOSTIC__?: LoginE2EDiagnostic;
+};
 
 function recordLoginE2EDiagnostic(
   key: Exclude<keyof LoginE2EDiagnostic, "componentHydrated">,
   value: boolean | null,
 ) {
-  if (typeof window === "undefined" || window.__GERIT_E2E_DIAGNOSTICS__ !== true) {
+  if (typeof window === "undefined") {
     return;
   }
+  const diagnosticWindow = window as LoginDiagnosticWindow;
+  if (diagnosticWindow.__GERIT_E2E_DIAGNOSTICS__ !== true) return;
 
-  const current = window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ ?? {
+  const current = diagnosticWindow.__GERIT_E2E_LOGIN_DIAGNOSTIC__ ?? {
     componentHydrated: false,
     loginSubmitHandlerEntered: false,
     prepareSubmitOk: null,
@@ -71,7 +71,7 @@ function recordLoginE2EDiagnostic(
   } else if (value !== null) {
     current[key] = value;
   }
-  window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = current;
+  diagnosticWindow.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = current;
 }
 
 function resolveEmailErrorMessage(
@@ -130,18 +130,17 @@ export function LoginScreen() {
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
-  const [e2eDiagnosticsHydrated, setE2EDiagnosticsHydrated] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    if (window.__GERIT_E2E_DIAGNOSTICS__ === true) {
-      window.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = {
+    const diagnosticWindow = window as LoginDiagnosticWindow;
+    if (diagnosticWindow.__GERIT_E2E_DIAGNOSTICS__ === true) {
+      diagnosticWindow.__GERIT_E2E_LOGIN_DIAGNOSTIC__ = {
         componentHydrated: true,
         loginSubmitHandlerEntered: false,
         prepareSubmitOk: null,
         loginSignInCalled: false,
       };
-      setE2EDiagnosticsHydrated(true);
     }
   }, []);
   const {
@@ -235,7 +234,7 @@ export function LoginScreen() {
   return (
     <div
       data-testid="login-screen-root"
-      data-hydrated={e2eDiagnosticsHydrated ? "true" : undefined}
+      data-hydrated={mounted ? "true" : undefined}
       className="relative h-[100dvh] overflow-hidden bg-background text-white"
     >
       <div className="relative grid h-[100dvh] lg:grid-cols-2">

@@ -19,6 +19,9 @@ function fail(message) {
 }
 
 function getRunPlan(capability, env = process.env, { mockedVisual = false, readOnlyVisual = false } = {}) {
+  if (capability === "authentication") {
+    return { spec: "tests/e2e/authentication-journey.spec.ts", project: "journey", mode: "nonmutating-regression" };
+  }
   if (mockedVisual && capability === "actions") {
     return { spec: "tests/e2e/actions-form-mocked-journey.spec.ts", project: "journey", mode: "mocked-visual-read-only" };
   }
@@ -206,6 +209,13 @@ function selfTest() {
   assert.throws(() => parseInvocation(["--scope", "actions", "--actions-qa-approved", "actions"]), /requires one Actions scope/);
   assert.throws(() => parseInvocation(["--scope", "actions", "--mutating-approved", "--actions-qa-approved", "--mocked-visual", "actions"]), /read-only/);
   assert.equal(parseInvocation(["--scope", "clients", "--mocked-visual", "clients"]).mockedVisual, true);
+  assert.deepEqual(getRunPlan("authentication", {}), {
+    spec: "tests/e2e/authentication-journey.spec.ts", project: "journey", mode: "nonmutating-regression",
+  });
+  assert.deepEqual(getBatchPlan(["authentication"], {}), {
+    specs: ["tests/e2e/authentication-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: ["authentication"],
+  });
+  assert.equal(parseInvocation(["--scope", "authentication", "authentication"]).capabilities[0], "authentication");
   assert.deepEqual(getRunPlan("clients", {}, { readOnlyVisual: true }), {
     spec: "tests/e2e/client-address-read-only-journey.spec.ts", project: "journey", mode: "read-only-visual",
   });

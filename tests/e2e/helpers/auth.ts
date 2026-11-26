@@ -122,7 +122,10 @@ export async function authenticateFromLogin(page: Page) {
   page.on("framenavigated", (frame) => {
     if (frame === page.mainFrame()) navigationPaths.push(new URL(frame.url()).pathname);
   });
-  if (!new URL(page.url()).pathname.startsWith("/login")) {
+  if (new URL(page.url()).pathname.replace(/\/$/, "") === "/login") {
+    // addInitScript applies on the next document; reload an already-open login page so diagnostics initialize before mount.
+    await page.reload({ waitUntil: "domcontentloaded" });
+  } else {
     await page.goto("/login/", { waitUntil: "domcontentloaded" });
   }
   await expect(page.getByTestId("login-screen-root"), "Login screen must be rendered before authentication").toBeVisible();

@@ -345,3 +345,27 @@ test("runner reports incomplete cleanup when process cleanup or port verificatio
   assert.equal(processFailure.status, "CLEANUP_INCOMPLETE");
   assert.equal(portFailure.status, "CLEANUP_INCOMPLETE");
 });
+
+test("Teams mocked visual mode permits only scoped local changes and requires API interception", async () => {
+  const teamsSpec = await readFile("tests/e2e/teams-form-mocked-journey.spec.ts", "utf8");
+  const teamsBase = {
+    ...valid,
+    capability: "teams",
+    mode: "read-only",
+    mockedVisual: true,
+    mutatingApproved: false,
+    git: { ...withBranch("feature/teams-crud"), dirty: true, changedFiles: ["domains/operations/teams/team-form-page.tsx", "tests/e2e/teams-form-mocked-journey.spec.ts"] },
+    stage: "prepare",
+    fileExists: (path) => path.endsWith("teams-form-mocked-journey.spec.ts"),
+    readText: async () => teamsSpec,
+  };
+  const pass = await evaluatePreflight(teamsBase);
+  assert.equal(pass.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(pass.authorization, "READ_ONLY_AUTHORIZED");
+  assert.equal(pass.checks.cleanupPlan, true);
+  const unsafe = await evaluatePreflight({ ...teamsBase, git: { ...teamsBase.git, changedFiles: [".env.e2e.local"] } });
+  assert.equal(unsafe.status, "PREFLIGHT_BLOCKED");
+  assert.equal(unsafe.checks.workingTreePreserved, false);
+  const missingInterception = await evaluatePreflight({ ...teamsBase, readText: async () => "POST PUT" });
+  assert.equal(missingInterception.checks.cleanupPlan, false);
+});

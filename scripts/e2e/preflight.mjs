@@ -51,11 +51,32 @@ const CLIENT_E2E_WORKING_FILES = new Set([
   "package.json",
   "scripts/e2e/preflight.mjs",
   "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/select-capabilities.mjs",
   "scripts/e2e/run-lock.mjs",
   "tests/e2e/client-address-crud-journey.spec.ts",
   "tests/e2e/client-contact-person-journey.spec.ts",
   "tests/e2e/preflight.test.mjs",
   "tests/e2e/run-lock.test.mjs",
+]);
+const TEAMS_VISUAL_WORKING_FILES = new Set([
+  "domains/operations/teams/team-form-page.tsx",
+  "domains/operations/teams/teams-contract.ts",
+  "domains/operations/teams/teams-page.tsx",
+  "locales/en-US/common.json",
+  "locales/es-ES/common.json",
+  "locales/pt-BR/common.json",
+  "locales/pt-PT/common.json",
+  "package.json",
+  "scripts/e2e/preflight.mjs",
+  "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/select-capabilities.mjs",
+  "tests/e2e/impact-classifier.test.mjs",
+  "tests/e2e/preflight.test.mjs",
+  "tests/e2e/run-capability.test.mjs",
+  "tests/e2e/teams-form-mocked-journey.spec.ts",
+  "tests/e2e/teams-journey.spec.ts",
+  "tests/actions/teams-contract.test.mjs",
+  "tests/teams/teams-ui-contract.test.mjs",
 ]);
 const ACTIONS_VISUAL_WORKING_FILES = new Set([
   "domains/operations/actions/action-contract.ts",
@@ -120,6 +141,16 @@ function hasActionsMockedVisualPlan(specText) {
     specText.includes('expect(businessRequests.some((item) => item.method === "PATCH")).toBe(false)');
 }
 
+function hasTeamsMockedVisualPlan(specText) {
+  return specText.includes('page.route("**/api/**"') &&
+    specText.includes('path === "/api/auth/login" && method === "POST"') &&
+    specText.includes('path === "/api/gerit/v1/teams" && method === "POST"') &&
+    specText.includes('path === "/api/gerit/v1/teams/" + teamId && method === "PUT"') &&
+    specText.includes("unexpectedRequests.push") &&
+    specText.includes("expect(unexpectedRequests).toEqual([])") &&
+    !specText.includes("route.continue()");
+}
+
 function hasClientsCleanupPlan(specText) {
   return /const createdClientIds = new Set<number>\(\)/.test(specText) &&
     /createdClientIds\.add\(clientId\)/.test(specText) &&
@@ -178,7 +209,9 @@ export async function evaluatePreflight({
     normalizedChangedFiles.every((file) => CLIENT_E2E_WORKING_FILES.has(file));
   const scopedActionsVisualChanges = capability === "actions" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
     normalizedChangedFiles.every((file) => ACTIONS_VISUAL_WORKING_FILES.has(file));
-  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges;
+  const scopedTeamsVisualChanges = capability === "teams" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => TEAMS_VISUAL_WORKING_FILES.has(file));
+  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges || scopedTeamsVisualChanges;
   const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");
   if (capability === "actions" && mode === "mutating" && fileExists(actionsManifestPath)) {
     try {
@@ -195,14 +228,18 @@ export async function evaluatePreflight({
 
   const selectedSpec = readOnlyVisual && capability === "clients"
     ? "client-address-read-only-journey.spec.ts"
-    : mockedVisual && capability === "actions"
-      ? "actions-form-mocked-journey.spec.ts"
+    : mockedVisual && capability === "teams"
+      ? "teams-form-mocked-journey.spec.ts"
+      : mockedVisual && capability === "actions"
+        ? "actions-form-mocked-journey.spec.ts"
       : capability + "-journey.spec.ts";
   const spec = resolve(repoRoot, "tests", "e2e", selectedSpec);
   checks.canonicalSpec = checks.capabilityAllowed && fileExists(spec);
   if (readOnlyVisual) {
     checks.readOnlyMutationGuard = capability === "clients" && checks.canonicalSpec && hasReadOnlyClientAddressPlan(await readText(spec));
     checks.cleanupPlan = checks.readOnlyMutationGuard;
+  } else if (mockedVisual && capability === "teams" && checks.canonicalSpec) {
+    checks.cleanupPlan = hasTeamsMockedVisualPlan(await readText(spec));
   } else if (mockedVisual && capability === "actions" && checks.canonicalSpec) {
     checks.cleanupPlan = hasActionsMockedVisualPlan(await readText(spec));
   } else if (capability === "actions" && mode === "mutating" && checks.canonicalSpec) {

@@ -53,6 +53,6 @@ export function buildTeamsQuery(input: {
   return query;
 }
 
-export function toTeamPayload(name: string, description: string) {
-  return { name: name.trim(), description: description.trim() ? description : null };
+export function toTeamPayload(name: string, description: string, isActive: boolean) {
+  return { name: name.trim(), description: description.trim(), isActive };
 }

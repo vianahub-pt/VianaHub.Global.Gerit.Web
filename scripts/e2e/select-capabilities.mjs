@@ -30,7 +30,7 @@ const capabilityTestPaths = new Map([
   ["authentication", ["tests/shared/login-hydration.test.mjs", "tests/e2e/authentication-journey.spec.ts", "tests/e2e/helpers/auth.ts"]],
   ["actions", ["tests/actions/", "tests/e2e/actions-journey.spec.ts", "tests/e2e/actions-form-mocked-journey.spec.ts", "tests/e2e/actions-cleanup.test.mjs"]],
   ["user-preferences", ["tests/preferences/", "tests/e2e/user-preferences-journey.spec.ts", "tests/e2e/workspace-header-theme-journey.spec.ts"]],
-  ["teams", ["tests/teams/", "tests/e2e/teams-journey.spec.ts"]],
+  ["teams", ["tests/teams/", "tests/actions/teams-contract.test.mjs", "tests/e2e/teams-journey.spec.ts", "tests/e2e/teams-form-mocked-journey.spec.ts"]],
   ["roles", ["tests/roles/", "tests/e2e/roles-journey.spec.ts"]],
   ["users", ["tests/users/", "tests/e2e/users-journey.spec.ts", "tests/e2e/users-self-password.spec.ts"]],
   ["equipment-types", ["tests/equipment-types/", "tests/e2e/equipment-types-journey.spec.ts"]],
@@ -270,6 +270,7 @@ function selectCapabilitiesPlan(files, {
       }
     }
     for (const [capability, paths] of capabilityTestPaths) {
+      if (file === "tests/actions/teams-contract.test.mjs" && capability === "actions") continue;
       if (paths.some((path) => matchesPath(file, path))) {
         changedTestCapabilities.add(capability);
         if (!scope.includes(capability)) supportingChanges.push(file);
@@ -627,6 +628,7 @@ function selfTest() {
   );
   assert.deepEqual(scoped(["domains/operations/users/users-page.tsx", "shared/ui/button.tsx"], ["users"]).capabilities, ["users"]);
   assert.deepEqual(scoped(["domains/operations/teams/teams-page.tsx"], ["teams"]).capabilities, ["teams"]);
+  assert.deepEqual(scoped(["tests/actions/teams-contract.test.mjs"], ["teams"]).capabilities, ["teams"]);
   assert.deepEqual(scoped(["domains/operations/equipment-types/equipment-types-page.tsx"], ["equipment-types"]).capabilities, ["equipment-types"]);
   assert.deepEqual(scoped(["domains/operations/clients/clients-v1.tsx", "tests/e2e/clients-journey.spec.ts"], ["clients"]).capabilities, ["clients"]);
   const clientLocalePlan = selectCapabilities(["domains/operations/clients/clients-v1.tsx", "locales/en-US/common.json"], {

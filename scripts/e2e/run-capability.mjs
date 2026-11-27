@@ -268,7 +268,7 @@ function selfTest() {
     specs: ["tests/e2e/client-address-read-only-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(parseInvocation(["--scope", "clients", "--read-only-visual", "clients"]), {
-    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false, actionsFormSmoke: false, rolesQaApproved: false, rolesCleanupRecovery: false, rolesCleanupRecovery: false,
+    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false, actionsFormSmoke: false, rolesQaApproved: false, rolesCleanupRecovery: false,
   });
   assert.throws(() => parseInvocation(["--scope", "clients", "--read-only-visual", "clients", "--mutating-approved"]), /cannot include mutation approval/);
   assert.throws(() => parseInvocation(["--scope", "users", "--read-only-visual", "users"]), /limited to one clients scope/);

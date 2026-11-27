@@ -177,7 +177,10 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
     const conflict = await apiViaUi(page, "POST", "/api/gerit/v1/roles/", {name:marker,description:marker+" duplicate",isActive:true}); evidence.conflict = conflict.status; expect(conflict.status).toBe(409);
     const afterConflict = await listExactViaUi(page, marker); const conflictIds = (afterConflict.body.items as Array<{id:number;name:string}>).filter((item)=>item.name===marker).map((item)=>item.id); await resolveRolesConflict(manifestPath,{name:marker,executionId,expectedExistingId:roleId,observedHttp:409,exactMatchIds:conflictIds});
     await search.fill(marker); const deleteRow=page.getByRole("row").filter({hasText:marker}); await expect(deleteRow).toBeVisible(); await deleteRow.getByRole("button",{name:/delete|eliminar|excluir/i}).click(); const dialog=page.getByRole("alertdialog"); await expect(dialog).toBeVisible(); await dialog.getByRole("button",{name:/cancel|cancelar/i}).click(); await expect(dialog).not.toBeVisible(); expect((await apiViaUi(page,"GET","/api/gerit/v1/roles/"+roleId+"/")).status).toBe(200);
-    expect(mutations.filter((item)=>item.method==="PATCH").length).toBe(2); expect(mutations.some((item)=>item.method==="POST"&&item.path.includes("bulk-upload"))).toBe(false);
+    const lifecyclePatchPaths = mutations.filter((item)=>item.method==="PATCH").map((item)=>item.path.replace(/\/+$/, ""));
+    expect(new Set(lifecyclePatchPaths)).toEqual(new Set(["/api/gerit/v1/roles/" + roleId + "/activate", "/api/gerit/v1/roles/" + roleId + "/deactivate"]));
+    expect(lifecyclePatchPaths.length).toBeGreaterThanOrEqual(2);
+    expect(mutations.some((item)=>item.method==="POST"&&item.path.includes("bulk-upload"))).toBe(false);
   } finally {
     releasePendingPut?.();
     let cleanupFailure: Error | null = null;

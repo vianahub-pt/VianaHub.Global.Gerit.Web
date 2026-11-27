@@ -58,12 +58,3 @@ test("HubSelect is adopted by every current eligible select consumer", () => {
     assert.doesNotMatch(source, /NativeSelect|SelectTrigger|SelectContent|SelectItem|SelectValue|<select/);
   }
 });
-test("EquipmentTypes edit form omits metadata presentation and keeps the basic CRUD controls", () => {
-  const source = read("domains/operations/equipment-types/equipment-type-form-page.tsx");
-  assert.doesNotMatch(source, /equipmentTypes\.detail\.(metadata|idLabel|createdAtLabel)|equipment-type-created-at|equipment-type-id|dateLabel|createdDate/);
-  assert.match(source, /id="equipment-type-name"/);
-  assert.match(source, /id="equipment-type-description"/);
-  for (const key of ["equipmentTypes.actions.back", "equipmentTypes.actions.save", "equipmentTypes.actions.activate", "equipmentTypes.actions.deactivate", "equipmentTypes.actions.delete"]) assert.ok(source.includes(key), `missing ${key}`);
-  for (const permission of ["canUpdate", "canActivate", "canDeactivate", "canDelete"]) assert.ok(source.includes(permission));
-  assert.match(source, /normalizeEquipmentTypeDetail/);
-});

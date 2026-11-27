@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { expect, test, type APIRequestContext, type Page, type TestInfo } from "@playwright/test";
 import {
   beginEquipmentTypesCreate, cleanupOwnedEquipmentTypes, confirmEquipmentTypeDelete, markEquipmentTypeDeleteAttempted, readEquipmentTypesCleanupManifest,
-  reconcileEquipmentTypesCreate, registerOwnedEquipmentType,
+  reconcileEquipmentTypesCreate, registerOwnedEquipmentType, resolveEquipmentTypeRejectedCreate,
 } from "../../scripts/e2e/equipment-types-cleanup.mjs";
 import { authenticateFromLogin } from "./helpers/auth";
 
@@ -450,6 +450,5 @@ async function resolveRejectedEquipmentTypeCreate(
   path: string,
   input: { name: string; executionId: string; expectedExistingId: number },
 ) {
-  const { resolveEquipmentTypeRejectedCreate } = await import("../../scripts/e2e/equipment-types-cleanup.mjs");
   await resolveEquipmentTypeRejectedCreate(path, input);
 }

@@ -220,7 +220,10 @@ export async function evaluatePreflight({
     try {
       const manifest = JSON.parse(await readText(equipmentTypesManifestPath));
       checks.equipmentTypesCleanupManifestClear = manifest?.schemaVersion === 1 && manifest.status === "verified" &&
-        Array.isArray(manifest.records) && manifest.records.every((record) => record?.status === "verified");
+        Array.isArray(manifest.records) && manifest.records.every((record) => record?.status === "verified" &&
+          (record.id === null
+            ? record.createHttp === 409 && record.noRecordConfirmed === true
+            : Number.isSafeInteger(record.id) && record.id > 0 && record.deleteAttempted === true && record.deleteHttp === 200 && record.followUpReadHttp === 410));
     } catch { checks.equipmentTypesCleanupManifestClear = false; }
   } else checks.equipmentTypesCleanupManifestClear = true;
   const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");

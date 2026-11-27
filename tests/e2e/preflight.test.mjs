@@ -122,6 +122,21 @@ test("EquipmentTypes preflight blocks a persistent cleanup manifest with unresol
   assert.equal(result.authorization, "MUTATING_AUTHORIZATION_PENDING");
   assert.equal(result.status, "PREFLIGHT_BLOCKED");
 });
+test("EquipmentTypes preflight rejects a verified manifest without DELETE and follow-up GET proof", async () => {
+  const result = await evaluatePreflight({
+    ...valid,
+    fileExists: (path) => String(path).endsWith("cleanup-manifest.json"),
+    readText: async (path) => String(path).endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "verified", records: [{ id: 77, name: "synthetic", status: "verified", deleteAttempted: false, followUpReadHttp: 410 }] })
+      : String(path).endsWith("equipment-types-cleanup.mjs")
+        ? await readFile("scripts/e2e/equipment-types-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/equipment-types-journey.spec.ts", "utf8"),
+  });
+  assert.equal(result.checks.equipmentTypesCleanupManifestClear, false);
+  assert.equal(result.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal(result.status, "PREFLIGHT_BLOCKED");
+});
+
 test("preflight accepts only the authorized EquipmentTypes branches", async () => {
   for (const branch of ["feature/equipment-types-crud", "hotfix/equipment-types-form-design", "feature/equipment-types-actions-standardization"]) {
     const result = await evaluatePreflight({ ...valid, git: withBranch(branch) });

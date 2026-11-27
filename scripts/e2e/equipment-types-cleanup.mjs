@@ -15,7 +15,9 @@ export async function readEquipmentTypesCleanupManifest(path) {
       Number.isSafeInteger(record.userId) && Number.isSafeInteger(record.tenantId) &&
       typeof record.executionId === "string" && record.executionId.length > 0 &&
       ["create", "bulk-upload"].includes(record.operation) &&
-      ["pending", "verified"].includes(record.status));
+      ["pending", "verified"].includes(record.status) &&
+      (record.status !== "verified" || (record.id === null && record.createHttp === 409 && record.noRecordConfirmed === true) ||
+        (record.id !== null && record.deleteAttempted === true && record.deleteHttp === 200 && record.followUpReadHttp === 410)));
     if (!valid) return { status: "invalid", manifest: null };
     const clear = manifest.status === "verified" && manifest.records.every((record) => record.status === "verified");
     return { status: clear ? "clear" : "pending", manifest };
@@ -72,6 +74,23 @@ export async function resolveEquipmentTypeRejectedCreate(path, { name, execution
   current.manifest.status = current.manifest.records.every((record) => record.status === "verified") ? "verified" : "pending";
   await persist(path, current.manifest);
 }
+export async function reconcileEquipmentTypeConflictAlias(path, { name, executionId, tenantId, existingId, observedHttp }) {
+  if (observedHttp !== 409 || !Number.isSafeInteger(existingId) || existingId <= 0) throw new Error("EquipmentTypes conflict alias requires observed HTTP 409 and an exact existing ID.");
+  const manifest = JSON.parse(await readFile(path, "utf8"));
+  if (manifest?.schemaVersion !== 1 || !Array.isArray(manifest.records)) throw new Error("EquipmentTypes cleanup manifest is invalid.");
+  const matches = manifest.records.filter((record) => record.id === existingId && record.name === name &&
+    record.executionId === executionId && record.tenantId === tenantId && record.status === "verified");
+  const deletedOwner = matches.filter((record) => record.createHttp === 201 && record.deleteHttp === 200 && record.followUpReadHttp === 410 && record.deleteAttempted === true);
+  const alias = matches.filter((record) => record.createHttp === 200 && record.deleteHttp === undefined && record.followUpReadHttp === 410);
+  if (deletedOwner.length !== 1 || alias.length !== 1) throw new Error("EquipmentTypes conflict alias is not uniquely backed by the same execution's deleted record and observed 409.");
+  Object.assign(alias[0], { id: null, createHttp: 409, noRecordConfirmed: true, expectedExistingId: existingId, reconciledConflictAliasOfId: existingId, status: "verified", deleteAttempted: false });
+  delete alias[0].followUpReadHttp;
+  delete alias[0].reconciled;
+  manifest.status = manifest.records.every((record) => record.status === "verified") ? "verified" : "pending";
+  await persist(path, manifest);
+  return manifest;
+}
+
 export async function reconcileEquipmentTypesCreate(path, { executionId, list, get }) {
   const current = await readEquipmentTypesCleanupManifest(path);
   if (current.status === "invalid" || !current.manifest) throw new Error("EquipmentTypes cleanup manifest is invalid.");
@@ -135,13 +154,14 @@ export async function cleanupOwnedEquipmentTypes({ path, executionId, session, a
     if (record.id === null) throw new Error("EquipmentTypes cleanup cannot proceed with an unresolved create intent.");
     if (record.userId !== session.userId || record.tenantId !== session.tenantId) throw new Error("EquipmentTypes cleanup identity or tenant differs from the manifest owner.");
     const before = await api("GET", record.id, session.accessToken);
-    if (before.status === 410) {
+    if (before.status === 410 && record.deleteAttempted) {
+      if (record.deleteHttp !== 200) throw new Error("EquipmentTypes GET 410 follows an ambiguous DELETE; cleanup requires manual reconciliation and will not retry.");
       record.status = "verified";
       record.followUpReadHttp = 410;
       await persist(path, current.manifest);
       continue;
     }
-    if (before.status !== 200 || before.body?.id !== record.id || before.body?.name !== record.name || before.body?.tenantId !== record.tenantId) {
+    if (before.status !== 410 && (before.status !== 200 || before.body?.id !== record.id || before.body?.name !== record.name || before.body?.tenantId !== record.tenantId)) {
       throw new Error("EquipmentTypes cleanup pre-read did not confirm the exact owned ID and marker.");
     }
     if (record.deleteAttempted) throw new Error("EquipmentTypes DELETE was previously attempted; manual reconciliation is required before retry.");

@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   beginEquipmentTypesCreate, cleanupOwnedEquipmentTypes, confirmEquipmentTypeDelete, markEquipmentTypeDeleteAttempted, readEquipmentTypesCleanupManifest,
-  reconcileEquipmentTypesCreate, registerOwnedEquipmentType, resolveEquipmentTypeRejectedCreate,
+  reconcileEquipmentTypeConflictAlias, reconcileEquipmentTypesCreate, registerOwnedEquipmentType, resolveEquipmentTypeRejectedCreate,
 } from "../../scripts/e2e/equipment-types-cleanup.mjs";
 
 test("EquipmentTypes persists create intent before mutation and blocks another execution", async () => {
@@ -48,6 +48,29 @@ test("EquipmentTypes resolves HTTP 409 only against a registered exact record in
     assert.equal(manifest.manifest.records[1].noRecordConfirmed, true);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+test("EquipmentTypes reconciles a same-run conflict alias only against its already deleted owner", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "gerit-equipment-cleanup-"));
+  const path = join(dir, "manifest.json");
+  try {
+    await beginEquipmentTypesCreate(path, { name: "E2E-EQT-run-ui", userId: 4, tenantId: 9, executionId: "run-1", operation: "create" });
+    await registerOwnedEquipmentType(path, { id: 51, name: "E2E-EQT-run-ui", userId: 4, tenantId: 9, executionId: "run-1", operation: "create", createHttp: 201 });
+    await markEquipmentTypeDeleteAttempted(path, 51);
+    await confirmEquipmentTypeDelete(path, { id: 51, executionId: "run-1", deleteHttp: 200, followUpReadHttp: 410 });
+    await beginEquipmentTypesCreate(path, { name: "E2E-EQT-run-ui", userId: 4, tenantId: 9, executionId: "run-1", operation: "create" });
+    const raw = JSON.parse(await readFile(path, "utf8"));
+    Object.assign(raw.records[1], { id: 51, createHttp: 200, reconciled: true, followUpReadHttp: 410, status: "verified" });
+    raw.status = "verified";
+    await import("node:fs/promises").then(({ writeFile }) => writeFile(path, JSON.stringify(raw), "utf8"));
+    await assert.rejects(() => reconcileEquipmentTypeConflictAlias(path, { name: "E2E-EQT-run-ui", executionId: "run-1", tenantId: 9, existingId: 51, observedHttp: 201 }), /observed HTTP 409/);
+    await reconcileEquipmentTypeConflictAlias(path, { name: "E2E-EQT-run-ui", executionId: "run-1", tenantId: 9, existingId: 51, observedHttp: 409 });
+    const manifest = await readEquipmentTypesCleanupManifest(path);
+    assert.equal(manifest.status, "clear");
+    assert.equal(manifest.manifest.records[1].id, null);
+    assert.equal(manifest.manifest.records[1].noRecordConfirmed, true);
+    assert.equal(manifest.manifest.records[1].expectedExistingId, 51);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 test("EquipmentTypes reconciles a partial import only when exact list and detail identify one record", async () => {
   const dir = await mkdtemp(join(tmpdir(), "gerit-equipment-cleanup-"));
   const path = join(dir, "manifest.json");

@@ -6,4 +6,4 @@ export * from "@/domains/operations/interventions";
 export * from "@/domains/operations/team-members";
 export * from "@/domains/operations/teams";
 export * from "@/domains/operations/vehicles";
-
+export * from "@/domains/operations/resources";

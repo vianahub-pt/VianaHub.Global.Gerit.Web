@@ -12,7 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "node --test tests/actions/*.test.mjs tests/teams/*.test.mjs tests/preferences/*.test.mjs tests/users/*.test.mjs tests/shared/*.test.mjs tests/clients/*.test.mjs tests/equipment-types/*.test.mjs tests/e2e/preflight.test.mjs tests/e2e/run-lock.test.mjs tests/e2e/impact-classifier.test.mjs tests/e2e/client-address-crud-guard.test.mjs tests/e2e/actions-cleanup.test.mjs tests/e2e/equipment-types-cleanup.test.mjs tests/e2e/roles-cleanup.test.mjs",
+    "test": "node --test tests/resources/*.test.mjs tests/actions/*.test.mjs tests/teams/*.test.mjs tests/preferences/*.test.mjs tests/users/*.test.mjs tests/shared/*.test.mjs tests/clients/*.test.mjs tests/equipment-types/*.test.mjs tests/e2e/preflight.test.mjs tests/e2e/run-lock.test.mjs tests/e2e/impact-classifier.test.mjs tests/e2e/client-address-crud-guard.test.mjs tests/e2e/actions-cleanup.test.mjs tests/e2e/equipment-types-cleanup.test.mjs tests/e2e/roles-cleanup.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:capability": "node scripts/e2e/run-capability.mjs",
     "test:e2e:client-address-crud": "node scripts/e2e/run-client-address-crud.mjs",

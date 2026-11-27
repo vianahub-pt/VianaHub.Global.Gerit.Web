@@ -229,7 +229,7 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
                 </div>
                 <label data-testid="role-description-field" className="block w-full sm:col-span-12">
                   <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("roles.form.description")}</span>
-                  <Textarea id="role-description" required maxLength={ROLE_DESCRIPTION_MAX_LENGTH} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || !canSave} className="h-20 min-h-[80px] resize-y px-4" />
+                  <Textarea id="role-description" data-testid="role-description-input" required maxLength={ROLE_DESCRIPTION_MAX_LENGTH} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || !canSave} className="h-20 min-h-[80px] resize-y px-4" />
                 </label>
                 {editing ? <p id="role-name-read-only" className="sr-only">{t("roles.form.nameReadOnly")}</p> : null}
               </div>

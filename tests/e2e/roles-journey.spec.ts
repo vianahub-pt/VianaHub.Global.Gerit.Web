@@ -140,7 +140,7 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
     let read = await apiViaUi(page, "GET", "/api/gerit/v1/roles/" + roleId + "/"); evidence.createRead = read.status; expect(read.status).toBe(200); expect(read.body).toMatchObject({ id: roleId, name: marker, description, isActive: true });
     await search.fill(marker); const row = page.getByRole("row").filter({ hasText: marker }); await expect(row).toBeVisible();
     await row.getByRole("button", { name: /edit|editar/i }).click(); await expect(page.getByLabel(nameLabel)).toHaveValue(marker); await expect(page.getByLabel(nameLabel)).toBeDisabled(); await expect(status).toBeChecked(); await capture(page, testInfo, "roles-edit-active.png");
-    await page.getByLabel(descriptionLabel).fill(marker + " updated"); await status.click(); await expect(status).not.toBeChecked(); await capture(page, testInfo, "roles-edit-inactive-before-save.png");
+    await page.getByTestId("role-description-input").fill(marker + " updated"); await status.click(); await expect(status).not.toBeChecked(); await capture(page, testInfo, "roles-edit-inactive-before-save.png");
     expect(mutations.filter((item) => ["PUT", "PATCH"].includes(item.method))).toHaveLength(0);
     let releaseRequest!: () => void;
     let signalRequestStarted!: () => void;

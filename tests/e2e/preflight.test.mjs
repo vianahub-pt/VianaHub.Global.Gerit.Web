@@ -32,8 +32,12 @@ const valid = {
   config,
   portAvailable: async () => true,
   buildCurrent: async () => true,
-  fileExists: () => true,
-  readText: async () => "finally randomUUID DELETE 410",
+  fileExists: (path) => !String(path).endsWith("cleanup-manifest.json"),
+  readText: async (path) => String(path).endsWith("equipment-types-cleanup.mjs")
+    ? await readFile("scripts/e2e/equipment-types-cleanup.mjs", "utf8")
+    : String(path).endsWith("equipment-types-journey.spec.ts")
+      ? await readFile("tests/e2e/equipment-types-journey.spec.ts", "utf8")
+      : "finally randomUUID DELETE 410",
 };
 const withBranch = (branch) => ({
   ...git,
@@ -104,14 +108,31 @@ test("preflight blocks Actions mocked visual with an unrelated dirty file or wit
   assert.equal(noMockMode.checks.workingTreePreserved, false);
 });
 
-test("preflight accepts the authorized EquipmentTypes visual hotfix branch", async () => {
+test("EquipmentTypes preflight blocks a persistent cleanup manifest with unresolved records", async () => {
   const result = await evaluatePreflight({
     ...valid,
-    git: withBranch("hotfix/equipment-types-form-design"),
+    fileExists: (path) => String(path).includes("equipment-types-journey") && String(path).endsWith("cleanup-manifest.json"),
+    readText: async (path) => String(path).endsWith("cleanup-manifest.json")
+      ? JSON.stringify({ schemaVersion: 1, status: "pending", records: [{ id: null, status: "pending" }] })
+      : String(path).endsWith("equipment-types-cleanup.mjs")
+        ? await readFile("scripts/e2e/equipment-types-cleanup.mjs", "utf8")
+        : await readFile("tests/e2e/equipment-types-journey.spec.ts", "utf8"),
   });
-  assert.equal(result.status, "PRECHECK_CONFIG_PASS");
-  assert.equal(result.checks.branch, true);
-  assert.equal(result.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  assert.equal(result.checks.equipmentTypesCleanupManifestClear, false);
+  assert.equal(result.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal(result.status, "PREFLIGHT_BLOCKED");
+});
+test("preflight accepts only the authorized EquipmentTypes branches", async () => {
+  for (const branch of ["feature/equipment-types-crud", "hotfix/equipment-types-form-design", "feature/equipment-types-actions-standardization"]) {
+    const result = await evaluatePreflight({ ...valid, git: withBranch(branch) });
+    assert.equal(result.status, "PRECHECK_CONFIG_PASS", branch);
+    assert.equal(result.checks.branch, true, branch);
+    assert.equal(result.authorization, "MUTATING_AUTHORIZATION_CONFIRMED", branch);
+  }
+  const arbitrary = await evaluatePreflight({ ...valid, git: withBranch("feature/equipment-types-other") });
+  assert.equal(arbitrary.checks.branch, false);
+  assert.equal(arbitrary.status, "PREFLIGHT_BLOCKED");
+  assert.equal(arbitrary.authorization, "MUTATING_AUTHORIZATION_PENDING");
 });
 
 test("Actions mutation preflight accepts only its original or current fix branch", async () => {

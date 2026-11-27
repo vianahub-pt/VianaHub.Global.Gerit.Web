@@ -65,6 +65,12 @@ function getBatchPlan(capabilities, env = process.env, options = {}) {
   };
 }
 
+function applyEquipmentTypesMutationApproval(environment, capability, localExecution, mutatingApproved) {
+  const result = { ...environment };
+  if (capability === "equipment-types" && localExecution && mutatingApproved) result.E2E_MUTATING_APPROVED = "true";
+  else delete result.E2E_MUTATING_APPROVED;
+  return result;
+}
 function getE2EEnvironment(env, { localExecution, mockedVisual, readOnlyVisual }) {
   if (!localExecution) return env;
   const result = { ...env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" };
@@ -146,6 +152,9 @@ function parseInvocation(args) {
 }
 
 function selfTest() {
+  assert.equal(applyEquipmentTypesMutationApproval({}, "equipment-types", true, true).E2E_MUTATING_APPROVED, "true");
+  assert.equal(applyEquipmentTypesMutationApproval({ E2E_MUTATING_APPROVED: "true" }, "equipment-types", false, true).E2E_MUTATING_APPROVED, undefined);
+  assert.equal(applyEquipmentTypesMutationApproval({ E2E_MUTATING_APPROVED: "true" }, "actions", true, true).E2E_MUTATING_APPROVED, undefined);
   assert.deepEqual(getRunPlan("users", { CI: "true", E2E_USERS_QA_MUTATION_APPROVAL: "configured" }), {
     spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression",
   });
@@ -279,6 +288,7 @@ const e2eEnvironment = { ...getE2EEnvironment(process.env, {
   mockedVisual: invocation.mockedVisual,
   readOnlyVisual: invocation.readOnlyVisual,
 }) };
+Object.assign(e2eEnvironment, applyEquipmentTypesMutationApproval(e2eEnvironment, capabilities[0], localExecution, mutatingApproved));
 if (batchPlan.nonmutatingCapabilities.includes("actions")) delete e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL;
 if (invocation.actionsQaApproved && !batchPlan.nonmutatingCapabilities.includes("actions")) e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL = "true";
 const readOnlyHomologationStatusPath = invocation.readOnlyVisual

@@ -98,7 +98,7 @@ function isExpectedBranch(branch, capability) {
     return true;
   }
   if (capability === "equipment-types") {
-    return branch === "feature/equipment-types-crud" || branch === "hotfix/equipment-types-form-design";
+    return ["feature/equipment-types-crud", "hotfix/equipment-types-form-design", "feature/equipment-types-actions-standardization"].includes(branch);
   }
   return /^(feature|fix|hotfix)\/[a-z0-9][a-z0-9-]*$/i.test(branch);
 }
@@ -111,11 +111,14 @@ export function portIsAvailable(port = 3100, host = "127.0.0.1") {
   });
 }
 
-function hasEquipmentTypesCleanupPlan(specText) {
-  return specText.includes("finally") &&
-    specText.includes("randomUUID") &&
-    specText.includes("DELETE") &&
-    specText.includes("410");
+function hasEquipmentTypesCleanupPlan(specText, cleanupText) {
+  return specText.includes("beginEquipmentTypesCreate") &&
+    specText.includes("registerOwnedEquipmentType") &&
+    specText.includes("cleanupOwnedEquipmentTypes") &&
+    specText.includes("finally") &&
+    cleanupText.includes("createAttempted") &&
+    cleanupText.includes("deleteAttempted") &&
+    cleanupText.includes("followUpReadHttp");
 }
 
 function hasReadOnlyClientAddressPlan(specText) {
@@ -212,6 +215,17 @@ export async function evaluatePreflight({
   const scopedTeamsVisualChanges = capability === "teams" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
     normalizedChangedFiles.every((file) => TEAMS_VISUAL_WORKING_FILES.has(file));
   checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges || scopedTeamsVisualChanges;
+  const equipmentTypesManifestPath = resolve(repoRoot, ".e2e-debug/equipment-types-journey/cleanup-manifest.json");
+  if (capability === "equipment-types" && mode === "mutating" && fileExists(equipmentTypesManifestPath)) {
+    try {
+      const manifest = JSON.parse(await readText(equipmentTypesManifestPath));
+      checks.equipmentTypesCleanupManifestClear = manifest?.schemaVersion === 1 && manifest.status === "verified" &&
+        Array.isArray(manifest.records) && manifest.records.every((record) => record?.status === "verified" &&
+          (record.id === null
+            ? record.createHttp === 409 && record.noRecordConfirmed === true
+            : Number.isSafeInteger(record.id) && record.id > 0 && record.deleteAttempted === true && record.deleteHttp === 200 && record.followUpReadHttp === 410));
+    } catch { checks.equipmentTypesCleanupManifestClear = false; }
+  } else checks.equipmentTypesCleanupManifestClear = true;
   const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");
   if (capability === "actions" && mode === "mutating" && fileExists(actionsManifestPath)) {
     try {
@@ -247,7 +261,8 @@ export async function evaluatePreflight({
     const cleanupText = await readText(resolve(scriptDir, "actions-cleanup.mjs"));
     checks.cleanupPlan = text.includes("registerOwnedAction") && text.includes("cleanupOwnedActions") && text.includes("test.afterEach") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp");
   } else if (capability === "equipment-types" && checks.canonicalSpec) {
-    checks.cleanupPlan = hasEquipmentTypesCleanupPlan(await readText(spec));
+    const cleanupModule = resolve(scriptDir, "equipment-types-cleanup.mjs");
+    checks.cleanupPlan = fileExists(cleanupModule) && hasEquipmentTypesCleanupPlan(await readText(spec), await readText(cleanupModule));
   } else if (capability === "clients" && checks.canonicalSpec) {
     checks.cleanupPlan = hasClientsCleanupPlan(await readText(spec));
   } else {
@@ -262,7 +277,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      (capability === "equipment-types" || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear))
+      ((capability === "equipment-types" && checks.branch && checks.equipmentTypesCleanupManifestClear) || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -356,6 +371,11 @@ async function selfTest() {
   });
   assert.equal(hotfixBranch.status, "PRECHECK_CONFIG_PASS");
   assert.equal(hotfixBranch.checks.branch, true);
+  const currentFeatureBranch = await evaluatePreflight({ ...common, git: gitWithBranch("feature/equipment-types-actions-standardization") });
+  assert.equal(currentFeatureBranch.status, "PRECHECK_CONFIG_PASS");
+  const arbitraryEquipmentBranch = await evaluatePreflight({ ...common, git: gitWithBranch("feature/equipment-types-other") });
+  assert.equal(arbitraryEquipmentBranch.checks.branch, false);
+  assert.equal(arbitraryEquipmentBranch.authorization, "MUTATING_AUTHORIZATION_PENDING");
   const wrongUrl = await evaluatePreflight({ ...common, config: { ...validConfig, E2E_BASE_URL: "http://localhost:3000" } });
   assert.equal(wrongUrl.status, "PREFLIGHT_BLOCKED");
   const unknown = await evaluatePreflight({ ...common, capability: "unknown" });

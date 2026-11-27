@@ -72,8 +72,8 @@ export function buildEquipmentTypesQuery(input: {
   return query;
 }
 
-export function toEquipmentTypePayload(name: string, description: string) {
-  return { name: name.trim(), description: description.trim() };
+export function toEquipmentTypePayload(name: string, description: string, isActive: boolean) {
+  return { name: name.trim(), description: description.trim(), isActive };
 }
 
 export function normalizeCreatedEquipmentTypeId(value: unknown): number | null {

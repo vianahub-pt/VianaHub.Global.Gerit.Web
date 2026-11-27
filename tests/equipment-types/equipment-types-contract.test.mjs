@@ -22,13 +22,13 @@ test("paged filters match the API and omit IsActive for all statuses", () => {
   assert.equal(buildEquipmentTypesQuery({ ...base, status: "inactive" }).get("IsActive"), "false");
 });
 
-test("request payload contains only the API name and description fields", () => {
-  const payload = toEquipmentTypePayload(" Pump ", " Heavy duty ");
-  assert.deepEqual(payload, { name: "Pump", description: "Heavy duty" });
-  assert.deepEqual(Object.keys(payload).sort(), ["description", "name"]);
+test("request payload explicitly carries status without tenant identity", () => {
+  const payload = toEquipmentTypePayload(" Pump ", " Heavy duty ", false);
+  assert.deepEqual(payload, { name: "Pump", description: "Heavy duty", isActive: false });
+  assert.deepEqual(Object.keys(payload).sort(), ["description", "isActive", "name"]);
   assert.equal("tenantId" in payload, false);
   assert.equal("TenantId" in payload, false);
-  assert.deepEqual(toEquipmentTypePayload("Pump", ""), { name: "Pump", description: "" });
+  assert.deepEqual(toEquipmentTypePayload("Pump", "", true), { name: "Pump", description: "", isActive: true });
 });
 
 test("API response normalizers reject incompatible contracts", () => {

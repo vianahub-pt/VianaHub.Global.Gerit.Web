@@ -63,6 +63,18 @@ async function listExact(request: APIRequestContext, token: string, name: string
   }
   return { status: 200, body: { ...firstBody, items } };
 }
+async function listExactViaUi(page: Page, name: string): Promise<ApiResult> {
+  const base = "/api/gerit/v1/roles/paged/?Search=" + encodeURIComponent(name) + "&PageSize=100&SortBy=Name&SortDirection=asc";
+  const first = await apiViaUi(page, "GET", base + "&PageNumber=1") as ApiResult & { body: { items?: Array<{ id: number; name: string }>; totalPages?: number } | null };
+  if (first.status !== 200 || !Array.isArray(first.body?.items) || !Number.isSafeInteger(first.body.totalPages) || first.body.totalPages! < 0 || first.body.totalPages! > 100) return first;
+  const items = [...first.body.items];
+  for (let pageNumber = 2; pageNumber <= first.body.totalPages!; pageNumber += 1) {
+    const response = await apiViaUi(page, "GET", base + "&PageNumber=" + pageNumber) as ApiResult & { body: { items?: Array<{ id: number; name: string }> } | null };
+    if (response.status !== 200 || !Array.isArray(response.body?.items)) return response;
+    items.push(...response.body.items);
+  }
+  return { status: 200, body: { ...first.body, items } };
+}
 async function detail(request: APIRequestContext, token: string, id: number): Promise<ApiResult> {
   const response = await request.get("/api/gerit/v1/roles/" + id + "/", { headers: { Authorization: "Bearer " + token } });
   return { status: response.status(), body: await response.json().catch(() => null) };
@@ -89,8 +101,7 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
     const required = ["getpaged", "getby", "create", "update", "activate", "deactivate", "delete"];
     if (!owner?.identityMatches || !["admin", "backoffice", "manager"].some((role) => owner!.roles.includes(role)) || required.some((grant) => !owner!.grants.includes(grant))) throw new Error("Roles QA identity, tenant, base role or CRUD grants were not verified before mutation.");
     evidence.identityTenantGrants = true;
-    const fresh = await refresh(request, owner);
-    const markerCheck = await listExact(request, fresh.accessToken, marker);
+    const markerCheck = await listExactViaUi(page, marker);
     evidence.markerPrecheck = markerCheck.status;
     if (markerCheck.status !== 200 || (markerCheck.body.items as Array<{ name: string }>).some((item) => item.name === marker)) throw new Error("Unique Roles marker precheck failed or marker already exists; no mutation started.");
     page.on("request", (event) => { const path = new URL(event.url()).pathname; if (["POST", "PUT", "PATCH", "DELETE"].includes(event.method()) && path.includes("/api/gerit/v1/roles")) mutations.push({ method: event.method(), path, body: event.postData() }); });
@@ -126,7 +137,7 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
     expect(created.request().postDataJSON()).toEqual({ name: marker, description, isActive: true }); expect(created.request().postData() ?? "").not.toMatch(/tenantid/i);
     await expect(page).toHaveURL(/\/roles\/$/);
     await expect(page.getByRole("status").filter({ hasText: /role created successfully|função criada com sucesso|función creada con éxito/i }).first()).toBeVisible();
-    let read = await detail(request, (await refresh(request, owner!)).accessToken, roleId); evidence.createRead = read.status; expect(read.status).toBe(200); expect(read.body).toMatchObject({ id: roleId, name: marker, description, isActive: true });
+    let read = await apiViaUi(page, "GET", "/api/gerit/v1/roles/" + roleId + "/"); evidence.createRead = read.status; expect(read.status).toBe(200); expect(read.body).toMatchObject({ id: roleId, name: marker, description, isActive: true });
     await search.fill(marker); const row = page.getByRole("row").filter({ hasText: marker }); await expect(row).toBeVisible();
     await row.getByRole("button", { name: /edit|editar/i }).click(); await expect(page.getByLabel(nameLabel)).toHaveValue(marker); await expect(page.getByLabel(nameLabel)).toBeDisabled(); await expect(status).toBeChecked(); await capture(page, testInfo, "roles-edit-active.png");
     await page.getByLabel(descriptionLabel).fill(marker + " updated"); await status.click(); await expect(status).not.toBeChecked(); await capture(page, testInfo, "roles-edit-inactive-before-save.png");
@@ -154,18 +165,18 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
     const updated = await putPromise; evidence.update = updated.status(); expect(updated.status()).toBe(200);
     expect(updated.request().postDataJSON()).toEqual({ description: marker + " updated", isActive: false }); expect(updated.request().postData() ?? "").not.toMatch(/tenantid|"name"/i); await expect(page).toHaveURL(/\/roles\/$/);
     await expect(page.getByRole("status").filter({ hasText: /role updated successfully|função atualizada com sucesso|función actualizada con éxito/i }).first()).toBeVisible();
-    read = await detail(request, (await refresh(request, owner!)).accessToken, roleId); evidence.updateRead = read.status; expect(read.status).toBe(200); expect(read.body).toMatchObject({ name: marker, description: marker + " updated", isActive: false });
+    read = await apiViaUi(page, "GET", "/api/gerit/v1/roles/" + roleId + "/"); evidence.updateRead = read.status; expect(read.status).toBe(200); expect(read.body).toMatchObject({ name: marker, description: marker + " updated", isActive: false });
     await search.fill(marker); const inactiveRow = page.getByRole("row").filter({ hasText: marker }); await expect(inactiveRow).toBeVisible(); await inactiveRow.getByRole("button", { name: /edit|editar/i }).click(); await expect(status).not.toBeChecked(); await status.click();
     const reactivatePutPromise = page.waitForResponse((response) => response.request().method() === "PUT" && new URL(response.url()).pathname.endsWith("/roles/" + roleId + "/")); await page.getByTestId("role-save-button").click(); const reactivatedByPut = await reactivatePutPromise; expect(reactivatedByPut.status()).toBe(200); expect(reactivatedByPut.request().postDataJSON()).toEqual({ description: marker + " updated", isActive: true }); await expect(page).toHaveURL(/\/roles\/$/);
     await expect(page.getByRole("status").filter({ hasText: /role updated successfully|função atualizada com sucesso|función actualizada con éxito/i }).first()).toBeVisible();
     await search.fill(marker); const activeRow = page.getByRole("row").filter({ hasText: marker }); await expect(activeRow).toBeVisible();
     const deactivate = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith("/roles/" + roleId + "/deactivate/")); await activeRow.getByRole("button", { name: /deactivate|desativar|desactivar/i }).click(); const deactivated = await deactivate; evidence.deactivate = deactivated.status(); expect(deactivated.status()).toBe(200);
     await search.fill(marker); const inactiveAgain = page.getByRole("row").filter({ hasText: marker }); const activate = page.waitForResponse((response) => response.request().method() === "PATCH" && new URL(response.url()).pathname.endsWith("/roles/" + roleId + "/activate/")); await inactiveAgain.getByRole("button", { name: /activate|ativar|activar/i }).click(); const activated = await activate; evidence.activate = activated.status(); expect(activated.status()).toBe(200);
-    const conflictSession = await refresh(request, owner!); const beforeConflict = await listExact(request, conflictSession.accessToken, marker); const ids = (beforeConflict.body.items as Array<{id:number;name:string}>).filter((item)=>item.name===marker).map((item)=>item.id); expect(ids).toEqual([roleId]);
+    const beforeConflict = await listExactViaUi(page, marker); const ids = (beforeConflict.body.items as Array<{id:number;name:string}>).filter((item)=>item.name===marker).map((item)=>item.id); expect(ids).toEqual([roleId]);
     await beginRolesConflict(manifestPath, { name: marker, userId: owner!.userId, tenantId: owner!.tenantId, executionId, expectedExistingId: roleId });
-    const conflict = await request.post("/api/gerit/v1/roles/", { headers:{Authorization:"Bearer "+conflictSession.accessToken,"Content-Type":"application/json"}, data:{name:marker,description:marker+" duplicate",isActive:true} }); evidence.conflict = conflict.status(); expect(conflict.status()).toBe(409);
-    const afterConflict = await listExact(request, conflictSession.accessToken, marker); const conflictIds = (afterConflict.body.items as Array<{id:number;name:string}>).filter((item)=>item.name===marker).map((item)=>item.id); await resolveRolesConflict(manifestPath,{name:marker,executionId,expectedExistingId:roleId,observedHttp:409,exactMatchIds:conflictIds});
-    await search.fill(marker); const deleteRow=page.getByRole("row").filter({hasText:marker}); await expect(deleteRow).toBeVisible(); await deleteRow.getByRole("button",{name:/delete|eliminar|excluir/i}).click(); const dialog=page.getByRole("alertdialog"); await expect(dialog).toBeVisible(); await dialog.getByRole("button",{name:/cancel|cancelar/i}).click(); await expect(dialog).not.toBeVisible(); expect((await detail(request,(await refresh(request,owner!)).accessToken,roleId)).status).toBe(200);
+    const conflict = await apiViaUi(page, "POST", "/api/gerit/v1/roles/", {name:marker,description:marker+" duplicate",isActive:true}); evidence.conflict = conflict.status; expect(conflict.status).toBe(409);
+    const afterConflict = await listExactViaUi(page, marker); const conflictIds = (afterConflict.body.items as Array<{id:number;name:string}>).filter((item)=>item.name===marker).map((item)=>item.id); await resolveRolesConflict(manifestPath,{name:marker,executionId,expectedExistingId:roleId,observedHttp:409,exactMatchIds:conflictIds});
+    await search.fill(marker); const deleteRow=page.getByRole("row").filter({hasText:marker}); await expect(deleteRow).toBeVisible(); await deleteRow.getByRole("button",{name:/delete|eliminar|excluir/i}).click(); const dialog=page.getByRole("alertdialog"); await expect(dialog).toBeVisible(); await dialog.getByRole("button",{name:/cancel|cancelar/i}).click(); await expect(dialog).not.toBeVisible(); expect((await apiViaUi(page,"GET","/api/gerit/v1/roles/"+roleId+"/")).status).toBe(200);
     expect(mutations.filter((item)=>item.method==="PATCH").length).toBe(2); expect(mutations.some((item)=>item.method==="POST"&&item.path.includes("bulk-upload"))).toBe(false);
   } finally {
     releasePendingPut?.();

@@ -4,6 +4,7 @@ export const CAPABILITIES = Object.freeze([
   "user-preferences",
   "teams",
   "roles",
+  "resources",
   "users",
   "equipment-types",
   "clients",

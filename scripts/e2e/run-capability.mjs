@@ -71,6 +71,14 @@ function applyEquipmentTypesMutationApproval(environment, capability, localExecu
   else delete result.E2E_MUTATING_APPROVED;
   return result;
 }
+function applyRolesMutationApproval(environment, capability, localExecution, mutatingApproved, rolesQaApproved, rolesCleanupRecovery) {
+  const result = { ...environment };
+  delete result.E2E_ROLES_QA_MUTATION_APPROVAL;
+  delete result.E2E_ROLES_CLEANUP_RECOVERY;
+  if (capability === "roles" && localExecution && mutatingApproved && rolesQaApproved) { result.E2E_MUTATING_APPROVED = "true"; result.E2E_ROLES_QA_MUTATION_APPROVAL = "true"; if (rolesCleanupRecovery) result.E2E_ROLES_CLEANUP_RECOVERY = "true"; }
+  else if (capability === "roles") delete result.E2E_MUTATING_APPROVED;
+  return result;
+}
 function getE2EEnvironment(env, { localExecution, mockedVisual, readOnlyVisual }) {
   if (!localExecution) return env;
   const result = { ...env, E2E_VISUAL: "true", E2E_SANITIZED_ARTIFACTS: "true" };
@@ -94,6 +102,8 @@ function parseInvocation(args) {
   let mockedVisual = false;
   let readOnlyVisual = false;
   let actionsQaApproved = false;
+  let rolesQaApproved = false;
+  let rolesCleanupRecovery = false;
   let actionsFormSmoke = false;
   const capabilities = [];
   for (let index = 0; index < args.length; index += 1) {
@@ -114,6 +124,12 @@ function parseInvocation(args) {
     } else if (argument === "--actions-qa-approved") {
       if (actionsQaApproved) throw new Error("Actions QA approval may be selected only once.");
       actionsQaApproved = true;
+    } else if (argument === "--roles-cleanup-recovery") {
+      if (rolesCleanupRecovery) throw new Error("Roles cleanup recovery may be selected only once.");
+      rolesCleanupRecovery = true;
+    } else if (argument === "--roles-qa-approved") {
+      if (rolesQaApproved) throw new Error("Roles QA approval may be selected only once.");
+      rolesQaApproved = true;
     } else if (argument === "--actions-form-smoke") {
       if (actionsFormSmoke) throw new Error("Actions focused form smoke may be selected only once.");
       actionsFormSmoke = true;
@@ -142,19 +158,28 @@ function parseInvocation(args) {
   if (actionsQaApproved && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || mockedVisual || readOnlyVisual)) {
     throw new Error("Actions QA approval requires one Actions scope, --mutating-approved, and canonical mutating mode.");
   }
+  if (rolesCleanupRecovery && (capabilities.length !== 1 || capabilities[0] !== "roles" || !mutatingApproved || !rolesQaApproved || mockedVisual || readOnlyVisual)) throw new Error("Roles cleanup recovery requires Roles scope and both explicit mutation approvals.");
+  if (rolesQaApproved && (capabilities.length !== 1 || capabilities[0] !== "roles" || !mutatingApproved || mockedVisual || readOnlyVisual)) {
+    throw new Error("Roles QA approval requires one Roles scope, --mutating-approved, and canonical mutating mode.");
+  }
   if (actionsFormSmoke && (capabilities.length !== 1 || capabilities[0] !== "actions" || !mutatingApproved || !actionsQaApproved || mockedVisual || readOnlyVisual)) {
     throw new Error("Actions focused form smoke requires one Actions scope and both explicit QA mutation approvals.");
   }
   if (readOnlyVisual && (capabilities.length !== 1 || capabilities[0] !== "clients" || mutatingApproved || mockedVisual)) {
     throw new Error("Read-only visual mode is limited to one clients scope and cannot include mutation approval.");
   }
-  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual, actionsQaApproved, actionsFormSmoke };
+  return { capabilities, scope, scopeApproved, mutatingApproved, mockedVisual, readOnlyVisual, actionsQaApproved, actionsFormSmoke, rolesQaApproved, rolesCleanupRecovery };
 }
 
 function selfTest() {
   assert.equal(applyEquipmentTypesMutationApproval({}, "equipment-types", true, true).E2E_MUTATING_APPROVED, "true");
   assert.equal(applyEquipmentTypesMutationApproval({ E2E_MUTATING_APPROVED: "true" }, "equipment-types", false, true).E2E_MUTATING_APPROVED, undefined);
   assert.equal(applyEquipmentTypesMutationApproval({ E2E_MUTATING_APPROVED: "true" }, "actions", true, true).E2E_MUTATING_APPROVED, undefined);
+  assert.equal(applyRolesMutationApproval({}, "roles", true, true, true, false).E2E_MUTATING_APPROVED, "true");
+  assert.equal(applyRolesMutationApproval({}, "roles", true, true, true, false).E2E_ROLES_QA_MUTATION_APPROVAL, "true");
+  assert.equal(applyRolesMutationApproval({ E2E_MUTATING_APPROVED: "true", E2E_ROLES_QA_MUTATION_APPROVAL: "true" }, "roles", true, true, false, false).E2E_MUTATING_APPROVED, undefined);
+  assert.equal(applyRolesMutationApproval({ E2E_ROLES_QA_MUTATION_APPROVAL: "true" }, "roles", true, true, false, false).E2E_ROLES_QA_MUTATION_APPROVAL, undefined);
+  assert.equal(applyRolesMutationApproval({ E2E_MUTATING_APPROVED: "true" }, "roles", false, true, true, false).E2E_MUTATING_APPROVED, undefined);
   assert.deepEqual(getRunPlan("users", { CI: "true", E2E_USERS_QA_MUTATION_APPROVAL: "configured" }), {
     spec: "tests/e2e/users-self-password.spec.ts", project: "chromium", mode: "nonmutating-regression",
   });
@@ -215,7 +240,7 @@ function selfTest() {
   assert.equal(explicitlyMockedEnvironment.E2E_VISUAL, "true");
   assert.equal(explicitlyMockedEnvironment.E2E_CLIENT_ADDRESS_MUTATING_APPROVED, undefined);
   assert.deepEqual(parseInvocation(["--scope", "users", "users"]), {
-    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false, actionsQaApproved: false, actionsFormSmoke: false,
+    capabilities: ["users"], scope: ["users"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: false, actionsQaApproved: false, actionsFormSmoke: false, rolesQaApproved: false, rolesCleanupRecovery: false,
   });
   assert.throws(() => parseInvocation(["--scope", "users", "users", "teams"]), /exactly match/);
   assert.throws(() => parseInvocation(["--scope", "users,teams", "users", "teams"]), /explicit scope approval/);
@@ -243,12 +268,17 @@ function selfTest() {
     specs: ["tests/e2e/client-address-read-only-journey.spec.ts"], projects: ["journey"], nonmutatingCapabilities: ["clients"],
   });
   assert.deepEqual(parseInvocation(["--scope", "clients", "--read-only-visual", "clients"]), {
-    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false, actionsFormSmoke: false,
+    capabilities: ["clients"], scope: ["clients"], scopeApproved: false, mutatingApproved: false, mockedVisual: false, readOnlyVisual: true, actionsQaApproved: false, actionsFormSmoke: false, rolesQaApproved: false, rolesCleanupRecovery: false,
   });
   assert.throws(() => parseInvocation(["--scope", "clients", "--read-only-visual", "clients", "--mutating-approved"]), /cannot include mutation approval/);
   assert.throws(() => parseInvocation(["--scope", "users", "--read-only-visual", "users"]), /limited to one clients scope/);
   assert.throws(() => parseInvocation(["--scope", "clients", "--mocked-visual", "clients", "--mutating-approved"]), /read-only/);
   assert.throws(() => parseInvocation(["--scope", "clients,users", "--scope-approved", "--mocked-visual", "clients", "users"]), /read-only/);
+  assert.equal(parseInvocation(["--scope", "roles", "--mutating-approved", "--roles-qa-approved", "roles"]).rolesQaApproved, true);
+  assert.throws(() => parseInvocation(["--scope", "roles", "--roles-qa-approved", "roles"]), /requires one Roles scope/);
+  assert.throws(() => parseInvocation(["--scope", "actions", "--mutating-approved", "--roles-qa-approved", "actions"]), /requires one Roles scope/);
+  assert.equal(parseInvocation(["--scope", "roles", "--mutating-approved", "--roles-qa-approved", "--roles-cleanup-recovery", "roles"]).rolesCleanupRecovery, true);
+  assert.throws(() => parseInvocation(["--scope", "roles", "--mutating-approved", "--roles-cleanup-recovery", "roles"]), /requires Roles scope and both/);
   console.log("E2E capability runner self-tests passed.");
 }
 
@@ -289,6 +319,7 @@ const e2eEnvironment = { ...getE2EEnvironment(process.env, {
   readOnlyVisual: invocation.readOnlyVisual,
 }) };
 Object.assign(e2eEnvironment, applyEquipmentTypesMutationApproval(e2eEnvironment, capabilities[0], localExecution, mutatingApproved));
+Object.assign(e2eEnvironment, applyRolesMutationApproval(e2eEnvironment, capabilities[0], localExecution, mutatingApproved, invocation.rolesQaApproved, invocation.rolesCleanupRecovery));
 if (batchPlan.nonmutatingCapabilities.includes("actions")) delete e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL;
 if (invocation.actionsQaApproved && !batchPlan.nonmutatingCapabilities.includes("actions")) e2eEnvironment.E2E_ACTIONS_QA_MUTATION_APPROVAL = "true";
 const readOnlyHomologationStatusPath = invocation.readOnlyVisual
@@ -330,6 +361,7 @@ if (invocation.readOnlyVisual) {
 }
 const playwrightArgs = [playwrightCli, "test", ...batchPlan.specs, ...batchPlan.projects.map((project) => `--project=${project}`)];
 if (invocation.actionsFormSmoke) playwrightArgs.push("--grep=Actions focused form save smoke");
+if (invocation.rolesCleanupRecovery) playwrightArgs.push("--grep=Roles cleanup recovery");
 if (localExecution) playwrightArgs.push("--headed");
 console.log(`[E2E capability] Starting one Playwright run for capabilities: ${capabilities.join(", ")}.`);
 let ownedPlaywrightChild;
@@ -423,6 +455,8 @@ if (localExecution) {
         mutatingApproved,
         clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
         actionsMutationApproved: invocation.actionsQaApproved,
+        rolesMutationApproved: invocation.rolesQaApproved,
+        rolesCleanupRecovery: invocation.rolesCleanupRecovery,
         readOnlyVisual: invocation.readOnlyVisual,
         mockedVisual: invocation.mockedVisual,
         config,

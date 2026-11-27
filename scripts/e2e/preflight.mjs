@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateE2EBuild } from "./build-fingerprint.mjs";
 import { CAPABILITIES } from "./capabilities.mjs";
 import { readRolesCleanupManifest } from "./roles-cleanup.mjs";
+import { readResourcesCleanupManifest } from "./resources-cleanup.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -92,6 +93,31 @@ const ACTIONS_VISUAL_WORKING_FILES = new Set([
   "scripts/e2e/actions-cleanup.mjs",
   "scripts/e2e/actions-cleanup.d.mts",
   "tests/e2e/preflight.test.mjs",
+]);
+const RESOURCES_WORKING_FILES = new Set([
+  "app/(workspace)/resources/[resourceId]/page.tsx",
+  "app/(workspace)/resources/new/page.tsx",
+  "app/(workspace)/resources/page.tsx",
+  "domains/operations/index.ts",
+  "domains/operations/resources/index.ts",
+  "domains/operations/resources/resource-contract.ts",
+  "domains/operations/resources/resource-form-page.tsx",
+  "domains/operations/resources/resources-page.tsx",
+  "locales/en-US/common.json",
+  "locales/es-ES/common.json",
+  "locales/pt-BR/common.json",
+  "locales/pt-PT/common.json",
+  "package.json",
+  "scripts/e2e/capabilities.mjs",
+  "scripts/e2e/preflight.mjs",
+  "scripts/e2e/resources-cleanup.d.mts",
+  "scripts/e2e/resources-cleanup.mjs",
+  "scripts/e2e/run-capability.mjs",
+  "scripts/e2e/select-capabilities.mjs",
+  "tests/e2e/resources-journey.spec.ts",
+  "tests/resources/resource-contract.test.mjs",
+  "tests/resources/resource-ui-contract.test.mjs",
+  "tests/resources/resources-cleanup.test.mjs",
 ]);
 
 function isExpectedBranch(branch, capability) {
@@ -178,6 +204,8 @@ export async function evaluatePreflight({
   actionsMutationApproved = false,
   rolesMutationApproved = false,
   rolesCleanupRecovery = false,
+  resourcesMutationApproved = false,
+  resourcesCleanupRecovery = false,
   readOnlyVisual = false,
   mockedVisual = false,
   platform = process.platform,
@@ -191,6 +219,7 @@ export async function evaluatePreflight({
   fileExists = existsSync,
   readText = (file) => readFile(file, "utf8"),
   readRolesCleanupState = readRolesCleanupManifest,
+  readResourcesCleanupState = readResourcesCleanupManifest,
 } = {}) {
   const checks = {};
   checks.windowsHost = platform === "win32";
@@ -212,6 +241,8 @@ export async function evaluatePreflight({
   checks.actionsIdentityConfigured = capability !== "actions" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
   checks.rolesAuthorizedBranch = capability !== "roles" || git.branch === "feature/roles-crud";
   checks.rolesIdentityConfigured = capability !== "roles" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
+  checks.resourcesAuthorizedBranch = capability !== "resources" || git.branch === "feature/resources-actions-standardization";
+  checks.resourcesIdentityConfigured = capability !== "resources" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
   const normalizedChangedFiles = Array.isArray(git.changedFiles)
     ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))
     : [];
@@ -221,7 +252,9 @@ export async function evaluatePreflight({
     normalizedChangedFiles.every((file) => ACTIONS_VISUAL_WORKING_FILES.has(file));
   const scopedTeamsVisualChanges = capability === "teams" && mode === "read-only" && mockedVisual && normalizedChangedFiles.length > 0 &&
     normalizedChangedFiles.every((file) => TEAMS_VISUAL_WORKING_FILES.has(file));
-  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges || scopedTeamsVisualChanges;
+  const scopedResourcesMutationChanges = capability === "resources" && mode === "mutating" && normalizedChangedFiles.length > 0 &&
+    normalizedChangedFiles.every((file) => RESOURCES_WORKING_FILES.has(file));
+  checks.workingTreePreserved = !git.dirty || scopedClientVisualChanges || scopedActionsVisualChanges || scopedTeamsVisualChanges || scopedResourcesMutationChanges;
   const equipmentTypesManifestPath = resolve(repoRoot, ".e2e-debug/equipment-types-journey/cleanup-manifest.json");
   if (capability === "equipment-types" && mode === "mutating" && fileExists(equipmentTypesManifestPath)) {
     try {
@@ -241,6 +274,15 @@ export async function evaluatePreflight({
   } else {
     checks.rolesCleanupManifestClear = true;
     checks.rolesCleanupManifestRecoverable = !rolesCleanupRecovery;
+  }
+  const resourcesManifestPath = resolve(repoRoot, ".e2e-debug/resources-journey/cleanup-manifest.json");
+  if (capability === "resources" && mode === "mutating" && fileExists(resourcesManifestPath)) {
+    const manifestState = await readResourcesCleanupState(resourcesManifestPath);
+    checks.resourcesCleanupManifestClear = resourcesCleanupRecovery || manifestState.status === "clear";
+    checks.resourcesCleanupManifestRecoverable = resourcesCleanupRecovery ? manifestState.status === "pending" && Boolean(manifestState.manifest?.records.some((record) => record.status === "pending")) : true;
+  } else {
+    checks.resourcesCleanupManifestClear = true;
+    checks.resourcesCleanupManifestRecoverable = !resourcesCleanupRecovery;
   }
   const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");
   if (capability === "actions" && mode === "mutating" && fileExists(actionsManifestPath)) {
@@ -281,6 +323,11 @@ export async function evaluatePreflight({
     const cleanupPath = resolve(scriptDir, "roles-cleanup.mjs");
     const cleanupText = fileExists(cleanupPath) ? await readText(cleanupPath) : "";
     checks.cleanupPlan = text.includes("beginRolesCreate") && text.includes("registerOwnedRole") && text.includes("cleanupOwnedRoles") && text.includes("finally") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp");
+  } else if (capability === "resources" && mode === "mutating" && checks.canonicalSpec) {
+    const text = await readText(spec);
+    const cleanupPath = resolve(scriptDir, "resources-cleanup.mjs");
+    const cleanupText = fileExists(cleanupPath) ? await readText(cleanupPath) : "";
+    checks.cleanupPlan = text.includes("beginResourcesCreate") && text.includes("beginResourcesBulkUpload") && text.includes("registerOwnedResource") && text.includes("registerOwnedBulkResource") && text.includes("cleanupOwnedResources") && text.includes("finally") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp") && cleanupText.includes("createdBy");
   } else if (capability === "equipment-types" && checks.canonicalSpec) {
     const cleanupModule = resolve(scriptDir, "equipment-types-cleanup.mjs");
     checks.cleanupPlan = fileExists(cleanupModule) && hasEquipmentTypesCleanupPlan(await readText(spec), await readText(cleanupModule));
@@ -298,7 +345,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      ((capability === "equipment-types" && checks.branch && checks.equipmentTypesCleanupManifestClear) || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear) || (capability === "roles" && rolesMutationApproved && checks.rolesAuthorizedBranch && checks.rolesIdentityConfigured && (rolesCleanupRecovery ? checks.rolesCleanupManifestRecoverable : checks.rolesCleanupManifestClear)))
+      ((capability === "equipment-types" && checks.branch && checks.equipmentTypesCleanupManifestClear) || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear) || (capability === "roles" && rolesMutationApproved && checks.rolesAuthorizedBranch && checks.rolesIdentityConfigured && (rolesCleanupRecovery ? checks.rolesCleanupManifestRecoverable : checks.rolesCleanupManifestClear)) || (capability === "resources" && resourcesMutationApproved && checks.resourcesAuthorizedBranch && checks.resourcesIdentityConfigured && (resourcesCleanupRecovery ? checks.resourcesCleanupManifestRecoverable : checks.resourcesCleanupManifestClear)))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -318,13 +365,15 @@ export async function evaluatePreflight({
 }
 
 function parseArgs(args) {
-  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false, rolesMutationApproved: false, rolesCleanupRecovery: false, readOnlyVisual: false };
+  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false, rolesMutationApproved: false, rolesCleanupRecovery: false, resourcesMutationApproved: false, resourcesCleanupRecovery: false, readOnlyVisual: false };
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--mode") result.mode = args[++i] || "";
     else if (args[i] === "--stage") result.stage = args[++i] || "";
     else if (args[i] === "--mutating-approved") result.mutatingApproved = true;
     else if (args[i] === "--roles-qa-approved") result.rolesMutationApproved = true;
     else if (args[i] === "--roles-cleanup-recovery") result.rolesCleanupRecovery = true;
+    else if (args[i] === "--resources-qa-approved") result.resourcesMutationApproved = true;
+    else if (args[i] === "--resources-cleanup-recovery") result.resourcesCleanupRecovery = true;
     else if (args[i] === "--read-only-visual") result.readOnlyVisual = true;
     else if (args[i].startsWith("--")) throw new Error("Unknown preflight option.");
     else if (result.capability) throw new Error("Select exactly one E2E capability.");
@@ -334,6 +383,8 @@ function parseArgs(args) {
   if (!["prepare", "execution"].includes(result.stage)) throw new Error("Stage must be prepare or execution.");
   if (result.rolesMutationApproved && (result.capability !== "roles" || result.mode !== "mutating" || !result.mutatingApproved)) throw new Error("Roles QA approval requires Roles mutating mode and --mutating-approved.");
   if (result.rolesCleanupRecovery && (!result.rolesMutationApproved || result.capability !== "roles" || result.mode !== "mutating")) throw new Error("Roles cleanup recovery requires Roles mutation approvals and mutating mode.");
+  if (result.resourcesMutationApproved && (result.capability !== "resources" || result.mode !== "mutating" || !result.mutatingApproved)) throw new Error("Resources QA approval requires Resources mutating mode and --mutating-approved.");
+  if (result.resourcesCleanupRecovery && (!result.resourcesMutationApproved || result.capability !== "resources" || result.mode !== "mutating")) throw new Error("Resources cleanup recovery requires Resources mutation approvals and mutating mode.");
   if (result.readOnlyVisual && (result.capability !== "clients" || result.mode !== "read-only" || result.mutatingApproved)) {
     throw new Error("Read-only visual preflight requires Client read-only mode without mutation approval.");
   }
@@ -525,7 +576,29 @@ async function selfTest() {
   assert.equal(rolesRecoveryWithoutManifest.authorization, "MUTATING_AUTHORIZATION_PENDING");
   assert.equal((await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, git: gitWithBranch("feature/other") })).checks.rolesAuthorizedBranch, false);
   assert.equal((await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, config: { ...validConfig, E2E_USER_EMAIL: "" } })).checks.rolesIdentityConfigured, false);
+  const resourcesSpec = await readFile(resolve(repoRoot, "tests/e2e/resources-journey.spec.ts"), "utf8");
+  const resourcesCleanup = await readFile(resolve(scriptDir, "resources-cleanup.mjs"), "utf8");
+  const resourcesBase = { ...common, capability: "resources", stage: "prepare", git: gitWithBranch("feature/resources-actions-standardization"), resourcesMutationApproved: false, readText: async (path) => path.endsWith("resources-cleanup.mjs") ? resourcesCleanup : resourcesSpec, readResourcesCleanupState: async () => ({ status: "clear", manifest: { records: [] } }) };
+  const resourcesNoOptIn = await evaluatePreflight(resourcesBase);
+  assert.equal(resourcesNoOptIn.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(resourcesNoOptIn.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const resourcesApproved = await evaluatePreflight({ ...resourcesBase, resourcesMutationApproved: true });
+  assert.equal(resourcesApproved.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(resourcesApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  assert.equal((await evaluatePreflight({ ...resourcesBase, git: gitWithBranch("feature/resources-other") })).checks.resourcesAuthorizedBranch, false);
+  assert.equal((await evaluatePreflight({ ...resourcesBase, config: { ...validConfig, E2E_USER_EMAIL: "" } })).checks.resourcesIdentityConfigured, false);
+  const resourcesRecovery = await evaluatePreflight({ ...resourcesBase, resourcesMutationApproved: true, resourcesCleanupRecovery: true, fileExists: () => true, readResourcesCleanupState: async () => ({ status: "pending", manifest: { records: [{ status: "pending" }] } }) });
+  assert.equal(resourcesRecovery.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  const resourcesRecoveryWithoutManifest = await evaluatePreflight({ ...resourcesBase, resourcesMutationApproved: true, resourcesCleanupRecovery: true });
+  assert.equal(resourcesRecoveryWithoutManifest.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const resourcesScopedDirtyTree = await evaluatePreflight({ ...resourcesBase, git: { ...gitWithBranch("feature/resources-actions-standardization"), dirty: true, changedFiles: ["domains/operations/resources/resource-form-page.tsx", "tests/e2e/resources-journey.spec.ts"] } });
+  assert.equal(resourcesScopedDirtyTree.checks.workingTreePreserved, true);
+  const resourcesUnrelatedDirtyTree = await evaluatePreflight({ ...resourcesBase, git: { ...gitWithBranch("feature/resources-actions-standardization"), dirty: true, changedFiles: ["AGENTS.md"] } });
+  assert.equal(resourcesUnrelatedDirtyTree.checks.workingTreePreserved, false);
   assert.throws(() => parseArgs(["roles", "--roles-qa-approved"]), /--mutating-approved/);
+  assert.equal(parseArgs(["resources", "--mutating-approved", "--resources-qa-approved"]).resourcesMutationApproved, true);
+  assert.throws(() => parseArgs(["resources", "--resources-qa-approved"]), /--mutating-approved/);
+  assert.throws(() => parseArgs(["roles", "--mutating-approved", "--resources-qa-approved"]), /Resources mutating mode/);
   assert.equal(parseArgs(["roles", "--mutating-approved", "--roles-qa-approved"]).rolesMutationApproved, true);
   assert.throws(() => parseArgs(["roles", "--mutating-approved", "--roles-cleanup-recovery"]), /requires Roles mutation approvals/);
   console.log("E2E preflight self-tests passed.");
@@ -544,6 +617,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         actionsMutationApproved: args.capability === "actions" && process.argv.includes("--actions-qa-approved"),
         rolesMutationApproved: args.capability === "roles" && process.argv.includes("--roles-qa-approved"),
         rolesCleanupRecovery: args.rolesCleanupRecovery,
+        resourcesMutationApproved: args.capability === "resources" && process.argv.includes("--resources-qa-approved"),
+        resourcesCleanupRecovery: args.resourcesCleanupRecovery,
         config,
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");

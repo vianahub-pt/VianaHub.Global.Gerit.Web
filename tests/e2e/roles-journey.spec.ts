@@ -97,7 +97,12 @@ test("Roles CRUD, grants, lifecycle and persistent cleanup", async ({ page, requ
 
     const sidebar = page.getByTestId("desktop-sidebar"); await expect(sidebar).toBeVisible();
     const section = sidebar.getByRole("button", { name: menuSectionLabel }); if (await section.getAttribute("aria-expanded") === "false") await section.click();
-    await expect(section).toHaveAttribute("aria-expanded", "true"); await sidebar.getByRole("link", { name: rolesLabel }).click();
+    await expect(section).toHaveAttribute("aria-expanded", "true");
+    const administrationGroupId = await section.getAttribute("aria-controls");
+    if (!administrationGroupId) throw new Error("The Administration menu group did not expose its controlled section.");
+    const rolesLink = sidebar.locator(`[id="${administrationGroupId}"]`).getByRole("link", { name: rolesLabel });
+    await expect(rolesLink).toHaveAttribute("href", /\/roles\/?$/);
+    await rolesLink.click();
     await expect(page).toHaveURL(/\/roles\/$/); await expect(page.getByRole("table")).toBeVisible();
     const search = page.getByPlaceholder(searchLabel);
     const status = page.getByTestId("role-is-active-switch");

@@ -7,6 +7,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { validateE2EBuild } from "./build-fingerprint.mjs";
 import { CAPABILITIES } from "./capabilities.mjs";
+import { readRolesCleanupManifest } from "./roles-cleanup.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -97,6 +98,7 @@ function isExpectedBranch(branch, capability) {
   if (capability === "clients" && branch === "refactor/global-spa-ux-foundations") {
     return true;
   }
+  if (capability === "roles") return branch === "feature/roles-crud";
   if (capability === "equipment-types") {
     return ["feature/equipment-types-crud", "hotfix/equipment-types-form-design", "feature/equipment-types-actions-standardization"].includes(branch);
   }
@@ -174,6 +176,8 @@ export async function evaluatePreflight({
   mutatingApproved = false,
   clientMutationApproved = false,
   actionsMutationApproved = false,
+  rolesMutationApproved = false,
+  rolesCleanupRecovery = false,
   readOnlyVisual = false,
   mockedVisual = false,
   platform = process.platform,
@@ -186,6 +190,7 @@ export async function evaluatePreflight({
   },
   fileExists = existsSync,
   readText = (file) => readFile(file, "utf8"),
+  readRolesCleanupState = readRolesCleanupManifest,
 } = {}) {
   const checks = {};
   checks.windowsHost = platform === "win32";
@@ -205,6 +210,8 @@ export async function evaluatePreflight({
   checks.branch = isExpectedBranch(git.branch, capability);
   checks.actionsAuthorizedBranch = capability !== "actions" || ["feature/actions-isactive-form-refactor", "fix/actions-form-switch-save-redirect"].includes(git.branch);
   checks.actionsIdentityConfigured = capability !== "actions" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
+  checks.rolesAuthorizedBranch = capability !== "roles" || git.branch === "feature/roles-crud";
+  checks.rolesIdentityConfigured = capability !== "roles" || mode !== "mutating" || (typeof config.E2E_USER_EMAIL === "string" && config.E2E_USER_EMAIL.trim().length > 0);
   const normalizedChangedFiles = Array.isArray(git.changedFiles)
     ? git.changedFiles.map((file) => String(file).replaceAll("\\", "/"))
     : [];
@@ -226,6 +233,15 @@ export async function evaluatePreflight({
             : Number.isSafeInteger(record.id) && record.id > 0 && record.deleteAttempted === true && record.deleteHttp === 200 && record.followUpReadHttp === 410));
     } catch { checks.equipmentTypesCleanupManifestClear = false; }
   } else checks.equipmentTypesCleanupManifestClear = true;
+  const rolesManifestPath = resolve(repoRoot, ".e2e-debug/roles-journey/cleanup-manifest.json");
+  if (capability === "roles" && mode === "mutating" && fileExists(rolesManifestPath)) {
+    const manifestState = await readRolesCleanupState(rolesManifestPath);
+    checks.rolesCleanupManifestClear = rolesCleanupRecovery || manifestState.status === "clear";
+    checks.rolesCleanupManifestRecoverable = rolesCleanupRecovery ? manifestState.status === "pending" && Boolean(manifestState.manifest?.records.some((record) => record.status === "pending")) : true;
+  } else {
+    checks.rolesCleanupManifestClear = true;
+    checks.rolesCleanupManifestRecoverable = !rolesCleanupRecovery;
+  }
   const actionsManifestPath = resolve(repoRoot, ".e2e-debug/actions-journey/cleanup-manifest.json");
   if (capability === "actions" && mode === "mutating" && fileExists(actionsManifestPath)) {
     try {
@@ -260,6 +276,11 @@ export async function evaluatePreflight({
     const text = await readText(spec);
     const cleanupText = await readText(resolve(scriptDir, "actions-cleanup.mjs"));
     checks.cleanupPlan = text.includes("registerOwnedAction") && text.includes("cleanupOwnedActions") && text.includes("test.afterEach") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp");
+  } else if (capability === "roles" && mode === "mutating" && checks.canonicalSpec) {
+    const text = await readText(spec);
+    const cleanupPath = resolve(scriptDir, "roles-cleanup.mjs");
+    const cleanupText = fileExists(cleanupPath) ? await readText(cleanupPath) : "";
+    checks.cleanupPlan = text.includes("beginRolesCreate") && text.includes("registerOwnedRole") && text.includes("cleanupOwnedRoles") && text.includes("finally") && cleanupText.includes("deleteAttempted") && cleanupText.includes("followUpReadHttp");
   } else if (capability === "equipment-types" && checks.canonicalSpec) {
     const cleanupModule = resolve(scriptDir, "equipment-types-cleanup.mjs");
     checks.cleanupPlan = fileExists(cleanupModule) && hasEquipmentTypesCleanupPlan(await readText(spec), await readText(cleanupModule));
@@ -277,7 +298,7 @@ export async function evaluatePreflight({
   const authorization = mode === "read-only"
     ? (policy.readOnlySmokeAuthorized ? "READ_ONLY_AUTHORIZED" : "MUTATING_AUTHORIZATION_PENDING")
     : (mutatingApproved && policy.mutatingApprovalRequiredPerRun &&
-      ((capability === "equipment-types" && checks.branch && checks.equipmentTypesCleanupManifestClear) || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear))
+      ((capability === "equipment-types" && checks.branch && checks.equipmentTypesCleanupManifestClear) || (capability === "clients" && clientMutationApproved) || (capability === "actions" && actionsMutationApproved && checks.actionsAuthorizedBranch && checks.actionsIdentityConfigured && checks.actionsCleanupManifestClear) || (capability === "roles" && rolesMutationApproved && checks.rolesAuthorizedBranch && checks.rolesIdentityConfigured && (rolesCleanupRecovery ? checks.rolesCleanupManifestRecoverable : checks.rolesCleanupManifestClear)))
       ? "MUTATING_AUTHORIZATION_CONFIRMED"
       : "MUTATING_AUTHORIZATION_PENDING");
   return {
@@ -297,11 +318,13 @@ export async function evaluatePreflight({
 }
 
 function parseArgs(args) {
-  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false, readOnlyVisual: false };
+  const result = { capability: "", mode: "mutating", stage: "execution", mutatingApproved: false, rolesMutationApproved: false, rolesCleanupRecovery: false, readOnlyVisual: false };
   for (let i = 0; i < args.length; i += 1) {
     if (args[i] === "--mode") result.mode = args[++i] || "";
     else if (args[i] === "--stage") result.stage = args[++i] || "";
     else if (args[i] === "--mutating-approved") result.mutatingApproved = true;
+    else if (args[i] === "--roles-qa-approved") result.rolesMutationApproved = true;
+    else if (args[i] === "--roles-cleanup-recovery") result.rolesCleanupRecovery = true;
     else if (args[i] === "--read-only-visual") result.readOnlyVisual = true;
     else if (args[i].startsWith("--")) throw new Error("Unknown preflight option.");
     else if (result.capability) throw new Error("Select exactly one E2E capability.");
@@ -309,6 +332,8 @@ function parseArgs(args) {
   }
   if (!["read-only", "mutating"].includes(result.mode)) throw new Error("Mode must be read-only or mutating.");
   if (!["prepare", "execution"].includes(result.stage)) throw new Error("Stage must be prepare or execution.");
+  if (result.rolesMutationApproved && (result.capability !== "roles" || result.mode !== "mutating" || !result.mutatingApproved)) throw new Error("Roles QA approval requires Roles mutating mode and --mutating-approved.");
+  if (result.rolesCleanupRecovery && (!result.rolesMutationApproved || result.capability !== "roles" || result.mode !== "mutating")) throw new Error("Roles cleanup recovery requires Roles mutation approvals and mutating mode.");
   if (result.readOnlyVisual && (result.capability !== "clients" || result.mode !== "read-only" || result.mutatingApproved)) {
     throw new Error("Read-only visual preflight requires Client read-only mode without mutation approval.");
   }
@@ -354,8 +379,8 @@ async function selfTest() {
     config: validConfig,
     portAvailable: async () => true,
     buildCurrent: async () => true,
-    fileExists: () => true,
-    readText: async () => "finally randomUUID DELETE 410",
+    fileExists: (path) => !path.endsWith("cleanup-manifest.json"),
+    readText: async (path) => path.endsWith("equipment-types-cleanup.mjs") ? await readFile(resolve(scriptDir, "equipment-types-cleanup.mjs"), "utf8") : "beginEquipmentTypesCreate registerOwnedEquipmentType cleanupOwnedEquipmentTypes finally createAttempted deleteAttempted followUpReadHttp",
   };
   const gitWithBranch = (branch) => ({
     ...validGit,
@@ -483,6 +508,26 @@ async function selfTest() {
   assert.equal(authenticationReadOnly.authorization, "READ_ONLY_AUTHORIZED");
   assert.equal(authenticationReadOnly.checks.canonicalSpec, true);
 
+  const rolesSpec = await readFile(resolve(repoRoot, "tests/e2e/roles-journey.spec.ts"), "utf8");
+  const rolesCleanup = await readFile(resolve(scriptDir, "roles-cleanup.mjs"), "utf8");
+  const rolesGit = gitWithBranch("feature/roles-crud");
+  const rolesBase = { ...common, capability: "roles", mode: "mutating", mutatingApproved: true, git: rolesGit, stage: "prepare", fileExists: (path) => !path.endsWith("cleanup-manifest.json"), readText: async (path) => path.endsWith("roles-cleanup.mjs") ? rolesCleanup : rolesSpec, readRolesCleanupState: async () => ({ status: "clear", manifest: { records: [] } }) };
+  const rolesNoOptIn = await evaluatePreflight({ ...rolesBase, rolesMutationApproved: false });
+  assert.equal(rolesNoOptIn.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(rolesNoOptIn.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  const rolesApproved = await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true });
+  assert.equal(rolesApproved.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(rolesApproved.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  const rolesRecovery = await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, rolesCleanupRecovery: true, fileExists: () => true, readRolesCleanupState: async () => ({ status: "pending", manifest: { records: [{ status: "pending" }] } }) });
+  assert.equal(rolesRecovery.status, "PRECHECK_CONFIG_PASS");
+  assert.equal(rolesRecovery.authorization, "MUTATING_AUTHORIZATION_CONFIRMED");
+  const rolesRecoveryWithoutManifest = await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, rolesCleanupRecovery: true });
+  assert.equal(rolesRecoveryWithoutManifest.authorization, "MUTATING_AUTHORIZATION_PENDING");
+  assert.equal((await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, git: gitWithBranch("feature/other") })).checks.rolesAuthorizedBranch, false);
+  assert.equal((await evaluatePreflight({ ...rolesBase, rolesMutationApproved: true, config: { ...validConfig, E2E_USER_EMAIL: "" } })).checks.rolesIdentityConfigured, false);
+  assert.throws(() => parseArgs(["roles", "--roles-qa-approved"]), /--mutating-approved/);
+  assert.equal(parseArgs(["roles", "--mutating-approved", "--roles-qa-approved"]).rolesMutationApproved, true);
+  assert.throws(() => parseArgs(["roles", "--mutating-approved", "--roles-cleanup-recovery"]), /requires Roles mutation approvals/);
   console.log("E2E preflight self-tests passed.");
 }
 
@@ -497,6 +542,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         ...args,
         clientMutationApproved: process.env.E2E_CLIENT_QA_MUTATION_APPROVAL === "true",
         actionsMutationApproved: args.capability === "actions" && process.argv.includes("--actions-qa-approved"),
+        rolesMutationApproved: args.capability === "roles" && process.argv.includes("--roles-qa-approved"),
+        rolesCleanupRecovery: args.rolesCleanupRecovery,
         config,
       });
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");

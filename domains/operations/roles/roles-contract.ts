@@ -6,6 +6,27 @@ export interface RoleRecord {
 }
 
 export type RoleStatusFilter = "active" | "inactive" | "all";
+export type RoleGrant = "GetPaged" | "GetBy" | "GetAll" | "Create" | "Update" | "Activate" | "Deactivate" | "Delete" | "BulkUpload";
+export type RolePermissionCheck = (resource: string, action: string) => boolean;
+
+const ROLE_MANAGER_ROLES = new Set(["admin", "backoffice", "manager"]);
+
+export function buildRoleAccess(roles: string[], hasPermission: RolePermissionCheck) {
+  const canManage = roles.some((role) => ROLE_MANAGER_ROLES.has(role.trim().toLowerCase()));
+  const hasGrant = (grant: RoleGrant) => canManage && hasPermission("Roles", grant);
+  return {
+    canManage,
+    getPaged: hasGrant("GetPaged"),
+    getBy: hasGrant("GetBy"),
+    getAll: hasGrant("GetAll"),
+    create: hasGrant("Create"),
+    update: hasGrant("Update"),
+    activate: hasGrant("Activate"),
+    deactivate: hasGrant("Deactivate"),
+    delete: hasGrant("Delete"),
+    bulkUpload: hasGrant("BulkUpload"),
+  };
+}
 
 export function normalizeRole(payload: unknown): RoleRecord | null {
   if (typeof payload !== "object" || payload === null) return null;
@@ -52,13 +73,30 @@ export function buildRolesQuery(input: {
   return query;
 }
 
-export function toRoleCreatePayload(name: string, description: string) {
+export const ROLE_NAME_MAX_LENGTH = 100;
+export const ROLE_DESCRIPTION_MAX_LENGTH = 255;
+
+export function validateRoleForm(name: string, description: string) {
+  const normalizedName = name.trim();
+  const normalizedDescription = description.trim();
+  if (!normalizedName) return "nameRequired" as const;
+  if (normalizedName.length > ROLE_NAME_MAX_LENGTH) return "nameTooLong" as const;
+  if (!normalizedDescription) return "descriptionRequired" as const;
+  if (normalizedDescription.length > ROLE_DESCRIPTION_MAX_LENGTH) return "descriptionTooLong" as const;
+  return null;
+}
+
+export function toRoleCreatePayload(name: string, description: string, isActive = true) {
   return {
     name: name.trim(),
-    description: description.trim() ? description.trim() : null,
+    description: description.trim(),
+    isActive,
   };
 }
 
-export function toRoleUpdatePayload(description: string) {
-  return { description: description.trim() ? description.trim() : null };
+export function toRoleUpdatePayload(description: string, isActive: boolean) {
+  return {
+    description: description.trim(),
+    isActive,
+  };
 }

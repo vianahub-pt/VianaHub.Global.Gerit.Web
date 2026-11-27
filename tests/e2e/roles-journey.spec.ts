@@ -8,7 +8,7 @@ import { authenticateFromLogin } from "./helpers/auth";
 const reportDirectory = resolve(".e2e-debug/roles-journey");
 const manifestPath = resolve(reportDirectory, "cleanup-manifest.json");
 const menuSectionLabel = /^(administration|administração|administración)$/i;
-const rolesLabel = /^(roles|funções|funciones)$/i;
+const rolesLabel = /^(roles|papéis|papeis|funciones)$/i;
 const nameLabel = /^(name|nome|nombre)$/i;
 const descriptionLabel = /^(description|descrição|descripción|descripcion)$/i;
 const searchLabel = /^(search by name or description|pesquisar por nome ou descrição|buscar por nome ou descrição|buscar por nombre o descripción)$/i;

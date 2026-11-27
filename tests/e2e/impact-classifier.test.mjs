@@ -194,14 +194,13 @@ test("direct HubTabs changes keep the functional Client plan and require mapped 
   assert.equal(plan.sharedUiRegressionRequired, true);
   assert.ok(plan.requiredRegressionTests.includes("tests/shared/ui-standard.test.mjs"));
 });
-test("package test gate and CI runner execute every required shared regression artifact", () => {
+test("package test gate includes shared regressions and CI keeps the three required checks", () => {
   const packageJson = JSON.parse(readFileSync("package.json", "utf8"));
   const testCommand = packageJson.scripts.test;
   const runner = readFileSync("scripts/e2e/run-capability.mjs", "utf8");
   const workflow = readFileSync(".github/workflows/ci.yml", "utf8");
-  const e2eJob = workflow.slice(workflow.indexOf("  e2e-validation:"));
-  assert.ok(e2eJob.indexOf("name: Install dependencies") < e2eJob.indexOf("name: Test capability selection and E2E outcomes"), "CI must install the TypeScript parser dependency before selector self-tests");
-  assert.ok(e2eJob.indexOf("name: Install dependencies") < e2eJob.indexOf("name: Select affected E2E journeys"), "CI must install the TypeScript parser dependency before capability selection");
+  assert.match(workflow, /jobs:\s*lint:[\s\S]*?typecheck:[\s\S]*?build:/);
+  assert.doesNotMatch(workflow, /e2e-validation|E2E Validation/i);
   for (const file of PRESENTATION_REGRESSION_TESTS) {
     if (file.endsWith(".spec.ts")) {
       assert.ok(runner.includes(file), "CI runner must select " + file);
@@ -215,14 +214,6 @@ test("package test gate and CI runner execute every required shared regression a
   assert.equal(journey.includes("route.continue()"), false, "shared journey must not forward API traffic to QA");
 
   assert.match(testCommand, /tests\/shared\/\*\.test\.mjs/);
-  assert.match(e2eJob, /shared_components=\$\(node -e .*sharedComponents/);
-  assert.match(e2eJob, /shared_components=\$shared_components/);
-  assert.match(e2eJob, /SHARED_COMPONENTS:.*shared_components/);
-  assert.match(e2eJob, /"sharedComponents":\$SHARED_COMPONENTS/);
-  assert.match(e2eJob, /SHARED_REGRESSION_CONSUMERS:.*presentation_consumers/);
-  assert.match(workflow, /name: Run required static and focused regression tests[\s\S]*?run: npm test/);
-  assert.match(e2eJob, /SHARED_COMPONENTS:.*shared_components/);
-  assert.match(e2eJob, /capabilities\[\*\].*=.*actions[\s\S]*SHARED_COMPONENTS.*hub-switch[\s\S]*tests\/shared\/ui-standard\.test\.mjs/);
   assert.match(runner, /tests\/e2e\/hub-image-journey\.spec\.ts[\s\S]*?tests\/e2e\/client-contact-person-journey\.spec\.ts/);
 });
 

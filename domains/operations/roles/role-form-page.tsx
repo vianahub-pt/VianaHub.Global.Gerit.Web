@@ -1,16 +1,26 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowLeft, Loader2, Power, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, Save, Trash2 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
+import { HubConfirmDialog } from "@/shared/ui/hub-confirm-dialog";
+import { HubSwitch } from "@/shared/ui/hub-switch";
 import { Input } from "@/shared/ui/input";
 import { Textarea } from "@/shared/ui/textarea";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { normalizeRole, toRoleCreatePayload, toRoleUpdatePayload, type RoleRecord } from "@/domains/operations/roles/roles-contract";
+import {
+  buildRoleAccess,
+  normalizeRole,
+  ROLE_DESCRIPTION_MAX_LENGTH,
+  ROLE_NAME_MAX_LENGTH,
+  toRoleCreatePayload,
+  toRoleUpdatePayload,
+  validateRoleForm,
+  type RoleRecord,
+} from "@/domains/operations/roles/roles-contract";
 
 interface RoleFormPageProps { roleId?: string }
 
@@ -31,19 +41,23 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
   const editing = roleId !== undefined;
   const parsedId = editing ? Number(roleId) : null;
   const validId = parsedId !== null && Number.isInteger(parsedId) && parsedId > 0;
-  const { fetchWithAuth, isAuthenticated, isHydrating } = useAuth();
+  const { fetchWithAuth, hasPermission, isAuthenticated, isHydrating, roles } = useAuth();
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
+  const access = buildRoleAccess(roles, hasPermission);
+  const canSave = editing ? access.update : access.create;
   const [role, setRole] = useState<RoleRecord | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [formIsActive, setFormIsActive] = useState(true);
   const [loading, setLoading] = useState(editing);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [statusSubmitting, setStatusSubmitting] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const deleteLock = useRef(false);
   const requestSequence = useRef(0);
 
   const loadRole = useCallback(async () => {
@@ -54,22 +68,33 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
       setLoading(false);
       return;
     }
+    if (!access.getBy) {
+      setRole(null);
+      setLoadError(t("roles.errors.permissionDenied"));
+      setLoading(false);
+      return;
+    }
     setRole(null);
     setName("");
     setDescription("");
+    setFormIsActive(true);
     setLoading(true);
     setLoadError(null);
     try {
-      const response = await fetchWithAuth(`/api/gerit/v1/roles/${parsedId}`, { method: "GET", cache: "no-store" });
+      const response = await fetchWithAuth("/api/gerit/v1/roles/" + parsedId + "/", { method: "GET", cache: "no-store" });
       if (!response) return;
       const payload = await response.json().catch(() => null) as unknown;
       if (sequence !== requestSequence.current) return;
-      if (!response.ok) throw new Error(errorMessage(payload, t("roles.errors.loadDetail")));
+      if (!response.ok) {
+        const fallback = response.status === 410 || response.status === 404 ? t("roles.errors.notFound") : t("roles.errors.loadDetail");
+        throw new Error(errorMessage(payload, fallback));
+      }
       const detail = normalizeRole(payload);
       if (!detail || detail.id !== parsedId) throw new Error(t("roles.errors.loadDetail"));
       setRole(detail);
       setName(detail.name);
       setDescription(detail.description ?? "");
+      setFormIsActive(detail.isActive);
     } catch (error) {
       if (sequence !== requestSequence.current) return;
       const message = error instanceof Error ? error.message : t("roles.errors.loadDetail");
@@ -78,124 +103,163 @@ export function RoleFormPage({ roleId }: RoleFormPageProps) {
     } finally {
       if (sequence === requestSequence.current) setLoading(false);
     }
-  }, [fetchWithAuth, parsedId, t, toast, validId]);
+  }, [access.getBy, fetchWithAuth, parsedId, t, toast, validId]);
 
   useEffect(() => {
     if (editing && !isHydrating && isAuthenticated) void loadRole();
+    else if (!editing && !isHydrating && isAuthenticated) setLoading(false);
     return () => { requestSequence.current += 1; };
   }, [editing, isAuthenticated, isHydrating, loadRole]);
 
   const currentRole = editing && role?.id === parsedId ? role : null;
   const detailLoading = loading || (editing && (isHydrating || currentRole === null && loadError === null));
+  const validationError = validateRoleForm(name, description);
+  const canSubmit = canSave && !submitting && !deleteSubmitting && validationError === null && (!editing || currentRole !== null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const normalizedName = name.trim();
-    if (!editing && !normalizedName) {
-      toast({ title: t("roles.toasts.validationTitle"), description: t("roles.validation.required"), variant: "destructive" });
+    if (submitLock.current || deleteLock.current || !canSave || (editing && !currentRole)) return;
+    const invalid = validateRoleForm(name, description);
+    if (invalid) {
+      toast({ title: t("roles.toasts.validationTitle"), description: t("roles.validation." + invalid), variant: "destructive" });
       return;
     }
-    if (editing && !currentRole) return;
-
+    submitLock.current = true;
     setSubmitting(true);
     try {
       const response = await fetchWithAuth(
-        editing && currentRole ? `/api/gerit/v1/roles/${currentRole.id}` : "/api/gerit/v1/roles/",
+        editing ? "/api/gerit/v1/roles/" + currentRole!.id + "/" : "/api/gerit/v1/roles/",
         {
           method: editing ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editing ? toRoleUpdatePayload(description) : toRoleCreatePayload(normalizedName, description)),
+          body: JSON.stringify(editing
+            ? toRoleUpdatePayload(description, formIsActive)
+            : toRoleCreatePayload(name, description, formIsActive)),
         },
       );
       if (!response) return;
       const payload = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(payload, t("roles.errors.save")));
-      toast({ title: t("roles.toasts.successTitle"), description: t(editing ? "roles.toasts.updated" : "roles.toasts.created") });
-      if (!editing && typeof payload === "object" && payload !== null && typeof (payload as { id?: unknown }).id === "number") {
-        router.push(`/roles/${(payload as { id: number }).id}/`);
-      } else {
-        router.push("/roles/");
+      const expectedStatus = editing ? 200 : 201;
+      if (response.status !== expectedStatus) {
+        const fallback = response.status === 409 ? t("roles.errors.conflict")
+          : response.status === 410 ? t("roles.errors.notFound")
+            : t("roles.errors.save");
+        throw new Error(errorMessage(payload, fallback));
       }
+      toast({
+        title: t("roles.toasts.successTitle"),
+        description: t(editing ? "roles.toasts.updated" : "roles.toasts.created"),
+      });
+      router.push("/roles/");
     } catch (error) {
       toast({ title: t("roles.toasts.errorTitle"), description: error instanceof Error ? error.message : t("roles.errors.save"), variant: "destructive" });
-    } finally { setSubmitting(false); }
-  };
-
-  const toggleStatus = async () => {
-    if (!currentRole) return;
-    const operation = currentRole.isActive ? "deactivate" : "activate";
-    setStatusSubmitting(true);
-    try {
-      const response = await fetchWithAuth(`/api/gerit/v1/roles/${currentRole.id}/${operation}`, { method: "PATCH" });
-      if (!response) return;
-      const payload = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(payload, t("roles.errors.status")));
-      setRole((current) => current?.id === currentRole.id ? { ...current, isActive: !current.isActive } : current);
-      toast({ title: t("roles.toasts.successTitle"), description: t(operation === "activate" ? "roles.toasts.activated" : "roles.toasts.deactivated") });
-    } catch (error) {
-      toast({ title: t("roles.toasts.errorTitle"), description: error instanceof Error ? error.message : t("roles.errors.status"), variant: "destructive" });
-    } finally { setStatusSubmitting(false); }
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
+    }
   };
 
   const deleteRole = async () => {
-    if (!currentRole) return;
+    if (!currentRole || !access.delete || deleteLock.current || submitLock.current) return;
+    deleteLock.current = true;
     setDeleteSubmitting(true);
     try {
-      const response = await fetchWithAuth(`/api/gerit/v1/roles/${currentRole.id}`, { method: "DELETE" });
+      const response = await fetchWithAuth("/api/gerit/v1/roles/" + currentRole.id + "/", { method: "DELETE" });
       if (!response) return;
       const payload = await response.json().catch(() => null) as unknown;
-      if (!response.ok) throw new Error(errorMessage(payload, t("roles.errors.delete")));
+      if (response.status !== 200) {
+        const fallback = response.status === 410 ? t("roles.errors.notFound") : t("roles.errors.delete");
+        throw new Error(errorMessage(payload, fallback));
+      }
       setDeleteOpen(false);
       toast({ title: t("roles.toasts.successTitle"), description: t("roles.toasts.deleted") });
       router.push("/roles/");
     } catch (error) {
       toast({ title: t("roles.toasts.errorTitle"), description: error instanceof Error ? error.message : t("roles.errors.delete"), variant: "destructive" });
-    } finally { setDeleteSubmitting(false); }
+    } finally {
+      deleteLock.current = false;
+      setDeleteSubmitting(false);
+    }
   };
 
-  const pageTitle = editing ? currentRole?.name ?? t("roles.form.editTitle") : t("roles.form.newTitle");
+  const title = editing ? currentRole?.name ?? t("roles.form.editTitle") : t("roles.form.newTitle");
+  const showForm = editing ? currentRole !== null : access.create;
 
   return (
     <div data-testid={editing ? "role-details-page-root" : "roles-create-page-root"} className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <div className="gerit-calendar-scrollbar flex min-h-0 flex-1 flex-col overflow-auto bg-background px-4 py-4 sm:px-6 dark:bg-background">
-        <div className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <button type="button" onClick={() => router.push("/roles/")} className="inline-flex h-9 w-9 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-secondary hover:text-primary" title={t("roles.actions.back")} aria-label={t("roles.actions.back")}><ArrowLeft className="h-5 w-5" aria-hidden="true" /></button>
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-semibold text-foreground sm:text-3xl">{pageTitle}</h1>
-                {currentRole ? <span className={clsx("inline-flex rounded-full px-3 py-1 text-xs font-semibold", currentRole.isActive ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400")}>{t(currentRole.isActive ? "roles.status.active" : "roles.status.inactive")}</span> : null}
-              </div>
-              <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground">{t("roles.form.subtitle")}</p>
+        <header className="mb-6 flex flex-col gap-4 rounded-sm border border-border/80 bg-card px-6 py-5 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-card sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl font-semibold text-foreground dark:text-foreground sm:text-3xl">{title}</h1>
+              {currentRole ? (
+                <span data-testid="role-persisted-status" className={clsx("inline-flex rounded-full px-3 py-1 text-xs font-semibold", currentRole.isActive ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400")}>
+                  {t(currentRole.isActive ? "roles.status.active" : "roles.status.inactive")}
+                </span>
+              ) : null}
             </div>
+            <p className="mt-1 text-sm uppercase tracking-[0.3em] text-muted-foreground dark:text-muted-foreground">{t("roles.form.subtitle")}</p>
           </div>
-          {currentRole ? <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-            <button type="button" onClick={() => void toggleStatus()} disabled={statusSubmitting || deleteSubmitting || submitting} className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-4 py-2 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50">{statusSubmitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Power className="h-4 w-4" aria-hidden="true" />}{t(currentRole.isActive ? "roles.actions.deactivate" : "roles.actions.activate")}</button>
-            <button type="button" onClick={() => setDeleteOpen(true)} disabled={statusSubmitting || deleteSubmitting || submitting} className="inline-flex items-center gap-2 rounded-sm border border-destructive/40 bg-card px-4 py-2 text-sm font-semibold text-destructive transition-colors hover:border-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" aria-hidden="true" />{t("roles.actions.delete")}</button>
-          </div> : null}
-        </div>
+        </header>
 
-        {detailLoading ? <div className="flex items-center justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" /><span className="ml-3 text-sm text-muted-foreground">{t("roles.loadingDetail")}</span></div> : null}
-        {!detailLoading && loadError ? <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{loadError}</section> : null}
-        {!detailLoading && (!editing || currentRole) ? (
-          <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
+        {detailLoading ? (
+          <div role="status" className="flex items-center justify-center py-20">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" aria-hidden="true" />
+            <span className="ml-3 text-sm text-muted-foreground">{t("roles.loadingDetail")}</span>
+          </div>
+        ) : null}
+        {!detailLoading && loadError ? (
+          <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{loadError}</section>
+        ) : null}
+        {!detailLoading && !loadError && !editing && !access.create ? (
+          <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("roles.errors.permissionDenied")}</section>
+        ) : null}
+        {!detailLoading && showForm ? (
+          <form data-testid="role-form" onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
             <section data-testid="role-fields-section" className="rounded-sm border border-border/80 bg-surface p-6 shadow-[0_10px_30px_rgba(0,0,0,0.08)] dark:border-border dark:bg-surface">
-              <div className="grid grid-cols-1 gap-6">
-                <label className="block"><span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("roles.form.name")}</span><Input id="role-name" required value={name} onChange={(event) => setName(event.target.value)} disabled={submitting || deleteSubmitting || editing} aria-describedby={editing ? "role-name-read-only" : undefined} /></label>
-                {editing ? <p id="role-name-read-only" className="-mt-4 text-xs text-muted-foreground">{t("roles.form.nameReadOnly")}</p> : null}
-                <div className="block"><label htmlFor="role-description" className="mb-2 block text-xs font-semibold text-muted-foreground">{t("roles.form.description")}</label><Textarea id="role-description" value={description} onChange={(event) => setDescription(event.target.value)} rows={3} className="min-h-24 resize-y" disabled={submitting || deleteSubmitting} /></div>
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-12">
+                <label data-testid="role-name-field" className="block sm:col-span-8 md:col-span-10">
+                  <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("roles.form.name")}</span>
+                  <Input id="role-name" required maxLength={ROLE_NAME_MAX_LENGTH} autoComplete="off" value={name} onChange={(event) => setName(event.target.value)} disabled={submitting || deleteSubmitting || editing || !access.create} aria-describedby={editing ? "role-name-read-only" : undefined} />
+                </label>
+                <div data-testid="role-status-field" className="flex justify-end sm:col-span-4 md:col-span-2">
+                  <div data-testid="role-status-control">
+                    <HubSwitch id="role-is-active-switch" testId="role-is-active-switch" label={t("roles.table.status")} checked={formIsActive} onCheckedChange={setFormIsActive} disabled={submitting || deleteSubmitting || !canSave} className="items-end" />
+                  </div>
+                </div>
+                <label data-testid="role-description-field" className="block w-full sm:col-span-12">
+                  <span className="mb-2 block text-xs font-semibold text-muted-foreground">{t("roles.form.description")}</span>
+                  <Textarea id="role-description" required maxLength={ROLE_DESCRIPTION_MAX_LENGTH} rows={3} value={description} onChange={(event) => setDescription(event.target.value)} disabled={submitting || deleteSubmitting || !canSave} className="h-20 min-h-[80px] resize-y px-4" />
+                </label>
+                {editing ? <p id="role-name-read-only" className="sr-only">{t("roles.form.nameReadOnly")}</p> : null}
               </div>
             </section>
-            <div className="flex justify-start gap-3">
+            <div className="flex flex-wrap justify-start gap-3">
               <button type="button" onClick={() => router.push("/roles/")} disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-input bg-card px-6 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-ring hover:text-primary disabled:opacity-50"><ArrowLeft className="h-4 w-4" aria-hidden="true" />{t("roles.actions.back")}</button>
-              <button type="submit" disabled={submitting || deleteSubmitting || editing && currentRole === null} className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">{submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}{t("roles.actions.save")}</button>
+              {editing && currentRole && access.delete ? (
+                <button type="button" onClick={() => setDeleteOpen(true)} disabled={submitting || deleteSubmitting} className="inline-flex items-center gap-2 rounded-sm border border-destructive/40 bg-card px-6 py-2.5 text-sm font-semibold text-destructive transition-colors hover:border-destructive disabled:opacity-50"><Trash2 className="h-4 w-4" aria-hidden="true" />{t("roles.actions.delete")}</button>
+              ) : null}
+              {canSave ? (
+                <button data-testid="role-save-button" type="submit" disabled={!canSubmit} className="inline-flex items-center gap-2 rounded-sm bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50">
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Save className="h-4 w-4" aria-hidden="true" />}
+                  {t("roles.actions.save")}
+                </button>
+              ) : null}
             </div>
           </form>
         ) : null}
       </div>
-      <ConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }}
-        title={t("roles.actions.delete")} description={t("roles.confirm.delete", { name: currentRole?.name ?? "" })}
-        confirmLabel={t("roles.actions.delete")} cancelLabel={t("roles.actions.cancel")} onConfirm={() => void deleteRole()} />
+      <HubConfirmDialog
+        open={deleteOpen}
+        onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }}
+        title={t("roles.actions.delete")}
+        description={t("roles.confirm.delete", { name: currentRole?.name ?? "" })}
+        confirmLabel={t("roles.actions.delete")}
+        cancelLabel={t("roles.actions.cancel")}
+        variant="destructive"
+        loading={deleteSubmitting}
+        onConfirm={deleteRole}
+      />
     </div>
   );
 }

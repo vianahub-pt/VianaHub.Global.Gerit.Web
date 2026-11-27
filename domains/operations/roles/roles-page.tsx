@@ -8,8 +8,8 @@ import { useAuth } from "@/platform/auth";
 import { useTranslation } from "@/platform/i18n";
 import { useToast } from "@/shared/feedback";
 import { HubGrid, type HubGridColumn, type RowDensity } from "@/shared/hub-grid";
-import { ConfirmDialog } from "@/shared/ui/confirm-dialog";
-import { buildRolesQuery, normalizeRoleSummary, type RoleRecord, type RoleStatusFilter } from "@/domains/operations/roles/roles-contract";
+import { HubConfirmDialog } from "@/shared/ui/hub-confirm-dialog";
+import { buildRoleAccess, buildRolesQuery, normalizeRoleSummary, type RoleRecord, type RoleStatusFilter } from "@/domains/operations/roles/roles-contract";
 
 interface RolesPagedResponse {
   items?: unknown;
@@ -45,7 +45,8 @@ function parsePagedRoles(payload: unknown) {
 }
 
 export function RolesPage() {
-  const { fetchWithAuth, isAuthenticated, isHydrating } = useAuth();
+  const { fetchWithAuth, hasPermission, isAuthenticated, isHydrating, roles: authRoles } = useAuth();
+  const access = buildRoleAccess(authRoles, hasPermission);
   const { t } = useTranslation();
   const { toast } = useToast();
   const router = useRouter();
@@ -100,7 +101,7 @@ export function RolesPage() {
     } finally { setLoading(false); }
   }, [fetchWithAuth, page, pageSize, search, sortDirection, statusFilter, t, toast]);
 
-  useEffect(() => { if (!isHydrating && isAuthenticated) void loadRoles(); }, [isAuthenticated, isHydrating, loadRoles]);
+  useEffect(() => { if (!isHydrating && isAuthenticated && access.getPaged) void loadRoles(); else if (!isHydrating) setLoading(false); }, [access.getPaged, isAuthenticated, isHydrating, loadRoles]);
 
   const toggleStatus = useCallback(async (role: RoleRecord) => {
     const operation = role.isActive ? "deactivate" : "activate";
@@ -173,22 +174,22 @@ export function RolesPage() {
 
   const renderActions = useCallback((role: RoleRecord) => (
     <div className="flex items-center justify-end gap-2">
-      <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); router.push(`/roles/${role.id}/`); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("roles.actions.edit")} aria-label={t("roles.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button>
-      <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(role); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-primary disabled:opacity-50" title={t(role.isActive ? "roles.actions.deactivate" : "roles.actions.activate")} aria-label={t(role.isActive ? "roles.actions.deactivate" : "roles.actions.activate")}>{busyRoleId === role.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : role.isActive ? <PowerOff className="h-4 w-4 text-red-500" aria-hidden="true" /> : <Power className="h-4 w-4 text-green-500" aria-hidden="true" />}</button>
-      <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); requestDelete(role); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-destructive disabled:opacity-50" title={t("roles.actions.delete")} aria-label={t("roles.actions.delete")}><Trash2 className="h-4 w-4 text-red-500" aria-hidden="true" /></button>
+      {access.getBy ? <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); router.push(`/roles/${role.id}/`); }} className="inline-flex h-8 w-8 items-center justify-center text-foreground hover:text-primary disabled:opacity-50" title={t("roles.actions.edit")} aria-label={t("roles.actions.edit")}><SquarePen className="h-4 w-4" aria-hidden="true" /></button> : null}
+      {(role.isActive ? access.deactivate : access.activate) ? <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); void toggleStatus(role); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-primary disabled:opacity-50" title={t(role.isActive ? "roles.actions.deactivate" : "roles.actions.activate")} aria-label={t(role.isActive ? "roles.actions.deactivate" : "roles.actions.activate")}>{busyRoleId === role.id ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : role.isActive ? <PowerOff className="h-4 w-4 text-red-500" aria-hidden="true" /> : <Power className="h-4 w-4 text-green-500" aria-hidden="true" />}</button> : null}
+      {access.delete ? <button type="button" disabled={busyRoleId === role.id} onClick={(event) => { event.stopPropagation(); requestDelete(role); }} className="inline-flex h-8 w-8 items-center justify-center hover:text-destructive disabled:opacity-50" title={t("roles.actions.delete")} aria-label={t("roles.actions.delete")}><Trash2 className="h-4 w-4 text-red-500" aria-hidden="true" /></button> : null}
     </div>
-  ), [busyRoleId, requestDelete, router, t, toggleStatus]);
+  ), [access.activate, access.deactivate, access.delete, access.getBy, busyRoleId, requestDelete, router, t, toggleStatus]);
 
   const gridToolbar = useMemo(() => (
     <div className="flex flex-wrap items-center gap-2">
-      <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary dark:text-muted-foreground">
+      {access.bulkUpload ? <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-sm border border-border bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-secondary dark:text-muted-foreground">
         {bulkUploading ? <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" /> : null}
         {t("roles.bulk.upload.label")}
         <input type="file" accept=".csv" className="hidden" disabled={bulkUploading} onChange={(event) => { void bulkUpload(event.currentTarget.files?.[0] ?? null); event.currentTarget.value = ""; }} />
-      </label>
-      <button type="button" onClick={() => router.push("/roles/new/")} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("roles.actions.add")}</button>
+      </label> : null}
+      {access.create ? <button type="button" onClick={() => router.push("/roles/new/")} className="inline-flex h-10 items-center gap-2 rounded-sm bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"><UserRoundPlus className="h-4 w-4" aria-hidden="true" />{t("roles.actions.add")}</button> : null}
     </div>
-  ), [bulkUpload, bulkUploading, router, t]);
+  ), [access.bulkUpload, access.create, bulkUpload, bulkUploading, router, t]);
 
   const pageButtons = useMemo(() => {
     const count = Math.max(1, totalPages);
@@ -205,7 +206,8 @@ export function RolesPage() {
             {gridToolbar}
           </div>
         </div>
-        <HubGrid
+        {!loading && !access.getPaged ? <section role="alert" className="rounded-sm border border-destructive/40 bg-card p-6 text-sm text-destructive">{t("roles.errors.permissionDenied")}</section> : null}
+        {access.getPaged ? <HubGrid
           title={t("roles.title")} subtitle={t("roles.subtitle")} columns={columns} items={roles}
           renderRowCells={(role) => [role.name]} renderStatus={renderStatus} statusColumnLabel={t("roles.table.status")}
           renderActions={renderActions} actionsColumnLabel={t("roles.table.actions")} rowDensity={rowDensity}
@@ -221,12 +223,12 @@ export function RolesPage() {
           onPageSizeChange={(value) => { if ((PAGE_SIZE_OPTIONS as readonly number[]).includes(value)) { setPageSize(value as PageSizeOption); setPage(1); } }}
           paginationPreviousLabel={t("roles.pagination.previous")} paginationNextLabel={t("roles.pagination.next")}
           paginationPageLabel={t("roles.pagination.page")} paginationPerPageLabel={t("roles.pagination.perPage")}
-          getRowKey={(role) => role.id} onRowClick={(role) => router.push(`/roles/${role.id}/`)}
-        />
+          getRowKey={(role) => role.id} onRowClick={access.getBy ? (role) => router.push(`/roles/${role.id}/`) : undefined}
+        /> : null}
       </div>
-      <ConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }}
+      <HubConfirmDialog open={deleteOpen} onOpenChange={(open) => { if (!deleteSubmitting) setDeleteOpen(open); }}
         title={t("roles.actions.delete")} description={t("roles.confirm.delete", { name: deleteRoleRef.current?.name ?? "" })}
-        confirmLabel={t("roles.actions.delete")} cancelLabel={t("roles.actions.cancel")} onConfirm={() => void deleteRole()} />
+        confirmLabel={t("roles.actions.delete")} cancelLabel={t("roles.actions.cancel")} variant="destructive" loading={deleteSubmitting} onConfirm={deleteRole} />
     </div>
   );
 }
